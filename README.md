@@ -10,7 +10,7 @@ The main purpose of HiveFW is to provide a permanently connected Wi-Fi Companion
 
 HiveFW extends the MeshCore Companion concept with a focus on **Wi-Fi connectivity, remote interaction and home automation**.
 
-A single Heltec V3 can remain connected to the local network while simultaneously participating in the LoRa mesh, combining local network connectivity with long-range, decentralised communication.
+A single dispositivos compatíveis com MeshCore can remain connected to the local network while simultaneously participating in the LoRa mesh, combining local network connectivity with long-range, decentralised communication.
 
 This creates a flexible platform that can act as:
 
@@ -50,7 +50,7 @@ This provides the foundation for integration with computers, automation platform
 
 One of the main objectives of HiveFW is to create a bridge between **MeshCore and Home Assistant**.
 
-A permanently connected Heltec V3 can provide a communication interface between the LoRa mesh and a local Home Assistant installation.
+A permanently connected dispositivos compatíveis com MeshCore can provide a communication interface between the LoRa mesh and a local Home Assistant installation.
 
 This architecture is intended to allow remote MeshCore users to interact with selected Home Assistant information and services through the LoRa network.
 
