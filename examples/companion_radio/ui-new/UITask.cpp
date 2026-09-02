@@ -73,7 +73,7 @@ public:
     // meshcore logo
     display.setColor(UIColor::corp_blue);
     int logoWidth = 128;
-    display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
+    display.drawXbm(4, 3, hivefw_logo, logoWidth, 13);
 
     // firmware name
     const char* firmware_name = "Companion-Repeater";
