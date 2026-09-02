@@ -2,7 +2,7 @@
 
 HiveFW is a custom firmware based on [MeshCore](https://github.com/meshcore-dev/MeshCore) for the **Heltec WiFi LoRa 32 V3**.
 
-It combines the functionality of a MeshCore Companion Radio with an integrated Repeater mode, providing a practical bridge between the LoRa mesh, Wi-Fi, computers and home automation systems.
+It combines the functionality of a MeshCore MeshCore Companion Radio with an integrated Repeater mode, providing a practical bridge between the LoRa mesh, Wi-Fi, computers and home automation systems.
 
 The main purpose of HiveFW is to provide a permanently connected Wi-Fi Companion that can also participate in the LoRa mesh as a Repeater, enabling remote interaction with MeshCore channels, automated services and selected Home Assistant information.
 
@@ -10,7 +10,7 @@ The main purpose of HiveFW is to provide a permanently connected Wi-Fi Companion
 
 HiveFW extends the MeshCore Companion concept with a focus on **Wi-Fi connectivity, remote interaction and home automation**.
 
-A single dispositivos compatíveis com MeshCore can remain connected to the local network while simultaneously participating in the LoRa mesh, combining local network connectivity with long-range, decentralised communication.
+A single MeshCore-compatible devices can remain connected to the local network while simultaneously participating in the LoRa mesh, combining local network connectivity with long-range, decentralised communication.
 
 This creates a flexible platform that can act as:
 
@@ -31,7 +31,7 @@ This creates a flexible platform that can act as:
 
 ### Wi-Fi Connectivity
 
-The Companion Radio can connect directly to the local network, allowing external applications and services to communicate with the radio without requiring a permanent USB connection.
+The MeshCore Companion Radio can connect directly to the local network, allowing external applications and services to communicate with the radio without requiring a permanent USB connection.
 
 This provides the foundation for integration with computers, automation platforms and other network services.
 
@@ -50,7 +50,7 @@ This provides the foundation for integration with computers, automation platform
 
 One of the main objectives of HiveFW is to create a bridge between **MeshCore and Home Assistant**.
 
-A permanently connected dispositivos compatíveis com MeshCore can provide a communication interface between the LoRa mesh and a local Home Assistant installation.
+A permanently connected MeshCore-compatible devices can provide a communication interface between the LoRa mesh and a local Home Assistant installation.
 
 This architecture is intended to allow remote MeshCore users to interact with selected Home Assistant information and services through the LoRa network.
 
@@ -97,13 +97,13 @@ Current target hardware:
 
 **Heltec WiFi LoRa 32 V3**
 
-The firmware is based on the MeshCore Companion Radio architecture and is built using PlatformIO.
+The firmware is based on the MeshCore MeshCore Companion Radio architecture and is built using PlatformIO.
 
 ## MeshCore
 
 HiveFW is based on [MeshCore](https://github.com/meshcore-dev/MeshCore), an open-source LoRa mesh networking system designed for long-range, decentralised communication.
 
-MeshCore provides multi-hop packet routing, Companion Radio support, Repeater functionality and telemetry capabilities across low-power LoRa networks.
+MeshCore provides multi-hop packet routing, MeshCore Companion Radio support, Repeater functionality and telemetry capabilities across low-power LoRa networks.
 
 For more information, visit the [MeshCore documentation](https://docs.meshcore.io/).
 
