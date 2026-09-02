@@ -15,7 +15,7 @@
 // Keep a compile-time fallback only for direct PlatformIO builds,
 // but do not hardcode a project release version here.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "V1.01"
+#define FIRMWARE_VERSION "V1.02-test"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
