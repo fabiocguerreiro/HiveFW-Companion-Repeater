@@ -38,15 +38,12 @@ class SplashScreen : public UIScreen {
 
 public:
   SplashScreen(UITask* task) : _task(task) {
-    // strip off dash and commit hash by changing dash to null terminator
-    // e.g: v1.2.3-abcdef -> v1.2.3
+    // Custom firmware branding
+    // v1.2.3 -> CFW V1.2.3
     const char *ver = FIRMWARE_VERSION;
-    const char *dash = strchr(ver, '-');
+    if (ver[0] == 'v' || ver[0] == 'V') ver++;
 
-    int len = dash ? dash - ver : strlen(ver);
-    if (len >= sizeof(_version_info)) len = sizeof(_version_info) - 1;
-    memcpy(_version_info, ver, len);
-    _version_info[len] = 0;
+    snprintf(_version_info, sizeof(_version_info), "CFW V%s", ver);
 
     dismiss_after = millis() + BOOT_SCREEN_MILLIS;
   }
@@ -57,13 +54,11 @@ public:
     int logoWidth = 128;
     display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
 
-    // meshcore website
-    const char* website = "https://meshcore.io";
+    // firmware name
+    const char* firmware_name = "HiveFW CR";
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
-    uint16_t websiteWidth = display.getTextWidth(website);
-    display.setCursor((display.width() - websiteWidth) / 2, 22);
-    display.print(website);
+    display.drawTextCentered(display.width()/2, 22, firmware_name);
 
     // version info
     display.setColor(UIColor::primary_txt);

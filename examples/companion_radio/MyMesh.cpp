@@ -779,10 +779,60 @@ bool MyMesh::onContactPathRecv(ContactInfo& contact, uint8_t* in_path, uint8_t i
 }
 
 void MyMesh::onControlDataRecv(mesh::Packet *packet) {
+  // Node Discovery is exclusively a Repeater feature.
+  // Normal Companion control-data handling remains unchanged.
+  if (_prefs.isRepeatEn() && packet->payload_len >= 1) {
+    const uint8_t type = packet->payload[0] & 0xF0;
+
+    const uint8_t CTL_TYPE_NODE_DISCOVER_REQ  = 0x80;
+    const uint8_t CTL_TYPE_NODE_DISCOVER_RESP = 0x90;
+
+    if (type == CTL_TYPE_NODE_DISCOVER_REQ &&
+        packet->payload_len >= 6) {
+
+      int i = 1;
+      uint8_t filter = packet->payload[i++];
+
+      uint32_t tag;
+      memcpy(&tag, &packet->payload[i], 4);
+      i += 4;
+
+      uint32_t since = 0;
+      if (packet->payload_len >= i + 4) {
+        memcpy(&since, &packet->payload[i], 4);
+      }
+
+      if ((filter & (1 << ADV_TYPE_REPEATER)) != 0) {
+
+        bool prefix_only = packet->payload[0] & 1;
+
+        uint8_t data[6 + PUB_KEY_SIZE];
+
+        data[0] = CTL_TYPE_NODE_DISCOVER_RESP | ADV_TYPE_REPEATER;
+        data[1] = packet->_snr;
+
+        memcpy(&data[2], &tag, 4);
+        memcpy(&data[6], self_id.pub_key, PUB_KEY_SIZE);
+
+        auto resp = createControlData(
+            data,
+            prefix_only ? 6 + 8 : 6 + PUB_KEY_SIZE);
+
+        if (resp) {
+          sendZeroHop(resp, getRetransmitDelay(resp) * 4);
+        }
+      }
+
+      return;
+    }
+  }
+
+  // Existing Companion behaviour: forward all other control data to the app.
   if (packet->payload_len + 4 > sizeof(out_frame)) {
     MESH_DEBUG_PRINTLN("onControlDataRecv(), payload_len too long: %d", packet->payload_len);
     return;
   }
+
   int i = 0;
   out_frame[i++] = PUSH_CODE_CONTROL_DATA;
   out_frame[i++] = (int8_t)(_radio->getLastSNR() * 4);
@@ -871,6 +921,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   next_ack_idx = 0;
   sign_data = NULL;
   dirty_contacts_expiry = 0;
+  next_smart_advert = 0;
   memset(advert_paths, 0, sizeof(advert_paths));
   memset(send_scope.key, 0, sizeof(send_scope.key));
   send_unscoped = false;
@@ -1000,9 +1051,8 @@ static FreqRange repeat_freq_ranges[] = {
   #ifdef ALLOWED_REPEAT_FREQ_RANGE
   ALLOWED_REPEAT_FREQ_RANGE
   #else
-  { 433000, 433000 },
-  { 869495, 869495 },
-  { 918000, 918000 }
+  { 433375, 433375 },
+  { 869618, 869618 }
   #endif
 };
 
@@ -1050,7 +1100,7 @@ void MyMesh::handleCmdFrame(size_t len) {
     _iter_started = false; // stop any left-over ContactsIterator
     int i = 0;
     out_frame[i++] = RESP_CODE_SELF_INFO;
-    out_frame[i++] = ADV_TYPE_CHAT; // what this node Advert identifies as (maybe node's pronouns too?? :-)
+    out_frame[i++] = _prefs.isRepeatEn() ? ADV_TYPE_REPEATER : ADV_TYPE_CHAT; // what this node Advert identifies as (maybe node's pronouns too?? :-)
     out_frame[i++] = _prefs.tx_power_dbm;
     out_frame[i++] = MAX_LORA_TX_POWER;
     memcpy(&out_frame[i], self_id.pub_key, PUB_KEY_SIZE);
@@ -2241,9 +2291,141 @@ void MyMesh::loop() {
     dirty_contacts_expiry = 0;
   }
 
+  // Smart Advert is exclusively a Repeater feature.
+  if (_prefs.isRepeatEn()) {
+    if (next_smart_advert == 0) {
+      updateSmartAdvertTimer();
+    } else if (millisHasNowPassed(next_smart_advert)) {
+      next_smart_advert = 0;
+
+      mesh::Packet* pkt;
+      if (_prefs.advert_loc_policy == ADVERT_LOC_NONE) {
+        pkt = createSelfAdvert(_prefs.node_name);
+      } else {
+        pkt = createSelfAdvert(
+            _prefs.node_name,
+            sensors.node_lat,
+            sensors.node_lon);
+      }
+
+      if (pkt) {
+        TransportKey default_scope;
+        memcpy(
+            &default_scope.key,
+            _prefs.default_scope_key,
+            sizeof(default_scope.key));
+
+        sendFloodScoped(default_scope, pkt, 0);
+      }
+
+      updateSmartAdvertTimer();
+    }
+  } else {
+    next_smart_advert = 0;
+  }
+
 #ifdef DISPLAY_CLASS
   if (_ui) _ui->setHasConnection(_serial->isConnected());
 #endif
+}
+
+mesh::Packet* MyMesh::createSelfAdvert(const char* name) {
+  uint8_t app_data[MAX_ADVERT_DATA_SIZE];
+  uint8_t app_data_len;
+
+  {
+    uint8_t advert_type = _prefs.isRepeatEn()
+        ? ADV_TYPE_REPEATER
+        : ADV_TYPE_CHAT;
+
+    AdvertDataBuilder builder(advert_type, name);
+    app_data_len = builder.encodeTo(app_data);
+  }
+
+  return createAdvert(self_id, app_data, app_data_len);
+}
+
+mesh::Packet* MyMesh::createSelfAdvert(const char* name, double lat, double lon) {
+  uint8_t app_data[MAX_ADVERT_DATA_SIZE];
+  uint8_t app_data_len;
+
+  {
+    uint8_t advert_type = _prefs.isRepeatEn()
+        ? ADV_TYPE_REPEATER
+        : ADV_TYPE_CHAT;
+
+    AdvertDataBuilder builder(advert_type, name, lat, lon);
+    app_data_len = builder.encodeTo(app_data);
+  }
+
+  return createAdvert(self_id, app_data, app_data_len);
+}
+
+void MyMesh::updateSmartAdvertTimer() {
+  // Smart Advert is exclusively a Repeater feature.
+  if (!_prefs.isRepeatEn()) {
+    next_smart_advert = 0;
+    return;
+  }
+
+  const uint32_t WINDOW_SIZE_SECONDS = 23 * 3600;
+  const int32_t JITTER_MAX_SECONDS = 3;
+
+  uint32_t hash = 0;
+  const char* name = _prefs.node_name ? _prefs.node_name : "";
+
+  mesh::Utils::sha256(
+      (uint8_t*)&hash,
+      sizeof(hash),
+      (const uint8_t*)name,
+      strlen(name),
+      self_id.pub_key,
+      4);
+
+  uint32_t my_offset = hash % WINDOW_SIZE_SECONDS;
+  uint32_t now_epoch = getRTCClock()->getCurrentTime();
+
+  if (now_epoch < 1577836800) {
+    int32_t random_jitter = ((hash ^ millis()) % 7) - 3;
+    uint32_t fallback_wait = my_offset + random_jitter;
+    if ((int32_t)fallback_wait < 0) {
+      fallback_wait = 0;
+    }
+    next_smart_advert = futureMillis(fallback_wait * 1000);
+  } else {
+    uint32_t current_cycle_start =
+        now_epoch - (now_epoch % WINDOW_SIZE_SECONDS);
+
+    uint32_t my_target_epoch =
+        current_cycle_start + my_offset;
+
+    int32_t random_jitter =
+        ((hash ^ current_cycle_start) %
+         ((JITTER_MAX_SECONDS * 2) + 1)) - JITTER_MAX_SECONDS;
+
+    int64_t target_epoch =
+        (int64_t)my_target_epoch + random_jitter;
+
+    if ((int64_t)now_epoch >= target_epoch) {
+      current_cycle_start += WINDOW_SIZE_SECONDS;
+
+      my_target_epoch =
+          current_cycle_start + my_offset;
+
+      random_jitter =
+          ((hash ^ current_cycle_start) %
+           ((JITTER_MAX_SECONDS * 2) + 1)) - JITTER_MAX_SECONDS;
+
+      target_epoch =
+          (int64_t)my_target_epoch + random_jitter;
+    }
+
+    uint32_t wait_seconds =
+        (uint32_t)(target_epoch - (int64_t)now_epoch);
+
+    next_smart_advert =
+        futureMillis(wait_seconds * 1000);
+  }
 }
 
 bool MyMesh::advert() {

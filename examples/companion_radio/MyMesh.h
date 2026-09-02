@@ -8,11 +8,11 @@
 #define FIRMWARE_VER_CODE 13
 
 #ifndef FIRMWARE_BUILD_DATE
-#define FIRMWARE_BUILD_DATE "14 Aug 2026"
+#define FIRMWARE_BUILD_DATE __DATE__
 #endif
 
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "v1.17.1"
+#define FIRMWARE_VERSION "v1.17.1-hivefw"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
@@ -98,6 +98,10 @@ public:
   void loop();
   void handleCmdFrame(size_t len);
   bool advert();
+  mesh::Packet* createSelfAdvert(const char* name);
+  mesh::Packet* createSelfAdvert(const char* name, double lat, double lon);
+  unsigned long next_smart_advert;
+  void updateSmartAdvertTimer();
   void enterCLIRescue();
 
   int  getRecentlyHeard(AdvertPath dest[], int max_num);
