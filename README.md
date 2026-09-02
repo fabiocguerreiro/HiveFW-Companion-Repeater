@@ -107,6 +107,15 @@ MeshCore provides multi-hop packet routing, Companion Radio support, Repeater fu
 
 For more information, visit the [MeshCore documentation](https://docs.meshcore.io/).
 
+## Building
+
+Clone the repository and build using PlatformIO:
+
+bash
+git clone https://github.com/fabiocguerreiro/HiveFW-Companion-Repeater.git
+cd HiveFW-Companion-Repeater
+pio run -e Heltec_v3_companion_radio_wifi
+
 ## Version
 
 **HiveFW v1.17.1-hivefw**
