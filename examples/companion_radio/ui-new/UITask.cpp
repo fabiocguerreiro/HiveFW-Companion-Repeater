@@ -34,16 +34,37 @@
 class SplashScreen : public UIScreen {
   UITask* _task;
   unsigned long dismiss_after;
-  char _version_info[12];
+  char _version_info[32];
 
 public:
   SplashScreen(UITask* task) : _task(task) {
-    // Custom firmware branding
-    // v1.2.3 -> CFW V1.2.3
+    // Custom firmware version shown on the boot screen.
+    // build.sh appends the Git commit hash to FIRMWARE_VERSION.
+    // Example: V1.01-368c97d
+    // Only the human-readable version is shown here: V1.01.
     const char *ver = FIRMWARE_VERSION;
-    if (ver[0] == 'v' || ver[0] == 'V') ver++;
 
-    snprintf(_version_info, sizeof(_version_info), "CFW V%s", ver);
+    snprintf(_version_info, sizeof(_version_info), "%s", ver);
+
+    char *hash_sep = strrchr(_version_info, '-');
+    if (hash_sep) {
+      const char *hash = hash_sep + 1;
+      size_t hash_len = strlen(hash);
+      bool is_hex = hash_len >= 7 && hash_len <= 40;
+
+      for (size_t i = 0; i < hash_len && is_hex; i++) {
+        char c = hash[i];
+        if (!((c >= '0' && c <= '9') ||
+              (c >= 'a' && c <= 'f') ||
+              (c >= 'A' && c <= 'F'))) {
+          is_hex = false;
+        }
+      }
+
+      if (is_hex) {
+        *hash_sep = '\0';
+      }
+    }
 
     dismiss_after = millis() + BOOT_SCREEN_MILLIS;
   }
@@ -55,7 +76,7 @@ public:
     display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
 
     // firmware name
-    const char* firmware_name = "HiveFW CR";
+    const char* firmware_name = "Companion-Repeater";
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
     display.drawTextCentered(display.width()/2, 22, firmware_name);
