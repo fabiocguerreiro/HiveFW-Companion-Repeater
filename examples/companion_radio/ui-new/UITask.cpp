@@ -43,7 +43,7 @@ public:
     const char *ver = FIRMWARE_VERSION;
     if (ver[0] == 'v' || ver[0] == 'V') ver++;
 
-    snprintf(_version_info, sizeof(_version_info), "CFW V%s", ver);
+    snprintf(_version_info, sizeof(_version_info), "V%s", ver);
 
     dismiss_after = millis() + BOOT_SCREEN_MILLIS;
   }
@@ -52,10 +52,10 @@ public:
     // meshcore logo
     display.setColor(UIColor::corp_blue);
     int logoWidth = 128;
-    display.drawXbm((display.width() - logoWidth) / 2, 3, meshcore_logo, logoWidth, 13);
+    display.drawTextCentered(display.width()/2, 3, "HIVEFW");
 
     // firmware name
-    const char* firmware_name = "HiveFW CR";
+    const char* firmware_name = "Companion-Repeater";
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
     display.drawTextCentered(display.width()/2, 22, firmware_name);
