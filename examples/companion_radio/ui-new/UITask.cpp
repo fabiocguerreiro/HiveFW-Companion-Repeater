@@ -7,7 +7,7 @@
 #endif
 
 #ifndef AUTO_OFF_MILLIS
-  #define AUTO_OFF_MILLIS     15000   // 15 seconds
+  #define AUTO_OFF_MILLIS     20000   // 20 seconds
 #endif
 #define BOOT_SCREEN_MILLIS   3000   // 3 seconds
 
@@ -126,6 +126,17 @@ class HomeScreen : public UIScreen {
   bool _sms_submenu;
   uint8_t _sms_messages_menu;
   bool _sms_messages_submenu;
+  uint8_t _sms_new_menu;
+  bool _sms_new_submenu;
+
+  struct ChannelUnread {
+    uint8_t hash[PATH_HASH_SIZE];
+    uint8_t count;
+    bool valid;
+  };
+
+  static const int MAX_CHANNEL_UNREAD = 16;
+  ChannelUnread _channel_unread[MAX_CHANNEL_UNREAD];
   uint8_t _settings_menu;
   bool _settings_submenu;
   bool _shutdown_init;
@@ -196,8 +207,64 @@ public:
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
+       _sms_new_menu(0), _sms_new_submenu(false),
        _settings_menu(0), _settings_submenu(false),
-       _shutdown_init(false), sensors_lpp(200) {  }
+       _shutdown_init(false), sensors_lpp(200) {
+    for (int i = 0; i < MAX_CHANNEL_UNREAD; i++) {
+      _channel_unread[i].count = 0;
+      _channel_unread[i].valid = false;
+      memset(_channel_unread[i].hash, 0, PATH_HASH_SIZE);
+    }
+  }
+
+  void addUnreadChannelMessage(const uint8_t* hash) {
+    if (hash == NULL) return;
+
+    int free_slot = -1;
+
+    for (int i = 0; i < MAX_CHANNEL_UNREAD; i++) {
+      if (_channel_unread[i].valid &&
+          memcmp(_channel_unread[i].hash, hash, PATH_HASH_SIZE) == 0) {
+        if (_channel_unread[i].count < 255)
+          _channel_unread[i].count++;
+        return;
+      }
+
+      if (!_channel_unread[i].valid && free_slot < 0)
+        free_slot = i;
+    }
+
+    if (free_slot >= 0) {
+      memcpy(_channel_unread[free_slot].hash, hash, PATH_HASH_SIZE);
+      _channel_unread[free_slot].count = 1;
+      _channel_unread[free_slot].valid = true;
+    }
+  }
+
+  int getUnreadChannelCount(const uint8_t* hash) {
+    if (hash == NULL) return 0;
+
+    for (int i = 0; i < MAX_CHANNEL_UNREAD; i++) {
+      if (_channel_unread[i].valid &&
+          memcmp(_channel_unread[i].hash, hash, PATH_HASH_SIZE) == 0)
+        return _channel_unread[i].count;
+    }
+
+    return 0;
+  }
+
+  void clearUnreadChannel(const uint8_t* hash) {
+    if (hash == NULL) return;
+
+    for (int i = 0; i < MAX_CHANNEL_UNREAD; i++) {
+      if (_channel_unread[i].valid &&
+          memcmp(_channel_unread[i].hash, hash, PATH_HASH_SIZE) == 0) {
+        _channel_unread[i].count = 0;
+        _channel_unread[i].valid = false;
+        return;
+      }
+    }
+  }
 
   void poll() override {
     if (_shutdown_init && !_task->isButtonPressed()) {  // must wait for USR button to be released
@@ -291,31 +358,117 @@ public:
 
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 55, "SMS");
+      display.drawTextCentered(display.width() / 2, 55, "Mensagens");
 
+
+  } else if (_sms_new_submenu) {
+
+    display.setColor(UIColor::primary_txt);
+    display.setTextSize(1);
+
+    display.drawTextCentered(display.width() / 2, 18, "Nova Mensagem");
+
+    const char* new_sms_items[] = {
+      "Escrever",
+      "Presets",
+      "[ SAIR ]"
+    };
+
+    for (int i = 0; i < 3; i++) {
+      int y = 34 + (i * 12);
+
+      if (i == _sms_new_menu) {
+        display.setColor(UIColor::primary_txt);
+        display.drawTextCentered(display.width() / 2 - 42, y, ">");
+        display.drawTextCentered(display.width() / 2 + 8, y, new_sms_items[i]);
+      } else {
+        display.setColor(UIColor::secondary_txt);
+        display.drawTextCentered(display.width() / 2, y, new_sms_items[i]);
+      }
+    }
     } else if (_sms_messages_submenu) {
 
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
       display.drawTextCentered(display.width() / 2, 18, "Mensagens");
 
-      const char* items[] = {
-        "Public",
-        "[Next]"
-      };
+      int channel_count = 0;
 
-      for (int i = 0; i < 2; i++) {
-        int y = 34 + (i * 12);
+      #ifdef MAX_GROUP_CHANNELS
+        for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+          ChannelDetails channel;
 
-        if (i == _sms_messages_menu) {
-          display.setColor(UIColor::primary_txt);
-          display.drawTextCentered(display.width() / 2 - 42, y, ">");
-          display.drawTextCentered(display.width() / 2 + 8, y, items[i]);
-        } else {
-          display.setColor(UIColor::secondary_txt);
-          display.drawTextCentered(display.width() / 2, y, items[i]);
+          if (the_mesh.getChannel(i, channel) &&
+              channel.name[0] != '\0') {
+            channel_count++;
+          }
         }
+      #endif
+
+      int total_items = channel_count + 1;
+
+      // Mostrar apenas a opção atualmente selecionada.
+      // A navegação continua a ser feita com NEXT/PREV.
+      if (_sms_messages_menu < channel_count) {
+
+        ChannelDetails selected;
+        bool valid = false;
+        int found = 0;
+
+        #ifdef MAX_GROUP_CHANNELS
+          for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+            ChannelDetails channel;
+
+            if (the_mesh.getChannel(i, channel) &&
+                channel.name[0] != '\0') {
+
+              if (found == _sms_messages_menu) {
+                selected = channel;
+                valid = true;
+                break;
+              }
+
+              found++;
+            }
+          }
+        #endif
+
+        if (valid) {
+          display.setColor(UIColor::primary_txt);
+          int unread_count = getUnreadChannelCount(selected.channel.hash);
+          char channel_label[48];
+
+          if (unread_count > 0)
+            snprintf(channel_label, sizeof(channel_label), "%s (%d)", selected.name, unread_count);
+          else
+            snprintf(channel_label, sizeof(channel_label), "%s", selected.name);
+
+          display.setColor(UIColor::primary_txt);
+          display.drawTextCentered(
+            display.width() / 2,
+            34,
+            channel_label
+          );
+        }
+
+      } else {
+
+        // Última opção: avançar para a página seguinte
+        display.setColor(UIColor::primary_txt);
+        display.drawTextCentered(
+          display.width() / 2,
+          34,
+          "[ SAIR ]"
+        );
       }
+
+      // Indicação fixa da função do botão ENTER
+      display.setColor(UIColor::secondary_txt);
+      display.drawTextCentered(
+        display.width() / 2,
+        54,
+        "ENTER = selecionar"
+      );
 
     } else {
 
@@ -324,8 +477,8 @@ public:
 
       const char* sms_items[] = {
         "Nova Mensagem",
-        "Mensagens",
-        "[Next]"
+        "Caixa de entrada",
+        "[ SAIR ]"
       };
 
       for (int i = 0; i < 3; i++) {
@@ -366,7 +519,7 @@ public:
     if (!_settings_submenu) {
 
       display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2, 15, settings_icon, 32, 32);
+      display.drawXbm((display.width() - 32) / 2 + 4, 25, settings_icon, 32, 32);
 
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
@@ -600,7 +753,7 @@ public:
 
       display.setColor(UIColor::primary_txt);
       display.setTextSize(2);
-      display.drawTextCentered(display.width() / 2 + 2, 25, timeText);
+      display.drawTextCentered(display.width() / 2, 25, timeText);
 
       display.setColor(UIColor::secondary_txt);
       display.setTextSize(1);
@@ -613,8 +766,8 @@ public:
         summerTime ? "Horário de Verão" : "Horário de Inverno"
       );
 
-    return 5000;   // next render after 5000 ms
-  }
+    }
+    return 20000;   // next render after 5000 ms
   }
 
   bool handleInput(char c) override {
@@ -625,13 +778,34 @@ public:
 
     if (_page == HomePage::MESSAGES && _sms_messages_submenu) {
 
+      int channel_count = 0;
+
+      #ifdef MAX_GROUP_CHANNELS
+        for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+          ChannelDetails channel;
+
+          if (the_mesh.getChannel(i, channel) &&
+              channel.name[0] != '\0') {
+            channel_count++;
+          }
+        }
+      #endif
+
+      int total_items = channel_count + 1;
+
       if (c == KEY_NEXT) {
-        _sms_messages_menu = (_sms_messages_menu + 1) % 2;
+        if (total_items > 0) {
+          _sms_messages_menu =
+            (_sms_messages_menu + 1) % total_items;
+        }
         return true;
       }
 
       if (c == KEY_PREV) {
-        _sms_messages_menu = (_sms_messages_menu + 1) % 2;
+        if (total_items > 0) {
+          _sms_messages_menu =
+            (_sms_messages_menu + total_items - 1) % total_items;
+        }
         return true;
       }
 
@@ -642,18 +816,45 @@ public:
 
       if (c == KEY_ENTER) {
 
-        // Public
-        if (_sms_messages_menu == 0) {
-          _task->showAlert("Public", 1000);
+        // Canal selecionado
+        if (_sms_messages_menu < channel_count) {
+
+          ChannelDetails selected;
+          bool valid = false;
+          int found = 0;
+
+          #ifdef MAX_GROUP_CHANNELS
+            for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+              ChannelDetails channel;
+
+              if (the_mesh.getChannel(i, channel) &&
+                  channel.name[0] != '\0') {
+
+                if (found == _sms_messages_menu) {
+                  selected = channel;
+                  valid = true;
+                  break;
+                }
+
+                found++;
+              }
+            }
+          #endif
+
+          if (valid) {
+            _task->gotoChannelMessages(
+              (uint8_t)found
+            );
+            clearUnreadChannel(selected.channel.hash);
+          }
+
           return true;
         }
 
-        // [Next]
-        if (_sms_messages_menu == 1) {
-          _sms_messages_submenu = false;
-          _sms_submenu = false;
-          _page = (_page + 1) % HomePage::Count;
-          return true;
+      // [ SAIR ]
+      if (_sms_messages_menu == channel_count) {
+        _sms_messages_submenu = false;
+        return true;
         }
       }
     }
@@ -683,21 +884,67 @@ public:
 
         // Nova Mensagem
         if (_sms_menu == 0) {
-          _task->showAlert("Nova Mensagem", 1000);
+          _sms_messages_submenu = false;
+          _sms_menu = 0;
+          _sms_new_submenu = true;
+          _sms_new_menu = 0;
           return true;
         }
 
-        // Mensagens
+        // Caixa de entrada
         if (_sms_menu == 1) {
           _sms_messages_submenu = true;
           _sms_messages_menu = 0;
           return true;
         }
 
-        // [Next]
+        // [ SAIR ]
         if (_sms_menu == 2) {
           _sms_submenu = false;
-          _page = (_page + 1) % HomePage::Count;
+          _task->gotoHomeScreen();
+          return true;
+        }
+      }
+    }
+
+    // ========================================================
+    // NOVA MENSAGEM MENU
+    // ========================================================
+
+    if (_page == HomePage::MESSAGES && _sms_new_submenu) {
+
+      if (c == KEY_NEXT) {
+        _sms_new_menu = (_sms_new_menu + 1) % 3;
+        return true;
+      }
+
+      if (c == KEY_PREV) {
+        _sms_new_menu = (_sms_new_menu + 2) % 3;
+        return true;
+      }
+
+      if (c == KEY_CANCEL) {
+        _sms_new_submenu = false;
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+
+        // Escrever
+        if (_sms_new_menu == 0) {
+          _task->showAlert("Escrever", 1000);
+          return true;
+        }
+
+        // Presets
+        if (_sms_new_menu == 1) {
+          _task->showAlert("Presets", 1000);
+          return true;
+        }
+
+        // [ SAIR ]
+        if (_sms_new_menu == 2) {
+          _sms_new_submenu = false;
           return true;
         }
       }
@@ -728,11 +975,20 @@ public:
 
         // Bluetooth
         if (_settings_menu == 0) {
-          if (_task->isBluetoothEnabled()) {
-            _task->disableBluetooth();
-          } else {
+          bool bluetooth_enable = !_task->isBluetoothEnabled();
+
+          if (bluetooth_enable) {
             _task->enableBluetooth();
+          } else {
+            _task->disableBluetooth();
           }
+
+          _task->notify(UIEventType::ack);
+          _task->showAlert(
+            bluetooth_enable ? "Bluetooth ON" : "Bluetooth OFF",
+            1000
+          );
+
           return true;
         }
 
@@ -827,90 +1083,581 @@ class MsgPreviewScreen : public UIScreen {
 
   struct MsgEntry {
     uint32_t timestamp;
+    uint8_t channel_hash[PATH_HASH_SIZE];
     char origin[62];
     char msg[78];
   };
-  #define MAX_UNREAD_MSGS   32
-  int num_unread;
-  int head = MAX_UNREAD_MSGS - 1; // index of latest unread message
+
+  #define MAX_UNREAD_MSGS 32
+
+  // ========================================================
+  // Fila de mensagens / histórico
+  // ========================================================
+
   MsgEntry unread[MAX_UNREAD_MSGS];
 
+  int num_unread;
+
+  // Índice da mensagem mais recente para notificações
+  int unread_head;
+
+  // Índice da mensagem mais recente do histórico
+  int history_head;
+
+  // Número de mensagens válidas armazenadas
+  int history_count;
+
+  // ========================================================
+  // Estado do histórico por canal
+  // ========================================================
+
+  bool _history_mode;
+
+  uint8_t _history_channel_hash[PATH_HASH_SIZE];
+
+  char _history_channel_name[32];
+
+  // 0 = mais recente
+  int _history_position;
+
 public:
-  MsgPreviewScreen(UITask* task, mesh::RTCClock* rtc) : _task(task), _rtc(rtc) { num_unread = 0; }
 
-  void addPreview(uint8_t path_len, const char* from_name, const char* msg) {
-    head = (head + 1) % MAX_UNREAD_MSGS;
-    if (num_unread < MAX_UNREAD_MSGS) num_unread++;
+  MsgPreviewScreen(
+    UITask* task,
+    mesh::RTCClock* rtc
+  )
+    : _task(task),
+      _rtc(rtc),
+      num_unread(0),
+      unread_head(MAX_UNREAD_MSGS - 1),
+      history_head(MAX_UNREAD_MSGS - 1),
+      history_count(0),
+      _history_mode(false),
+      _history_position(0) {
 
-    auto p = &unread[head];
-    p->timestamp = _rtc->getCurrentTime();
-    if (path_len == 0xFF) {
-      sprintf(p->origin, "(D) %s:", from_name);
-    } else {
-      sprintf(p->origin, "(%d) %s:", (uint32_t) path_len, from_name);
-    }
-    StrHelper::strncpy(p->msg, msg, sizeof(p->msg));
+    memset(
+      _history_channel_hash,
+      0,
+      sizeof(_history_channel_hash)
+    );
+
+    memset(
+      _history_channel_name,
+      0,
+      sizeof(_history_channel_name)
+    );
   }
 
+  // ========================================================
+  // Receber e armazenar uma nova mensagem
+  // ========================================================
+
+  void addPreview(
+    uint8_t path_len,
+    const uint8_t* channel_hash,
+    const char* from_name,
+    const char* msg
+  ) {
+
+    // Avança o armazenamento circular
+    history_head =
+      (history_head + 1) % MAX_UNREAD_MSGS;
+
+    // As notificações começam também pela mensagem mais recente
+    unread_head = history_head;
+
+    if (history_count < MAX_UNREAD_MSGS) {
+      history_count++;
+    }
+
+    if (num_unread < MAX_UNREAD_MSGS) {
+      num_unread++;
+    }
+
+    MsgEntry* p = &unread[history_head];
+
+    p->timestamp =
+      _rtc->getCurrentTime();
+
+    if (channel_hash != NULL) {
+
+      memcpy(
+        p->channel_hash,
+        channel_hash,
+        PATH_HASH_SIZE
+      );
+
+    } else {
+
+      memset(
+        p->channel_hash,
+        0,
+        PATH_HASH_SIZE
+      );
+    }
+
+    if (path_len == 0xFF) {
+
+      sprintf(
+        p->origin,
+        "(D) %s:",
+        from_name
+      );
+
+    } else {
+
+      sprintf(
+        p->origin,
+        "(%d) %s:",
+        (uint32_t) path_len,
+        from_name
+      );
+    }
+
+    StrHelper::strncpy(
+      p->msg,
+      msg,
+      sizeof(p->msg)
+    );
+  }
+
+  // ========================================================
+  // Abrir histórico de um canal
+  // ========================================================
+
+  void openChannel(
+    const uint8_t* channel_hash,
+    const char* channel_name
+  ) {
+
+    _history_mode = true;
+
+    _history_position = 0;
+
+    memcpy(
+      _history_channel_hash,
+      channel_hash,
+      PATH_HASH_SIZE
+    );
+
+    StrHelper::strncpy(
+      _history_channel_name,
+      channel_name,
+      sizeof(_history_channel_name)
+    );
+  }
+
+  // ========================================================
+  // Contar mensagens pertencentes ao canal
+  // ========================================================
+
+  int countChannelMessages() {
+
+    int count = 0;
+
+    for (int n = 0; n < history_count; n++) {
+
+      int idx =
+        (history_head - n + MAX_UNREAD_MSGS)
+        % MAX_UNREAD_MSGS;
+
+      if (memcmp(
+            unread[idx].channel_hash,
+            _history_channel_hash,
+            PATH_HASH_SIZE
+          ) == 0) {
+
+        count++;
+      }
+    }
+
+    return count;
+  }
+
+  // ========================================================
+  // Obter mensagem N do canal
+  //
+  // position 0 = mais recente
+  // ========================================================
+
+  MsgEntry* getChannelMessage(int position) {
+
+    int found = 0;
+
+    for (int n = 0; n < history_count; n++) {
+
+      int idx =
+        (history_head - n + MAX_UNREAD_MSGS)
+        % MAX_UNREAD_MSGS;
+
+      if (memcmp(
+            unread[idx].channel_hash,
+            _history_channel_hash,
+            PATH_HASH_SIZE
+          ) == 0) {
+
+        if (found == position) {
+          return &unread[idx];
+        }
+
+        found++;
+      }
+    }
+
+    return NULL;
+  }
+
+  // ========================================================
+  // RENDER
+  // ========================================================
+
   int render(DisplayDriver& display) override {
+
+    // ======================================================
+    // HISTÓRICO DE CANAL
+    // ======================================================
+
+    if (_history_mode) {
+
+      int total = countChannelMessages();
+
+      // Nome do canal
+      display.setColor(UIColor::corp_blue);
+
+      display.drawTextCentered(
+        display.width() / 2,
+        0,
+        _history_channel_name
+      );
+
+      display.drawRect(
+        0,
+        11,
+        display.width(),
+        1
+      );
+
+      if (total == 0) {
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          30,
+          "Sem mensagens"
+        );
+
+      } else {
+
+        if (_history_position >= total) {
+          _history_position = total - 1;
+        }
+
+        MsgEntry* p =
+          getChannelMessage(_history_position);
+
+        if (p != NULL) {
+
+          // Remetente
+          display.setCursor(0, 14);
+
+          display.setColor(
+            UIColor::secondary_txt
+          );
+
+          char filtered_origin[
+            sizeof(p->origin)
+          ];
+
+          display.translateUTF8ToBlocks(
+            filtered_origin,
+            p->origin,
+            sizeof(filtered_origin)
+          );
+
+          display.print(filtered_origin);
+
+          // Mensagem
+          display.setCursor(0, 25);
+
+          display.setColor(
+            UIColor::primary_txt
+          );
+
+          char filtered_msg[
+            sizeof(p->msg)
+          ];
+
+          display.translateUTF8ToBlocks(
+            filtered_msg,
+            p->msg,
+            sizeof(filtered_msg)
+          );
+
+          display.printWordWrap(
+            filtered_msg,
+            display.width()
+          );
+
+          // Contador
+          char counter[20];
+
+          sprintf(
+            counter,
+            "%d/%d",
+            _history_position + 1,
+            total
+          );
+
+          display.setColor(
+            UIColor::secondary_txt
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            54,
+            counter
+          );
+        }
+      }
+
+#if AUTO_OFF_MILLIS==0
+      return 10000;
+#else
+      return 1000;
+#endif
+    }
+
+    // ======================================================
+    // NOTIFICAÇÃO NORMAL
+    // ======================================================
+
     char tmp[16];
+
     display.setCursor(0, 0);
     display.setTextSize(1);
-    display.setColor(UIColor::corp_blue);
-    sprintf(tmp, "Unread: %d", num_unread);
+
+    display.setColor(
+      UIColor::corp_blue
+    );
+
+    sprintf(
+      tmp,
+      "Unread: %d",
+      num_unread
+    );
+
     display.print(tmp);
 
-    auto p = &unread[head];
+    if (num_unread > 0) {
 
-    int secs = _rtc->getCurrentTime() - p->timestamp;
-    if (secs < 60) {
-      sprintf(tmp, "%ds", secs);
-    } else if (secs < 60*60) {
-      sprintf(tmp, "%dm", secs / 60);
-    } else {
-      sprintf(tmp, "%dh", secs / (60*60));
+      MsgEntry* p =
+        &unread[unread_head];
+
+      int secs =
+        _rtc->getCurrentTime() -
+        p->timestamp;
+
+      if (secs < 60) {
+
+        sprintf(
+          tmp,
+          "%ds",
+          secs
+        );
+
+      } else if (secs < 60 * 60) {
+
+        sprintf(
+          tmp,
+          "%dm",
+          secs / 60
+        );
+
+      } else {
+
+        sprintf(
+          tmp,
+          "%dh",
+          secs / (60 * 60)
+        );
+      }
+
+      display.setCursor(
+        display.width() -
+        display.getTextWidth(tmp) -
+        2,
+        0
+      );
+
+      display.print(tmp);
+
+      display.drawRect(
+        0,
+        11,
+        display.width(),
+        1
+      );
+
+      display.setCursor(0, 14);
+
+      display.setColor(
+        UIColor::secondary_txt
+      );
+
+      char filtered_origin[
+        sizeof(p->origin)
+      ];
+
+      display.translateUTF8ToBlocks(
+        filtered_origin,
+        p->origin,
+        sizeof(filtered_origin)
+      );
+
+      display.print(filtered_origin);
+
+      display.setCursor(0, 25);
+
+      display.setColor(
+        UIColor::primary_txt
+      );
+
+      char filtered_msg[
+        sizeof(p->msg)
+      ];
+
+      display.translateUTF8ToBlocks(
+        filtered_msg,
+        p->msg,
+        sizeof(filtered_msg)
+      );
+
+      display.printWordWrap(
+        filtered_msg,
+        display.width()
+      );
     }
-    display.setCursor(display.width() - display.getTextWidth(tmp) - 2, 0);
-    display.print(tmp);
 
-    display.drawRect(0, 11, display.width(), 1);  // horiz line
-
-    display.setCursor(0, 14);
-    display.setColor(UIColor::secondary_txt);
-    char filtered_origin[sizeof(p->origin)];
-    display.translateUTF8ToBlocks(filtered_origin, p->origin, sizeof(filtered_origin));
-    display.print(filtered_origin);
-
-    display.setCursor(0, 25);
-    display.setColor(UIColor::primary_txt);
-    char filtered_msg[sizeof(p->msg)];
-    display.translateUTF8ToBlocks(filtered_msg, p->msg, sizeof(filtered_msg));
-    display.printWordWrap(filtered_msg, display.width());
-
-#if AUTO_OFF_MILLIS==0 // probably e-ink
-    return 10000; // 10 s
+#if AUTO_OFF_MILLIS==0
+    return 10000;
 #else
-    return 1000;  // next render after 1000 ms
+    return 1000;
 #endif
   }
 
+  // ========================================================
+  // INPUT
+  // ========================================================
+
   bool handleInput(char c) override {
-    if (c == KEY_NEXT || c == KEY_RIGHT) {
-      head = (head + MAX_UNREAD_MSGS - 1) % MAX_UNREAD_MSGS;
-      num_unread--;
-      if (num_unread == 0) {
-        _task->gotoHomeScreen();
+
+    // ======================================================
+    // HISTÓRICO
+    // ======================================================
+
+    if (_history_mode) {
+
+      int total =
+        countChannelMessages();
+
+      // Próxima mensagem
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+        if (total > 0) {
+
+          _history_position =
+            (_history_position + 1) % total;
+        }
+
+        return true;
       }
+
+      // Mensagem anterior
+      if (c == KEY_PREV || c == KEY_LEFT) {
+
+        if (total > 0) {
+
+          _history_position =
+            (_history_position + total - 1)
+            % total;
+        }
+
+        return true;
+      }
+
+      // Sair do histórico
+      if (c == KEY_ENTER ||
+          c == KEY_CANCEL) {
+
+        _history_mode = false;
+
+        _task->gotoHomeScreen();
+
+        return true;
+      }
+
       return true;
     }
+
+    // ======================================================
+    // NOTIFICAÇÕES
+    // ======================================================
+
+    if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+      if (num_unread > 0) {
+
+        unread_head =
+          (unread_head + MAX_UNREAD_MSGS - 1)
+          % MAX_UNREAD_MSGS;
+
+        num_unread--;
+
+        if (num_unread == 0) {
+          _task->gotoHomeScreen();
+        }
+      }
+
+      return true;
+    }
+
     if (c == KEY_ENTER) {
-      num_unread = 0;  // clear unread queue
+
+      num_unread = 0;
+
       _task->gotoHomeScreen();
+
       return true;
     }
+
     return false;
   }
 };
+
+
+void UITask::gotoChannelMessages(uint8_t channel_index) {
+
+  ChannelDetails channel;
+
+  if (!the_mesh.getChannel(
+        channel_index,
+        channel
+      )) {
+
+    return;
+  }
+
+  ((MsgPreviewScreen*) channel_messages)->openChannel(
+    channel.channel.hash,
+    channel.name
+  );
+
+  setCurrScreen(channel_messages);
+}
+
 
 void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs) {
   _display = display;
@@ -946,6 +1693,7 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   splash = new SplashScreen(this);
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
   msg_preview = new MsgPreviewScreen(this, &rtc_clock);
+  channel_messages = msg_preview;
   setCurrScreen(splash);
 }
 
@@ -991,10 +1739,15 @@ void UITask::msgRead(int msgcount) {
   }
 }
 
-void UITask::newMsg(uint8_t path_len, const char* from_name, const char* text, int msgcount) {
+void UITask::newMsg(uint8_t path_len, const uint8_t* channel_hash, const char* from_name, const char* text, int msgcount) {
   _msgcount = msgcount;
 
-  ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, from_name, text);
+  if (channel_hash != NULL && !hasConnection()) {
+    HomeScreen* home_ptr = (HomeScreen*) home;
+    home_ptr->addUnreadChannelMessage(channel_hash);
+  }
+
+  ((MsgPreviewScreen *) msg_preview)->addPreview(path_len, channel_hash, from_name, text);
   setCurrScreen(msg_preview);
 
   if (_display != NULL) {
