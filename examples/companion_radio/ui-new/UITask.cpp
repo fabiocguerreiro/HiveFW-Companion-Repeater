@@ -106,15 +106,13 @@ class HomeScreen : public UIScreen {
     RECENT,
     MESSAGES,
     RADIO,
-    BLUETOOTH,
-    ADVERT,
 #if ENV_INCLUDE_GPS == 1
     GPS,
 #endif
 #if UI_SENSORS_PAGE == 1
     SENSORS,
 #endif
-    SHUTDOWN,
+    SETTINGS,
     CLOCK,
     Count    // keep as last
   };
@@ -126,6 +124,10 @@ class HomeScreen : public UIScreen {
   uint8_t _page;
   uint8_t _sms_menu;
   bool _sms_submenu;
+  uint8_t _sms_messages_menu;
+  bool _sms_messages_submenu;
+  uint8_t _settings_menu;
+  bool _settings_submenu;
   bool _shutdown_init;
   AdvertPath recent[UI_RECENT_LIST_SIZE];
 
@@ -193,7 +195,9 @@ public:
   HomeScreen(UITask* task, mesh::RTCClock* rtc, SensorManager* sensors, NodePrefs* node_prefs)
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
        _sms_menu(0), _sms_submenu(false),
-    _shutdown_init(false), sensors_lpp(200) {  }
+       _sms_messages_menu(0), _sms_messages_submenu(false),
+       _settings_menu(0), _settings_submenu(false),
+       _shutdown_init(false), sensors_lpp(200) {  }
 
   void poll() override {
     if (_shutdown_init && !_task->isButtonPressed()) {  // must wait for USR button to be released
@@ -281,22 +285,51 @@ public:
         display.print(tmp);
       }
     } else if (_page == HomePage::MESSAGES) {
-    display.setTextSize(2);
-    display.setColor(UIColor::primary_txt);
-    display.drawTextCentered(display.width() / 2, 21, "SMS");
+    if (!_sms_submenu) {
+      display.setColor(UIColor::corp_blue);
+      display.drawXbm((display.width() - 32) / 2, 15, sms_icon, 32, 32);
 
-    if (_sms_submenu) {
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(1);
+      display.drawTextCentered(display.width() / 2, 55, "SMS");
+
+    } else if (_sms_messages_submenu) {
+
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(1);
+      display.drawTextCentered(display.width() / 2, 18, "Mensagens");
+
+      const char* items[] = {
+        "Public",
+        "[Next]"
+      };
+
+      for (int i = 0; i < 2; i++) {
+        int y = 34 + (i * 12);
+
+        if (i == _sms_messages_menu) {
+          display.setColor(UIColor::primary_txt);
+          display.drawTextCentered(display.width() / 2 - 42, y, ">");
+          display.drawTextCentered(display.width() / 2 + 8, y, items[i]);
+        } else {
+          display.setColor(UIColor::secondary_txt);
+          display.drawTextCentered(display.width() / 2, y, items[i]);
+        }
+      }
+
+    } else {
+
+      display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
 
       const char* sms_items[] = {
         "Nova Mensagem",
         "Mensagens",
-        "Next",
-        "Back"
+        "[Next]"
       };
 
-      for (int i = 0; i < 4; i++) {
-        int y = 34 + (i * 9);
+      for (int i = 0; i < 3; i++) {
+        int y = 25 + (i * 12);
 
         if (i == _sms_menu) {
           display.setColor(UIColor::primary_txt);
@@ -328,19 +361,42 @@ public:
       display.setCursor(0, 53);
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
       display.print(tmp);
-    } else if (_page == HomePage::BLUETOOTH) {
+    } else if (_page == HomePage::SETTINGS) {
+
+    if (!_settings_submenu) {
+
       display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2, 18,
-          _task->isBluetoothEnabled() ? bluetooth_on : bluetooth_off,
-          32, 32);
-      display.setColor(UIColor::secondary_txt);
+      display.drawXbm((display.width() - 32) / 2, 15, settings_icon, 32, 32);
+
+      display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 64 - 11, "toggle: " PRESS_LABEL);
-    } else if (_page == HomePage::ADVERT) {
-      display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2, 18, advert_icon, 32, 32);
-      display.setColor(UIColor::secondary_txt);
-      display.drawTextCentered(display.width() / 2, 64 - 11, "advert: " PRESS_LABEL);
+      display.drawTextCentered(display.width() / 2, 55, "SETTINGS");
+
+    } else {
+
+      display.setTextSize(1);
+
+      const char* settings_items[] = {
+        "Bluetooth",
+        "Advert",
+        "Shutdown",
+        "[Next]"
+      };
+
+      for (int i = 0; i < 4; i++) {
+        int y = 19 + (i * 11);
+
+        if (i == _settings_menu) {
+          display.setColor(UIColor::primary_txt);
+          display.drawTextCentered(display.width() / 2 - 42, y, ">");
+          display.drawTextCentered(display.width() / 2 + 8, y, settings_items[i]);
+        } else {
+          display.setColor(UIColor::secondary_txt);
+          display.drawTextCentered(display.width() / 2, y, settings_items[i]);
+        }
+      }
+    }
+
 #if ENV_INCLUDE_GPS == 1
     } else if (_page == HomePage::GPS) {
       LocationProvider* nmea = sensors.getLocationProvider();
@@ -557,32 +613,64 @@ public:
         summerTime ? "Horário de Verão" : "Horário de Inverno"
       );
 
-    } else if (_page == HomePage::SHUTDOWN) {
-      display.setColor(UIColor::corp_blue);
-      display.setTextSize(1);
-      if (_shutdown_init) {
-        display.setColor(UIColor::warning_txt);
-        display.drawTextCentered(display.width() / 2, 34, "hibernating...");
-      } else {
-        display.setColor(UIColor::secondary_txt);
-        display.drawXbm((display.width() - 32) / 2, 18, power_icon, 32, 32);
-        display.drawTextCentered(display.width() / 2, 64 - 11, "hibernate:" PRESS_LABEL);
-      }
-    }
     return 5000;   // next render after 5000 ms
+  }
   }
 
   bool handleInput(char c) override {
-    // SMS submenu: NEXT/PREV move the cursor instead of changing pages.
-    if (_page == HomePage::MESSAGES && _sms_submenu) {
+
+    // ========================================================
+    // SMS -> MENSAGENS -> PUBLIC
+    // ========================================================
+
+    if (_page == HomePage::MESSAGES && _sms_messages_submenu) {
 
       if (c == KEY_NEXT) {
-        _sms_menu = (_sms_menu + 1) % 4;
+        _sms_messages_menu = (_sms_messages_menu + 1) % 2;
         return true;
       }
 
       if (c == KEY_PREV) {
-        _sms_menu = (_sms_menu + 3) % 4;
+        _sms_messages_menu = (_sms_messages_menu + 1) % 2;
+        return true;
+      }
+
+      if (c == KEY_CANCEL) {
+        _sms_messages_submenu = false;
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+
+        // Public
+        if (_sms_messages_menu == 0) {
+          _task->showAlert("Public", 1000);
+          return true;
+        }
+
+        // [Next]
+        if (_sms_messages_menu == 1) {
+          _sms_messages_submenu = false;
+          _sms_submenu = false;
+          _page = (_page + 1) % HomePage::Count;
+          return true;
+        }
+      }
+    }
+
+    // ========================================================
+    // SMS MENU
+    // ========================================================
+
+    if (_page == HomePage::MESSAGES && _sms_submenu) {
+
+      if (c == KEY_NEXT) {
+        _sms_menu = (_sms_menu + 1) % 3;
+        return true;
+      }
+
+      if (c == KEY_PREV) {
+        _sms_menu = (_sms_menu + 2) % 3;
         return true;
       }
 
@@ -592,31 +680,94 @@ public:
       }
 
       if (c == KEY_ENTER) {
+
+        // Nova Mensagem
         if (_sms_menu == 0) {
           _task->showAlert("Nova Mensagem", 1000);
           return true;
         }
 
+        // Mensagens
         if (_sms_menu == 1) {
-          _task->showAlert("Mensagens", 1000);
+          _sms_messages_submenu = true;
+          _sms_messages_menu = 0;
           return true;
         }
 
+        // [Next]
         if (_sms_menu == 2) {
           _sms_submenu = false;
           _page = (_page + 1) % HomePage::Count;
           return true;
         }
+      }
+    }
 
-        if (_sms_menu == 3) {
-          _sms_submenu = false;
-          _page = (_page + HomePage::Count - 1) % HomePage::Count;
+    // ========================================================
+    // SETTINGS MENU
+    // ========================================================
+
+    if (_page == HomePage::SETTINGS && _settings_submenu) {
+
+      if (c == KEY_NEXT) {
+        _settings_menu = (_settings_menu + 1) % 4;
+        return true;
+      }
+
+      if (c == KEY_PREV) {
+        _settings_menu = (_settings_menu + 3) % 4;
+        return true;
+      }
+
+      if (c == KEY_CANCEL) {
+        _settings_submenu = false;
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+
+        // Bluetooth
+        if (_settings_menu == 0) {
+          if (_task->isBluetoothEnabled()) {
+            _task->disableBluetooth();
+          } else {
+            _task->enableBluetooth();
+          }
+          return true;
+        }
+
+        // Advert
+        if (_settings_menu == 1) {
+          _task->notify(UIEventType::ack);
+
+          if (the_mesh.advert()) {
+            _task->showAlert("Advert sent!", 1000);
+          } else {
+            _task->showAlert("Advert failed..", 1000);
+          }
+
+          return true;
+        }
+
+        // Shutdown
+        if (_settings_menu == 2) {
+          _shutdown_init = true;
+          return true;
+        }
+
+        // [Next]
+        if (_settings_menu == 3) {
+          _settings_submenu = false;
+          _page = (_page + 1) % HomePage::Count;
           return true;
         }
       }
     }
 
-    // Normal page navigation remains unchanged.
+    // ========================================================
+    // NORMAL PAGE NAVIGATION
+    // ========================================================
+
     if (c == KEY_LEFT || c == KEY_PREV) {
       _page = (_page + HomePage::Count - 1) % HomePage::Count;
       return true;
@@ -624,11 +775,17 @@ public:
 
     if (c == KEY_NEXT || c == KEY_RIGHT) {
       _page = (_page + 1) % HomePage::Count;
+
       if (_page == HomePage::RECENT) {
         _task->showAlert("Recent adverts", 800);
       }
+
       return true;
     }
+
+    // ========================================================
+    // ENTER SMS
+    // ========================================================
 
     if (c == KEY_ENTER && _page == HomePage::MESSAGES) {
       _sms_submenu = true;
@@ -636,30 +793,23 @@ public:
       return true;
     }
 
-    if (c == KEY_ENTER && _page == HomePage::BLUETOOTH) {
-      if (_task->isBluetoothEnabled()) {
-        _task->disableBluetooth();
-      } else {
-        _task->enableBluetooth();
-      }
+    // ========================================================
+    // ENTER SETTINGS
+    // ========================================================
+
+    if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
+      _settings_submenu = true;
+      _settings_menu = 0;
       return true;
     }
 
-    if (c == KEY_ENTER && _page == HomePage::ADVERT) {
-      _task->notify(UIEventType::ack);
-      if (the_mesh.advert()) {
-        _task->showAlert("Advert sent!", 1000);
-      } else {
-        _task->showAlert("Advert failed..", 1000);
-      }
-      return true;
-    }
 #if ENV_INCLUDE_GPS == 1
     if (c == KEY_ENTER && _page == HomePage::GPS) {
       _task->toggleGPS();
       return true;
     }
 #endif
+
 #if UI_SENSORS_PAGE == 1
     if (c == KEY_ENTER && _page == HomePage::SENSORS) {
       _task->toggleGPS();
@@ -667,10 +817,7 @@ public:
       return true;
     }
 #endif
-    if (c == KEY_ENTER && _page == HomePage::SHUTDOWN) {
-      _shutdown_init = true;
-      return true;
-    }
+
     return false;
   }};
 
