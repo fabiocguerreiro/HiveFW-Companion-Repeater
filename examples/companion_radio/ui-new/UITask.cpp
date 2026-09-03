@@ -115,6 +115,7 @@ class HomeScreen : public UIScreen {
     SENSORS,
 #endif
     SHUTDOWN,
+    CLOCK,
     Count    // keep as last
   };
 
@@ -130,43 +131,35 @@ class HomeScreen : public UIScreen {
 
 
   void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
-    // Convert millivolts to percentage
 #ifndef BATT_MIN_MILLIVOLTS
-  #define BATT_MIN_MILLIVOLTS 3000
+#define BATT_MIN_MILLIVOLTS 3000
 #endif
 #ifndef BATT_MAX_MILLIVOLTS
-  #define BATT_MAX_MILLIVOLTS 4200
+#define BATT_MAX_MILLIVOLTS 4200
 #endif
+
     const int minMilliVolts = BATT_MIN_MILLIVOLTS;
     const int maxMilliVolts = BATT_MAX_MILLIVOLTS;
-    int batteryPercentage = ((batteryMilliVolts - minMilliVolts) * 100) / (maxMilliVolts - minMilliVolts);
-    if (batteryPercentage < 0) batteryPercentage = 0; // Clamp to 0%
-    if (batteryPercentage > 100) batteryPercentage = 100; // Clamp to 100%
 
-    // battery icon
-    int iconWidth = 24;
-    int iconHeight = 10;
-    int iconX = display.width() - iconWidth - 5; // Position the icon near the top-right corner
-    int iconY = 0;
-    display.setColor(UIColor::title_txt);
+    int batteryPercentage =
+      ((batteryMilliVolts - minMilliVolts) * 100) /
+      (maxMilliVolts - minMilliVolts);
 
-    // battery outline
-    display.drawRect(iconX, iconY, iconWidth, iconHeight);
+    if (batteryPercentage < 0) batteryPercentage = 0;
+    if (batteryPercentage > 100) batteryPercentage = 100;
 
-    // battery "cap"
-    display.fillRect(iconX + iconWidth, iconY + (iconHeight / 4), 3, iconHeight / 2);
+    char batteryText[24];
+    snprintf(
+      batteryText,
+      sizeof(batteryText),
+      "%d%% %.2fV",
+      batteryPercentage,
+      batteryMilliVolts / 1000.0f
+    );
 
-    // fill the battery based on the percentage
-    int fillWidth = (batteryPercentage * (iconWidth - 4)) / 100;
-    display.fillRect(iconX + 2, iconY + 2, fillWidth, iconHeight - 4);
-
-    // show muted icon if buzzer is muted
-#ifdef PIN_BUZZER
-    if (_task->isBuzzerQuiet()) {
-      display.setColor(UIColor::warning_txt);
-      display.drawXbm(iconX - 9, iconY + 1, muted_icon, 8, 8);
-    }
-#endif
+    display.setColor(UIColor::secondary_txt);
+    display.setTextSize(1);
+    display.drawTextCentered(display.width() - 24, 1, batteryText);
   }
 
   CayenneLPP sensors_lpp;
@@ -470,6 +463,100 @@ public:
       if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
       else sensors_scroll_offset = 0;
 #endif
+    } else if (_page == HomePage::CLOCK) {
+      uint32_t now = _rtc->getCurrentTime();
+
+      // Lisbon timezone:
+      // Winter = UTC+0
+      // Summer = UTC+1
+      // DST starts on the last Sunday of March
+      // DST ends on the last Sunday of October
+
+      DateTime utc = DateTime(now);
+
+      int daysInMonth = 31;
+      if (utc.month() == 4 || utc.month() == 6 || utc.month() == 9 || utc.month() == 11) {
+        daysInMonth = 30;
+      } else if (utc.month() == 2) {
+        daysInMonth = ((utc.year() % 4 == 0 && utc.year() % 100 != 0) || (utc.year() % 400 == 0)) ? 29 : 28;
+      }
+
+      // Calculate weekday of the last day of the month.
+      // 0 = Sunday, 1 = Monday, ... 6 = Saturday
+      int y = utc.year();
+      int m = utc.month();
+      int d = daysInMonth;
+
+      if (m < 3) {
+        y--;
+        m += 12;
+      }
+
+      int weekdayLastDay =
+        (d + (13 * (m + 1)) / 5 + y + y / 4 - y / 100 + y / 400) % 7;
+
+      // Zeller: 0 = Saturday, 1 = Sunday, ...
+      int sundayOffset = (weekdayLastDay + 6) % 7;
+      int lastSunday = daysInMonth - sundayOffset;
+
+      bool summerTime = false;
+
+      if (utc.month() > 3 && utc.month() < 10) {
+        summerTime = true;
+      } else if (utc.month() == 3) {
+        if (utc.day() > lastSunday) {
+          summerTime = true;
+        } else if (utc.day() == lastSunday && utc.hour() >= 1) {
+          // EU DST transition occurs at 01:00 UTC
+          summerTime = true;
+        }
+      } else if (utc.month() == 10) {
+        if (utc.day() < lastSunday) {
+          summerTime = true;
+        } else if (utc.day() == lastSunday && utc.hour() < 1) {
+          // Until 01:00 UTC on the last Sunday of October
+          summerTime = true;
+        }
+      }
+
+      uint32_t localTimestamp = now + (summerTime ? 3600 : 0);
+      DateTime localTime = DateTime(localTimestamp);
+
+      char timeText[16];
+      char dateText[16];
+
+      snprintf(
+        timeText,
+        sizeof(timeText),
+        "%02d:%02d",
+        localTime.hour(),
+        localTime.minute()
+      );
+
+      snprintf(
+        dateText,
+        sizeof(dateText),
+        "%02d/%02d/%04d",
+        localTime.day(),
+        localTime.month(),
+        localTime.year()
+      );
+
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(2);
+      display.drawTextCentered(display.width() / 2 + 2, 25, timeText);
+
+      display.setColor(UIColor::secondary_txt);
+      display.setTextSize(1);
+      display.drawTextCentered(display.width() / 2, 41, dateText);
+
+      display.setTextSize(1);
+      display.drawTextCentered(
+        display.width() / 2 + 2,
+        53,
+        summerTime ? "Horário de Verão" : "Horário de Inverno"
+      );
+
     } else if (_page == HomePage::SHUTDOWN) {
       display.setColor(UIColor::corp_blue);
       display.setTextSize(1);
