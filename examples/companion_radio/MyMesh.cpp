@@ -106,6 +106,14 @@
 #define DIRECT_SEND_PERHOP_EXTRA_MILLIS 250
 #define LAZY_CONTACTS_WRITE_DELAY       5000
 
+#ifndef CTL_TYPE_NODE_DISCOVER_REQ
+#define CTL_TYPE_NODE_DISCOVER_REQ   0x80
+#endif
+
+#ifndef CTL_TYPE_NODE_DISCOVER_RESP
+#define CTL_TYPE_NODE_DISCOVER_RESP  0x90
+#endif
+
 #define PUBLIC_GROUP_PSK                "izOH6cXN6mrJ5e26oRXNcg=="
 
 // these are _pushed_ to client app at any time
@@ -391,6 +399,66 @@ void MyMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path
 
 static int sort_by_recent(const void *a, const void *b) {
   return ((AdvertPath *) b)->recv_timestamp - ((AdvertPath *) a)->recv_timestamp;
+}
+
+
+bool MyMesh::sendNodeDiscoveryReq() {
+
+  // DISCOVER_REQ
+  //
+  // byte 0 = subtype 0x80
+  // byte 1 = type filter
+  // byte 2..5 = random tag
+  // byte 6..9 = since timestamp
+
+  uint8_t data[10];
+
+  data[0] = CTL_TYPE_NODE_DISCOVER_REQ;
+
+  // Procuramos Repeaters, Rooms e Companions.
+  data[1] =
+      (1 << ADV_TYPE_CHAT) |
+      (1 << ADV_TYPE_REPEATER) |
+      (1 << ADV_TYPE_ROOM);
+
+  getRNG()->random(&data[2], 4);
+
+  memcpy(
+    &pending_discover_tag,
+    &data[2],
+    4
+  );
+
+  // janela de 60 segundos para respostas
+  pending_discover_until =
+    millis() + 60000UL;
+
+  uint32_t since = 0;
+
+  memcpy(
+    &data[6],
+    &since,
+    4
+  );
+
+  mesh::Packet* pkt =
+    createControlData(
+      data,
+      sizeof(data)
+    );
+
+  if (!pkt) {
+
+    pending_discover_tag = 0;
+    pending_discover_until = 0;
+
+    return false;
+  }
+
+  // DISCOVER_REQ é enviado por zero-hop/flood.
+  sendZeroHop(pkt);
+
+  return true;
 }
 
 int MyMesh::getRecentlyHeard(AdvertPath dest[], int max_num) {
@@ -781,11 +849,63 @@ bool MyMesh::onContactPathRecv(ContactInfo& contact, uint8_t* in_path, uint8_t i
 void MyMesh::onControlDataRecv(mesh::Packet *packet) {
   // Node Discovery is exclusively a Repeater feature.
   // Normal Companion control-data handling remains unchanged.
+  // ==========================================================
+  // companion discover response final
+  // ==========================================================
+  //
+  // O Companion também aceita DISCOVER_RESP.
+  // O pedido continua a ser tratado pelo protocolo Zero-Hop.
+  //
+
+  if (packet->payload_len >=
+      6 + PUB_KEY_SIZE) {
+
+    uint8_t type =
+      packet->payload[0] & 0xF0;
+
+    if (type == CTL_TYPE_NODE_DISCOVER_RESP) {
+
+      if (pending_discover_tag != 0 &&
+          (long)(
+            pending_discover_until -
+            millis()
+          ) > 0) {
+
+        uint32_t tag = 0;
+
+        memcpy(
+          &tag,
+          &packet->payload[2],
+          4
+        );
+
+        if (tag == pending_discover_tag) {
+
+          // Recebemos a resposta à nossa pesquisa.
+          //
+          // Não precisamos de criar outro formato de
+          // armazenamento: os adverts recebidos continuam
+          // a alimentar AdvertPath/getRecentlyHeard().
+          //
+          // Apenas mantemos a pesquisa válida enquanto
+          // chegam respostas correspondentes.
+
+#ifdef DISPLAY_CLASS
+          if (_ui) {
+
+            _ui->notify(
+              UIEventType::newContactMessage
+            );
+          }
+#endif
+        }
+      }
+    }
+  }
+
   if (_prefs.isRepeatEn() && packet->payload_len >= 1) {
     const uint8_t type = packet->payload[0] & 0xF0;
 
-    const uint8_t CTL_TYPE_NODE_DISCOVER_REQ  = 0x80;
-    const uint8_t CTL_TYPE_NODE_DISCOVER_RESP = 0x90;
 
     if (type == CTL_TYPE_NODE_DISCOVER_REQ &&
         packet->payload_len >= 6) {
@@ -918,6 +1038,8 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   offline_queue_len = 0;
   app_target_ver = 0;
   clearPendingReqs();
+  pending_discover_tag = 0;
+  pending_discover_until = 0;
   next_ack_idx = 0;
   sign_data = NULL;
   dirty_contacts_expiry = 0;

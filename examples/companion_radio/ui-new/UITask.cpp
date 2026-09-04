@@ -113,9 +113,12 @@ class HomeScreen : public UIScreen {
     SENSORS,
 #endif
     SETTINGS,
-    HOME_ASSISTANT,
-    CLOCK,
-    Count    // keep as last
+    APPS,
+    Count,    // keep as last
+
+    // Estados internos das APPS.
+    INTERNAL_HOME_ASSISTANT,
+    INTERNAL_CLOCK
   };
 
   UITask* _task;
@@ -172,6 +175,61 @@ class HomeScreen : public UIScreen {
   bool _ha_submenu;
   uint8_t _ha_confirm;
   bool _ha_confirm_submenu;
+
+  // APPS
+  // 0 = menu
+  // 1 = relógio
+  // 2 = Home Assistant
+  // 3 = Descobrir Nós
+  uint8_t _apps_menu;
+  uint8_t _apps_view;
+  bool _apps_submenu;
+  bool _apps_return;
+
+  // Descobrir Nós
+  static const uint8_t DISCOVER_MAX_NODES = 8;
+  AdvertPath _discover_nodes[DISCOVER_MAX_NODES];
+  uint8_t _discover_count;
+  uint8_t _discover_menu;
+
+  void refreshDiscoveredNodes() {
+
+    AdvertPath temp[DISCOVER_MAX_NODES];
+
+    int total =
+      the_mesh.getRecentlyHeard(
+        temp,
+        DISCOVER_MAX_NODES
+      );
+
+    _discover_count = 0;
+
+    for (int i = 0;
+         i < total &&
+         _discover_count < DISCOVER_MAX_NODES;
+         i++) {
+
+      if (temp[i].recv_timestamp == 0)
+        continue;
+
+      _discover_nodes[_discover_count] =
+        temp[i];
+
+      _discover_count++;
+    }
+
+    if (_discover_count == 0) {
+
+      _discover_menu = 0;
+
+    } else if (
+      _discover_menu >= _discover_count
+    ) {
+
+      _discover_menu = 0;
+    }
+  }
+
   bool _shutdown_init;
   AdvertPath recent[UI_RECENT_LIST_SIZE];
 
@@ -258,6 +316,8 @@ public:
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
       _ha_confirm(0), _ha_confirm_submenu(false),
+       _apps_menu(0), _apps_view(0), _apps_submenu(false), _apps_return(false),
+       _discover_count(0), _discover_menu(0),
        _shutdown_init(false), sensors_lpp(200) {
     _sms_text[0] = '\0';
     memset(&_sms_recipient, 0, sizeof(_sms_recipient));
@@ -1248,7 +1308,324 @@ public:
       if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
       else sensors_scroll_offset = 0;
 #endif
-    } else if (_page == HomePage::HOME_ASSISTANT) {
+
+    } else if (_page == HomePage::APPS) {
+
+      // ======================================================
+      // APPS
+      // ======================================================
+
+      // ------------------------------------------------------
+      // APPS -> DESCOBRIR NÓS
+      // ------------------------------------------------------
+
+      if (!_apps_submenu && _apps_view == 3) {
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          16,
+          "Descobrir Nós"
+        );
+
+        if (_discover_count == 0) {
+
+          display.drawTextCentered(
+            display.width() / 2,
+            31,
+            "Nenhum nó encontrado"
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            48,
+            "A aguardar anúncios..."
+          );
+
+        } else {
+
+          AdvertPath& node =
+            _discover_nodes[_discover_menu];
+
+          char name[33];
+          strncpy(
+            name,
+            node.name,
+            sizeof(name) - 1
+          );
+          name[sizeof(name) - 1] = '\0';
+
+          if (name[0] == '\0') {
+            strcpy(name, "Nó sem nome");
+          }
+
+          display.setColor(UIColor::primary_txt);
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            29,
+            name
+          );
+
+          uint32_t now =
+            _rtc->getCurrentTime();
+
+          uint32_t age = 0;
+
+          if (now >= node.recv_timestamp) {
+            age = now - node.recv_timestamp;
+          }
+
+          char ageText[32];
+
+          if (age < 60) {
+
+            snprintf(
+              ageText,
+              sizeof(ageText),
+              "há %lus",
+              (unsigned long)age
+            );
+
+          } else if (age < 3600) {
+
+            snprintf(
+              ageText,
+              sizeof(ageText),
+              "há %lum",
+              (unsigned long)(age / 60)
+            );
+
+          } else {
+
+            snprintf(
+              ageText,
+              sizeof(ageText),
+              "há %luh",
+              (unsigned long)(age / 3600)
+            );
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            41,
+            ageText
+          );
+
+          char infoText[32];
+
+          snprintf(
+            infoText,
+            sizeof(infoText),
+            "%d saltos   %d/%d",
+            (int)(node.path_len & 0x3F),
+            (int)(_discover_menu + 1),
+            (int)_discover_count
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            52,
+            infoText
+          );
+        }
+
+        display.drawTextCentered(
+          display.width() / 2,
+          63,
+          "[ SAIR ]"
+        );
+
+      }
+
+      // ------------------------------------------------------
+      // APPS -> NÓS DESCOBERTOS
+      // render discovered nodes final
+      // ------------------------------------------------------
+
+      else if (!_apps_submenu && _apps_view == 4) {
+
+        refreshDiscoveredNodes();
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          16,
+          "Nós descobertos"
+        );
+
+        if (_discover_count == 0) {
+
+          display.drawTextCentered(
+            display.width() / 2,
+            33,
+            "Nenhum nó conhecido"
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            49,
+            "A aguardar anúncios..."
+          );
+
+        } else {
+
+          AdvertPath& node =
+            _discover_nodes[_discover_menu];
+
+          char name[33];
+
+          strncpy(
+            name,
+            node.name,
+            sizeof(name) - 1
+          );
+
+          name[sizeof(name) - 1] = '\0';
+
+          if (name[0] == '\0') {
+            strcpy(name, "Nó sem nome");
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            29,
+            name
+          );
+
+          uint32_t now =
+            _rtc->getCurrentTime();
+
+          uint32_t age = 0;
+
+          if (now >= node.recv_timestamp) {
+            age = now - node.recv_timestamp;
+          }
+
+          char ageText[24];
+
+          if (age < 60) {
+
+            snprintf(
+              ageText,
+              sizeof(ageText),
+              "há %lus",
+              (unsigned long)age
+            );
+
+          } else if (age < 3600) {
+
+            snprintf(
+              ageText,
+              sizeof(ageText),
+              "há %lum",
+              (unsigned long)(age / 60)
+            );
+
+          } else {
+
+            snprintf(
+              ageText,
+              sizeof(ageText),
+              "há %luh",
+              (unsigned long)(age / 3600)
+            );
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            41,
+            ageText
+          );
+
+          char infoText[24];
+
+          snprintf(
+            infoText,
+            sizeof(infoText),
+            "%d saltos   %d/%d",
+            (int)(node.path_len & 0x3F),
+            (int)(_discover_menu + 1),
+            (int)_discover_count
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            53,
+            infoText
+          );
+        }
+
+        display.drawTextCentered(
+          display.width() / 2,
+          63,
+          "[ SAIR ]"
+        );
+      }
+
+      // ------------------------------------------------------
+      // APPS -> PÁGINA PRINCIPAL
+      // ------------------------------------------------------
+
+      else if (!_apps_submenu) {
+
+        display.setColor(UIColor::corp_blue);
+
+        display.drawXbm(
+          (display.width() - 32) / 2,
+          14,
+          apps_icon,
+          32,
+          32
+        );
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          55,
+          "APPS"
+        );
+
+      }
+
+      // ------------------------------------------------------
+      // APPS -> MENU
+      // ------------------------------------------------------
+
+      else {
+
+        const char* apps_items[] = {
+          "Relógio",
+          "Descobrir Nós",
+          "Nós descobertos",
+          "HOME ASSISTANT",
+          "[ SAIR ]"
+        };
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          34,
+          ">"
+        );
+
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          34,
+          apps_items[_apps_menu]
+        );
+      }
+
+    } else if (_page == HomePage::INTERNAL_HOME_ASSISTANT) {
 
       if (!_ha_submenu) {
 
@@ -1320,7 +1697,7 @@ public:
         );
       }
 
-    } else if (_page == HomePage::CLOCK) {
+    } else if (_page == HomePage::INTERNAL_CLOCK) {
       uint32_t now = _rtc->getCurrentTime();
 
       // Lisbon timezone:
@@ -2342,19 +2719,459 @@ public:
     }
 
     // ========================================================
+    // APPS MENU
+    // ========================================================
+
+    if (_page == HomePage::APPS && _apps_submenu) {
+
+      // ------------------------------------------------------
+      // MENU APPS
+      // ------------------------------------------------------
+
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+        _apps_menu =
+          (_apps_menu + 1) % 5;
+
+        return true;
+      }
+
+      if (c == KEY_PREV || c == KEY_LEFT) {
+
+        _apps_menu =
+          (_apps_menu + 4) % 5;
+
+        return true;
+      }
+
+      if (c == KEY_CANCEL ||
+          c == KEY_SELECT) {
+
+        _apps_submenu = false;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+
+        // RELÓGIO
+        if (_apps_menu == 0) {
+
+          _apps_submenu = false;
+          _apps_view = 1;
+          _apps_return = true;
+
+          _page = HomePage::INTERNAL_CLOCK;
+
+          return true;
+        }
+
+        // DESCOBRIR NÓS
+        if (_apps_menu == 1) {
+
+          _apps_submenu = false;
+          _apps_view = 3;
+          _apps_return = true;
+
+          _discover_menu = 0;
+          refreshDiscoveredNodes();
+
+          return true;
+        }
+
+        // NÓS DESCOBERTOS
+        if (_apps_menu == 2) {
+
+          _apps_submenu = false;
+          _apps_view = 4;
+          _apps_return = true;
+
+          _discover_menu = 0;
+          refreshDiscoveredNodes();
+
+          return true;
+        }
+
+        // HOME ASSISTANT
+        if (_apps_menu == 3) {
+
+          _apps_submenu = false;
+          _apps_view = 2;
+          _apps_return = true;
+
+          _ha_submenu = true;
+          _ha_menu = 0;
+          _ha_confirm = 0;
+          _ha_confirm_submenu = false;
+
+          _page = HomePage::INTERNAL_HOME_ASSISTANT;
+
+          return true;
+        }
+
+        // SAIR
+        if (_apps_menu == 4) {
+
+          _apps_submenu = false;
+          _apps_menu = 0;
+          _apps_view = 0;
+          _apps_return = false;
+
+          return true;
+        }
+      }
+
+      return true;
+    }
+
+    // --------------------------------------------------------
+    // APPS -> DESCOBRIR NÓS
+    // --------------------------------------------------------
+
+    if (_page == HomePage::APPS &&
+        !_apps_submenu &&
+        _apps_view == 3) {
+
+      // 1 CLICK -> próximo nó
+      if (c == KEY_NEXT ||
+          c == KEY_RIGHT) {
+
+        refreshDiscoveredNodes();
+
+        if (_discover_count > 0) {
+
+          _discover_menu =
+            (_discover_menu + 1)
+            % _discover_count;
+        }
+
+        return true;
+      }
+
+      // 2 CLICKS -> voltar para APPS
+      if (c == KEY_PREV ||
+          c == KEY_LEFT) {
+
+        _page = HomePage::APPS;
+
+        _apps_submenu = false;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        _discover_menu = 0;
+        _discover_count = 0;
+
+        return true;
+      }
+
+      // LONG PRESS -> DISCOVER_REQ
+      if (c == KEY_ENTER) {
+
+        _discover_count = 0;
+        _discover_menu = 0;
+
+        if (!the_mesh.sendNodeDiscoveryReq()) {
+
+          _task->showAlert(
+            "Falha ao descobrir",
+            1500
+          );
+
+        } else {
+
+          _task->showAlert(
+            "A procurar nós...",
+            1200
+          );
+        }
+
+        return true;
+      }
+
+      // 3 CLICKS -> sair
+      if (c == KEY_SELECT ||
+          c == KEY_CANCEL) {
+
+        _page = HomePage::APPS;
+
+        _apps_submenu = false;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        _discover_menu = 0;
+        _discover_count = 0;
+
+        return true;
+      }
+
+      return true;
+    }
+
+    // --------------------------------------------------------
+    // APPS -> NÓS DESCOBERTOS
+    // handler discovered nodes final
+    // --------------------------------------------------------
+
+    if (_page == HomePage::APPS &&
+        !_apps_submenu &&
+        _apps_view == 4) {
+
+      // 1 CLICK -> próximo
+      if (c == KEY_NEXT ||
+          c == KEY_RIGHT) {
+
+        refreshDiscoveredNodes();
+
+        if (_discover_count > 0) {
+
+          _discover_menu =
+            (_discover_menu + 1)
+            % _discover_count;
+        }
+
+        return true;
+      }
+
+      // 2 CLICKS -> voltar
+      if (c == KEY_PREV ||
+          c == KEY_LEFT) {
+
+        _page = HomePage::APPS;
+
+        _apps_submenu = false;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        return true;
+      }
+
+      // 3 CLICKS / CANCEL -> sair
+      if (c == KEY_SELECT ||
+          c == KEY_CANCEL) {
+
+        _page = HomePage::APPS;
+
+        _apps_submenu = false;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        return true;
+      }
+
+      return true;
+    }
+
+    // --------------------------------------------------------
+    // APPS -> RELÓGIO
+    //
+    // O render continua sendo o bloco CLOCK original.
+    // --------------------------------------------------------
+
+    if (_page == HomePage::INTERNAL_CLOCK &&
+        _apps_return) {
+
+      // Qualquer ação de saída regressa diretamente à
+      // aba principal APPS.
+
+      if (c == KEY_CANCEL ||
+          c == KEY_SELECT ||
+          c == KEY_ENTER) {
+
+        _page = HomePage::APPS;
+
+        _apps_submenu = false;
+        _apps_view = 0;
+        _apps_menu = 0;
+        _apps_return = false;
+
+        return true;
+      }
+
+      return true;
+    }
+
+    // --------------------------------------------------------
+    // APPS -> HOME ASSISTANT
+    // --------------------------------------------------------
+
+    if (_page == HomePage::INTERNAL_HOME_ASSISTANT &&
+        _apps_return) {
+
+      if (_ha_confirm_submenu) {
+
+        if (c == KEY_NEXT ||
+            c == KEY_RIGHT ||
+            c == KEY_PREV ||
+            c == KEY_LEFT) {
+
+          _ha_confirm =
+            (_ha_confirm + 1) % 2;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _ha_confirm_submenu = false;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (_ha_confirm == 0) {
+
+            ChannelDetails channel;
+            bool found = false;
+
+            for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+
+              if (the_mesh.getChannel(i, channel) &&
+                  strcmp(channel.name, "HIVE") == 0) {
+
+                found = true;
+                break;
+              }
+            }
+
+            if (!found) {
+
+              _task->showAlert(
+                "Canal HIVE nao encontrado",
+                1500
+              );
+
+              return true;
+            }
+
+            const char* command =
+              "!portapredio";
+
+            bool success =
+              the_mesh.sendGroupMessage(
+                _rtc->getCurrentTime(),
+                channel.channel,
+                _node_prefs->node_name,
+                command,
+                strlen(command)
+              );
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            _task->showAlert(
+              success
+                ? "Comando enviado"
+                : "Falha ao enviar",
+              1200
+            );
+
+            return true;
+          }
+
+          _ha_confirm_submenu = false;
+          return true;
+        }
+
+        return true;
+      }
+
+      if (c == KEY_NEXT ||
+          c == KEY_RIGHT) {
+
+        _ha_menu =
+          (_ha_menu + 1) % 2;
+
+        return true;
+      }
+
+      if (c == KEY_PREV ||
+          c == KEY_LEFT) {
+
+        _ha_menu =
+          (_ha_menu + 1) % 2;
+
+        return true;
+      }
+
+      if (c == KEY_CANCEL ||
+          c == KEY_SELECT ||
+          c == KEY_ENTER) {
+
+        _page = HomePage::APPS;
+
+        _apps_submenu = false;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        _ha_submenu = false;
+        _ha_confirm_submenu = false;
+
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+
+        if (_ha_menu == 0) {
+
+          _ha_confirm = 0;
+          _ha_confirm_submenu = true;
+
+          return true;
+        }
+
+        if (_ha_menu == 1) {
+
+          _page = HomePage::APPS;
+
+          _apps_submenu = false;
+          _apps_menu = 0;
+          _apps_view = 0;
+          _apps_return = false;
+
+          _ha_submenu = false;
+          _ha_confirm_submenu = false;
+
+          return true;
+        }
+      }
+
+      return true;
+    }
+
+    // ========================================================
     // NORMAL PAGE NAVIGATION
     // ========================================================
 
     if (c == KEY_LEFT || c == KEY_PREV) {
-      _page = (_page + HomePage::Count - 1) % HomePage::Count;
+
+      _page =
+        (_page + HomePage::Count - 1)
+        % HomePage::Count;
+
       return true;
     }
 
     if (c == KEY_NEXT || c == KEY_RIGHT) {
-      _page = (_page + 1) % HomePage::Count;
+
+      _page =
+        (_page + 1)
+        % HomePage::Count;
 
       if (_page == HomePage::RECENT) {
-        _task->showAlert("Recent adverts", 800);
+        _task->showAlert(
+          "Recent adverts",
+          800
+        );
       }
 
       return true;
@@ -2374,7 +3191,7 @@ public:
     // ENTER HOME ASSISTANT
     // ========================================================
 
-    if (c == KEY_ENTER && _page == HomePage::HOME_ASSISTANT) {
+    if (c == KEY_ENTER && _page == HomePage::INTERNAL_HOME_ASSISTANT) {
       _ha_submenu = true;
       _ha_menu = 0;
       _ha_confirm_submenu = false;
@@ -2382,6 +3199,20 @@ public:
     }
 
     // ========================================================
+    // ========================================================
+    // ENTER APPS
+    // ========================================================
+
+    if (c == KEY_ENTER && _page == HomePage::APPS) {
+
+      _apps_submenu = true;
+      _apps_menu = 0;
+      _apps_view = 0;
+      _apps_return = true;
+
+      return true;
+    }
+
     // ENTER SETTINGS
     // ========================================================
 

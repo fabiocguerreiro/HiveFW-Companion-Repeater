@@ -108,6 +108,7 @@ public:
   void enterCLIRescue();
 
   int  getRecentlyHeard(AdvertPath dest[], int max_num);
+  bool sendNodeDiscoveryReq();
 
 protected:
   float getAirtimeBudgetFactor() const override;
@@ -220,6 +221,8 @@ private:
   uint32_t pending_login;
   uint32_t pending_status;
   uint32_t pending_telemetry, pending_discovery;   // pending _TELEMETRY_REQ
+  uint32_t pending_discover_tag;
+  unsigned long pending_discover_until;
   uint32_t pending_req;   // pending _BINARY_REQ
   BaseSerialInterface *_serial;
   AbstractUITask* _ui;
