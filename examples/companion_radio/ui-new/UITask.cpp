@@ -165,15 +165,16 @@ class HomeScreen : public UIScreen {
     RECENT,
     MESSAGES,
     RADIO,
+    GPS,
+    REPETIDOR,
+    SENSORES,
+    RELÓGIO,
     SETTINGS,
     APPS,
     Count,    // keep as last
 
     // Estados internos das APPS.
-    INTERNAL_HOME_ASSISTANT,
-    INTERNAL_CLOCK,
-    INTERNAL_GPS,
-    INTERNAL_SENSORS
+    INTERNAL_HOME_ASSISTANT
   };
 
   UITask* _task;
@@ -241,6 +242,15 @@ class HomeScreen : public UIScreen {
   // 6 = Repetidores Descobertos
   uint8_t _apps_menu;
   uint8_t _apps_view;
+
+  // HiveFW Repeater statistics page:
+  // 0 RSSI
+  // 1 TX Airtime
+  // 2 Messages OUT
+  // 3 Messages IN
+  // 4 Location
+  uint8_t _repeater_stats_page;
+
   bool _apps_submenu;
   bool _apps_return;
 
@@ -395,7 +405,9 @@ public:
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
       _ha_confirm(0), _ha_confirm_submenu(false),
-       _apps_menu(0), _apps_view(0), _apps_submenu(false), _apps_return(false),
+       _apps_menu(0), _apps_view(0),
+       _repeater_stats_page(0),
+       _apps_submenu(false), _apps_return(false),
        _active_discovery_count(0), _active_discovery_menu(0),
        _discover_count(0), _discover_menu(0),
        _shutdown_init(false), sensors_lpp(200) {
@@ -604,10 +616,7 @@ public:
     int y,
     const char* text
   ) {
-    // Simula negrito desenhando o texto duas vezes,
-    // com deslocamento horizontal de 1 pixel.
     display.drawTextCentered(centerX, y, text);
-    display.drawTextCentered(centerX + 1, y, text);
   }
 
   void renderSectionHome(
@@ -682,7 +691,7 @@ public:
 
     if (_page == HomePage::FIRST) {
       display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
+      display.setTextSize(2);
       sprintf(tmp, "Mensagens: %d", _task->getMsgCount());
       display.drawTextCentered(display.width() / 2, 22, tmp);
 
@@ -1297,6 +1306,7 @@ public:
         const char* settings_items[] = {
           "BLUETOOTH",
           "ANUNCIAR NÓ",
+          "REPETIDOR",
           "DESLIGAR",
           "[ SAIR ]"
         };
@@ -1468,6 +1478,215 @@ public:
       // Discovery ATIVO. Não usa AdvertPath.
       // ------------------------------------------------------
 
+      // ------------------------------------------------------
+      // APLICAÇÕES -> ESTATÍSTICAS DO REPETIDOR
+      // ------------------------------------------------------
+      // _apps_view == 7
+      // ------------------------------------------------------
+
+      if (!_apps_submenu && _apps_view == 7) {
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        char value[40];
+
+        switch (_repeater_stats_page) {
+
+          case 0: {
+            // LAST RSSI
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "RSSI"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%d dBm",
+              (int)the_mesh.getRepeaterRSSI()
+            );
+
+            display.setTextSize(2);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "LAST RSSI"
+            );
+
+            break;
+          }
+
+          case 1: {
+            // TX AIRTIME
+            uint32_t ms = the_mesh.getRepeaterTXAirtime();
+            uint32_t seconds = ms / 1000;
+
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "ATIVIDADE TX"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lus",
+              (unsigned long)seconds
+            );
+
+            display.setTextSize(2);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "TX AIRTIME"
+            );
+
+            break;
+          }
+
+          case 2: {
+            // MENSAGENS OUT
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "MENSAGENS OUT"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu",
+              (unsigned long)the_mesh.getRepeaterMessagesOut()
+            );
+
+            display.setTextSize(2);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "TRANSMITIDAS"
+            );
+
+            break;
+          }
+
+          case 3: {
+            // MENSAGENS IN
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "MENSAGENS IN"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu",
+              (unsigned long)the_mesh.getRepeaterMessagesIn()
+            );
+
+            display.setTextSize(2);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "RECEBIDAS"
+            );
+
+            break;
+          }
+
+          case 4: {
+            // LOCALIZAÇÃO
+            NodePrefs *prefs = the_mesh.getNodePrefs();
+
+            double lat = (double)prefs->node_lat / 1000000.0;
+            double lon = (double)prefs->node_lon / 1000000.0;
+
+            display.drawTextCentered(
+              display.width() / 2,
+              14,
+              "LOCALIZAÇÃO"
+            );
+
+            char line1[32];
+            char line2[32];
+
+            snprintf(
+              line1,
+              sizeof(line1),
+              "LAT %.5f",
+              lat
+            );
+
+            snprintf(
+              line2,
+              sizeof(line2),
+              "LON %.5f",
+              lon
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              32,
+              line1
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              48,
+              line2
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              62,
+              "NO ANÚNCIO"
+            );
+
+            break;
+          }
+        }
+
+        return 0;
+      }
+
       if (!_apps_submenu && _apps_view == 5) {
 
         refreshActiveDiscoveryNodes();
@@ -1482,7 +1701,7 @@ public:
           display.drawTextCentered(
             display.width() / 2,
             37,
-            "Prima demoradamente"
+            "Pressione"
           );
 
         } else {
@@ -1755,13 +1974,6 @@ public:
 
         const char* apps_items[] = {
           "HOME ASSISTANT",
-#if ENV_INCLUDE_GPS == 1
-          "GPS",
-#endif
-#if UI_SENSORS_PAGE == 1
-          "SENSORES",
-#endif
-          "RELÓGIO",
           "DESCOBRIR REPETIDORES",
           "REPETIDORES DESCOBERTOS",
           "[ SAIR ]"
@@ -1787,12 +1999,12 @@ public:
         strncpy(line2, space + 1, sizeof(line2) - 1);
         line2[sizeof(line2) - 1] = '\0';
 
-        drawSelectedMenuText(display, display.width() / 2 + 8, 29, line1);
-        drawSelectedMenuText(display, display.width() / 2 + 8, 47, line2);
+        drawSelectedMenuText(display, display.width() / 2, 29, line1);
+        drawSelectedMenuText(display, display.width() / 2, 47, line2);
       } else {
         drawSelectedMenuText(
           display,
-          display.width() / 2 + 8,
+          display.width() / 2,
           38,
           text
         );
@@ -2832,12 +3044,12 @@ public:
       // ======================================================
 
       if (c == KEY_NEXT) {
-        _settings_menu = (_settings_menu + 1) % 4;
+        _settings_menu = (_settings_menu + 1) % 5;
         return true;
       }
 
       if (c == KEY_PREV) {
-        _settings_menu = (_settings_menu + 3) % 4;
+        _settings_menu = (_settings_menu + 4) % 5;
         return true;
       }
 
@@ -2877,14 +3089,32 @@ public:
           return true;
         }
 
-        // DESLIGAR
+        // REPETIDOR
         if (_settings_menu == 2) {
+          bool repeater_enable =
+            !the_mesh.getNodePrefs()->isRepeatEn();
+
+          the_mesh.getNodePrefs()->setRepeatEn(repeater_enable);
+          the_mesh.savePrefs();
+
+          _task->notify(UIEventType::ack);
+
+          _task->showAlert(
+            repeater_enable ? "Repetidor: ON" : "Repetidor: OFF",
+            1000
+          );
+
+          return true;
+        }
+
+        // DESLIGAR
+        if (_settings_menu == 3) {
           _shutdown_init = true;
           return true;
         }
 
         // SAIR
-        if (_settings_menu == 3) {
+        if (_settings_menu == 4) {
           _settings_submenu = false;
           _settings_menu = 0;
           return true;
@@ -2900,23 +3130,10 @@ public:
 
     if (_page == HomePage::APPS && _apps_submenu) {
 
-      // Número real de opções.
-      int apps_count = 5;
-      // HOME ASSISTANT
-      // RELÓGIO
-      // DESCOBRIR REPETIDORES
-      // REPETIDORES DESCOBERTOS
-      // SAIR
+      // Número de opções do menu APLICAÇÕES.
+      int apps_count = 4;
 
-#if ENV_INCLUDE_GPS == 1
-      apps_count++;
-#endif
-
-#if UI_SENSORS_PAGE == 1
-      apps_count++;
-#endif
-
-      if (c == KEY_NEXT || c == KEY_RIGHT) {
+    if (c == KEY_NEXT || c == KEY_RIGHT) {
 
         _apps_menu =
           (_apps_menu + 1) % apps_count;
@@ -2965,46 +3182,6 @@ public:
           return true;
         }
 
-#if ENV_INCLUDE_GPS == 1
-        // GPS
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 3;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_GPS;
-
-          return true;
-        }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-        // SENSORES
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 4;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_SENSORS;
-
-          return true;
-        }
-#endif
-
-        // RELÓGIO
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 1;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_CLOCK;
-
-          return true;
-        }
-
         // DESCOBRIR REPETIDORES
         if (_apps_menu == app_index++) {
 
@@ -3013,7 +3190,7 @@ public:
           _apps_return = true;
 
           _discover_menu = 0;
-          refreshDiscoveredNodes();
+          refreshActiveDiscoveryNodes();
 
           return true;
         }
@@ -3052,6 +3229,52 @@ public:
     // Discovery ATIVO.
     // Não usa AdvertPath e não interfere em "REPETIDORES DESCOBERTOS".
     // --------------------------------------------------------
+
+    // --------------------------------------------------------
+    // APLICAÇÕES -> ESTATÍSTICAS DO REPETIDOR
+    // --------------------------------------------------------
+
+    if (_page == HomePage::APPS &&
+        !_apps_submenu &&
+        _apps_view == 7) {
+
+      // NEXT / RIGHT -> próxima estatística
+      if (c == KEY_NEXT ||
+          c == KEY_RIGHT) {
+
+        _repeater_stats_page =
+          (_repeater_stats_page + 1) % 5;
+
+        return true;
+      }
+
+      // PREV / LEFT -> estatística anterior
+      if (c == KEY_PREV ||
+          c == KEY_LEFT) {
+
+        _repeater_stats_page =
+          (_repeater_stats_page + 4) % 5;
+
+        return true;
+      }
+
+      // CANCEL / SELECT -> voltar a APLICAÇÕES
+      if (c == KEY_CANCEL ||
+          c == KEY_SELECT ||
+          c == KEY_ENTER) {
+
+        _page = HomePage::APPS;
+        _apps_submenu = true;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+        _repeater_stats_page = 0;
+
+        return true;
+      }
+
+      return true;
+    }
 
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
@@ -3118,7 +3341,7 @@ public:
           } else {
 
             _task->showAlert(
-              "A procurar nos...",
+              "Pedido Enviado",
               1200
             );
           }
