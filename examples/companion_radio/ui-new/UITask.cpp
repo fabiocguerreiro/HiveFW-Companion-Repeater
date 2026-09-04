@@ -113,6 +113,7 @@ class HomeScreen : public UIScreen {
     SENSORS,
 #endif
     SETTINGS,
+    HOME_ASSISTANT,
     CLOCK,
     Count    // keep as last
   };
@@ -129,6 +130,29 @@ class HomeScreen : public UIScreen {
   uint8_t _sms_new_menu;
   bool _sms_new_submenu;
 
+  // Nova mensagem
+  // 0 = menu principal
+  // 1 = escolher contacto
+  // 2 = escrever
+  // 3 = presets
+  // 4 = confirmação
+  // 5 = ações da mensagem
+  uint8_t _sms_new_stage;
+  uint8_t _sms_contact_menu;
+  uint8_t _sms_preset_menu;
+  uint8_t _sms_char_index;
+  uint8_t _sms_action_menu;
+  uint8_t _sms_confirm;
+  uint8_t _sms_flow_type;
+  char _sms_text[128];
+  ContactInfo _sms_recipient;
+  bool _sms_recipient_valid;
+  uint8_t _sms_target_type;       // 0 = contacto, 1 = canal
+  uint8_t _sms_target_menu;
+  uint8_t _sms_channel_menu;
+  ChannelDetails _sms_channel;
+  bool _sms_channel_valid;
+
   struct ChannelUnread {
     uint8_t hash[PATH_HASH_SIZE];
     uint8_t count;
@@ -139,6 +163,15 @@ class HomeScreen : public UIScreen {
   ChannelUnread _channel_unread[MAX_CHANNEL_UNREAD];
   uint8_t _settings_menu;
   bool _settings_submenu;
+
+  uint8_t _settings_advert_menu;
+  bool _settings_advert_submenu;
+  bool _settings_confirm;
+  uint8_t _settings_confirm_menu;
+  uint8_t _ha_menu;
+  bool _ha_submenu;
+  uint8_t _ha_confirm;
+  bool _ha_confirm_submenu;
   bool _shutdown_init;
   AdvertPath recent[UI_RECENT_LIST_SIZE];
 
@@ -208,8 +241,27 @@ public:
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
        _sms_new_menu(0), _sms_new_submenu(false),
+       _sms_new_stage(0),
+       _sms_contact_menu(0),
+       _sms_preset_menu(0),
+       _sms_char_index(0),
+       _sms_action_menu(0),
+       _sms_confirm(0),
+       _sms_flow_type(0),
+       _sms_recipient_valid(false),
+       _sms_target_type(0),
+       _sms_target_menu(0),
+       _sms_channel_menu(0),
+       _sms_channel_valid(false),
        _settings_menu(0), _settings_submenu(false),
+      _settings_advert_menu(0), _settings_advert_submenu(false),
+      _settings_confirm(false), _settings_confirm_menu(0),
+      _ha_menu(0), _ha_submenu(false),
+      _ha_confirm(0), _ha_confirm_submenu(false),
        _shutdown_init(false), sensors_lpp(200) {
+    _sms_text[0] = '\0';
+    memset(&_sms_recipient, 0, sizeof(_sms_recipient));
+
     for (int i = 0; i < MAX_CHANNEL_UNREAD; i++) {
       _channel_unread[i].count = 0;
       _channel_unread[i].valid = false;
@@ -264,6 +316,140 @@ public:
         return;
       }
     }
+  }
+
+  void resetNewMessageState() {
+    _sms_new_stage = 0;
+    _sms_contact_menu = 0;
+    _sms_preset_menu = 0;
+    _sms_char_index = 0;
+    _sms_action_menu = 0;
+    _sms_confirm = 0;
+    _sms_flow_type = 0;
+    _sms_target_type = 0;
+    _sms_target_menu = 0;
+    _sms_channel_menu = 0;
+    _sms_text[0] = '\0';
+    _sms_recipient_valid = false;
+    _sms_channel_valid = false;
+    memset(&_sms_recipient, 0, sizeof(_sms_recipient));
+    memset(&_sms_channel, 0, sizeof(_sms_channel));
+  }
+
+  bool sendComposedMessage() {
+
+    // --------------------------------------------------------
+    // LOCALIZAÇÃO
+    // --------------------------------------------------------
+
+    // Obter a posição novamente no momento do envio.
+    if (_sms_flow_type == 2) {
+
+      if (!prepareCurrentLocationMessage()) {
+        return false;
+      }
+    }
+
+    if (_sms_text[0] == '\0') {
+      _task->showAlert("Mensagem vazia", 1500);
+      return false;
+    }
+
+    // --------------------------------------------------------
+    // CONTACTO
+    // --------------------------------------------------------
+
+    if (_sms_target_type == 0) {
+
+      if (!_sms_recipient_valid) {
+        _task->showAlert("Contacto invalido", 1500);
+        return false;
+      }
+
+      uint32_t expected_ack = 0;
+      uint32_t est_timeout = 0;
+
+      int result = the_mesh.sendMessage(
+        _sms_recipient,
+        _rtc->getCurrentTimeUnique(),
+        0,
+        _sms_text,
+        expected_ack,
+        est_timeout
+      );
+
+      if (result == MSG_SEND_FAILED) {
+        _task->showAlert("Falha ao enviar", 1800);
+        return false;
+      }
+
+      _task->showAlert("Mensagem enviada", 1200);
+      return true;
+    }
+
+    // --------------------------------------------------------
+    // CANAL
+    // --------------------------------------------------------
+
+    if (_sms_target_type == 1) {
+
+      if (!_sms_channel_valid) {
+        _task->showAlert("Canal invalido", 1500);
+        return false;
+      }
+
+      bool success = the_mesh.sendGroupMessage(
+        _rtc->getCurrentTime(),
+        _sms_channel.channel,
+        _node_prefs->node_name,
+        _sms_text,
+        strlen(_sms_text)
+      );
+
+      if (!success) {
+        _task->showAlert("Falha ao enviar", 1800);
+        return false;
+      }
+
+      _task->showAlert("Mensagem enviada", 1200);
+      return true;
+    }
+
+    return false;
+  }
+
+  bool prepareCurrentLocationMessage() {
+
+#if ENV_INCLUDE_GPS == 1
+
+    LocationProvider* location = _sensors->getLocationProvider();
+
+    if (location == NULL) {
+      _task->showAlert("GPS indisponivel", 1800);
+      return false;
+    }
+
+    if (!location->isValid()) {
+      _task->showAlert("Sem fix GPS", 1800);
+      return false;
+    }
+
+    snprintf(
+      _sms_text,
+      sizeof(_sms_text),
+      "Localizacao: %.6f, %.6f",
+      _sensors->node_lat,
+      _sensors->node_lon
+    );
+
+    return true;
+
+#else
+
+    _task->showAlert("GPS nao compilado", 1800);
+    return false;
+
+#endif
   }
 
   void poll() override {
@@ -366,25 +552,393 @@ public:
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
 
-    display.drawTextCentered(display.width() / 2, 18, "Nova Mensagem");
+    // ========================================================
+    // MENU NOVA MENSAGEM
+    // ========================================================
 
-    const char* new_sms_items[] = {
-      "Escrever",
-      "Presets",
-      "[ SAIR ]"
-    };
+    if (_sms_new_stage == 0) {
 
-    for (int i = 0; i < 3; i++) {
-      int y = 34 + (i * 12);
+      display.drawTextCentered(
+        display.width() / 2,
+        18,
+        "Nova Mensagem"
+      );
 
-      if (i == _sms_new_menu) {
-        display.setColor(UIColor::primary_txt);
-        display.drawTextCentered(display.width() / 2 - 42, y, ">");
-        display.drawTextCentered(display.width() / 2 + 8, y, new_sms_items[i]);
+      const char* items[] = {
+        "Escrever",
+        "Presets",
+        "Localizacao",
+        "[ SAIR ]"
+      };
+
+      display.drawTextCentered(
+        display.width() / 2 - 42,
+        40,
+        ">"
+      );
+
+      display.drawTextCentered(
+        display.width() / 2 + 8,
+        40,
+        items[_sms_new_menu]
+      );
+
+    // ========================================================
+    // DESTINO
+    // ========================================================
+
+    } else if (_sms_new_stage == 1) {
+
+      display.drawTextCentered(
+        display.width() / 2,
+        18,
+        "Enviar para"
+      );
+
+      const char* items[] = {
+        "Contactos",
+        "Canais",
+        "[ SAIR ]"
+      };
+
+      display.drawTextCentered(
+        display.width() / 2 - 42,
+        40,
+        ">"
+      );
+
+      display.drawTextCentered(
+        display.width() / 2 + 8,
+        40,
+        items[_sms_target_menu]
+      );
+
+    // ========================================================
+    // CONTACTOS
+    // ========================================================
+
+    } else if (_sms_new_stage == 2) {
+
+      display.drawTextCentered(
+        display.width() / 2,
+        18,
+        "Contacto"
+      );
+
+      int count = the_mesh.getNumContacts();
+
+      if (_sms_contact_menu < count) {
+
+        ContactInfo contact;
+
+        if (the_mesh.getContactByIdx(
+              _sms_contact_menu + MAX_ANON_CONTACTS,
+              contact
+            )) {
+
+          display.drawTextCentered(
+            display.width() / 2 - 42,
+            40,
+            ">"
+          );
+
+          display.drawTextEllipsized(
+            8,
+            34,
+            display.width() - 12,
+            contact.name
+          );
+        }
+
       } else {
-        display.setColor(UIColor::secondary_txt);
-        display.drawTextCentered(display.width() / 2, y, new_sms_items[i]);
+
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          40,
+          ">"
+        );
+
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          40,
+          "[ SAIR ]"
+        );
       }
+
+    // ========================================================
+    // EDITOR
+    // ========================================================
+
+    } else if (_sms_new_stage == 3) {
+
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(1);
+
+      // Texto atualmente escrito
+      if (_sms_text[0] == '\0') {
+
+        display.setColor(UIColor::secondary_txt);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          31,
+          "Mensagem vazia"
+        );
+
+      } else {
+
+        display.setColor(UIColor::primary_txt);
+
+        display.drawTextEllipsized(
+          2,
+          29,
+          display.width() - 4,
+          _sms_text
+        );
+      }
+
+      // Carácter atualmente selecionado
+      const char* charset =
+        " ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz"
+        "0123456789"
+        ".,!?-_/@#()";
+
+      char selected_char = charset[_sms_char_index];
+
+      char char_label[32];
+
+      if (selected_char == ' ') {
+
+        snprintf(
+          char_label,
+          sizeof(char_label),
+          "> ESPACO <"
+        );
+
+      } else {
+
+        snprintf(
+          char_label,
+          sizeof(char_label),
+          "> %c <",
+          selected_char
+        );
+      }
+
+      display.setColor(UIColor::secondary_txt);
+
+      display.drawTextCentered(
+        display.width() / 2,
+        49,
+        char_label
+      );
+
+    } else if (_sms_new_stage == 4) {
+
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(1);
+
+      display.drawTextCentered(
+        display.width() / 2,
+        18,
+        "Acoes"
+      );
+
+      const char* actions[] = {
+        "APAGAR",
+        "ENVIAR",
+        "SAIR"
+      };
+
+      display.drawTextCentered(
+        display.width() / 2 - 42,
+        40,
+        ">"
+      );
+
+      display.drawTextCentered(
+        display.width() / 2 + 8,
+        40,
+        actions[_sms_action_menu]
+      );
+
+    } else if (_sms_new_stage == 5) {
+
+      display.drawTextCentered(
+        display.width() / 2,
+        17,
+        "Enviar?"
+      );
+
+      // Destino
+      if (_sms_target_type == 0 &&
+          _sms_recipient_valid) {
+
+        display.drawTextEllipsized(
+          4,
+          28,
+          display.width() - 8,
+          _sms_recipient.name
+        );
+
+      } else if (_sms_target_type == 1 &&
+                 _sms_channel_valid) {
+
+        display.drawTextEllipsized(
+          4,
+          28,
+          display.width() - 8,
+          _sms_channel.name
+        );
+      }
+
+      // Conteúdo
+      display.drawTextEllipsized(
+        4,
+        39,
+        display.width() - 8,
+        _sms_text
+      );
+
+      const char* confirms[] = {
+        "SIM",
+        "NAO"
+      };
+
+      display.drawTextCentered(
+        display.width() / 2 - 42,
+        54,
+        ">"
+      );
+
+      display.drawTextCentered(
+        display.width() / 2 + 8,
+        54,
+        confirms[_sms_confirm]
+      );
+
+    // ========================================================
+    // CANAIS
+    // ========================================================
+
+    } else if (_sms_new_stage == 6) {
+
+      display.drawTextCentered(
+        display.width() / 2,
+        18,
+        "Canal"
+      );
+
+      int count = 0;
+
+#ifdef MAX_GROUP_CHANNELS
+      for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+
+        ChannelDetails channel;
+
+        if (the_mesh.getChannel(i, channel) &&
+            channel.name[0] != '\0') {
+
+          count++;
+        }
+      }
+#endif
+
+      if (_sms_channel_menu < count) {
+
+        int found = 0;
+        ChannelDetails selected;
+        bool valid = false;
+
+#ifdef MAX_GROUP_CHANNELS
+        for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+
+          ChannelDetails channel;
+
+          if (the_mesh.getChannel(i, channel) &&
+              channel.name[0] != '\0') {
+
+            if (found == _sms_channel_menu) {
+
+              selected = channel;
+              valid = true;
+              break;
+            }
+
+            found++;
+          }
+        }
+#endif
+
+        if (valid) {
+
+          display.drawTextCentered(
+            display.width() / 2 - 42,
+            40,
+            ">"
+          );
+
+          display.drawTextEllipsized(
+            8,
+            34,
+            display.width() - 12,
+            selected.name
+          );
+        }
+
+      } else {
+
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          40,
+          ">"
+        );
+
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          40,
+          "[ SAIR ]"
+        );
+      }
+
+    // ========================================================
+    // PRESETS
+    // ========================================================
+
+    } else if (_sms_new_stage == 7) {
+
+      const char* presets[] = {
+        "Estou em casa",
+        "Cheguei bem",
+        "A caminho",
+        "Preciso de ajuda",
+        "Estou no trabalho",
+        "Ja vou",
+        "OK",
+        "Sim",
+        "Nao",
+        "[ SAIR ]"
+      };
+
+      display.drawTextCentered(
+        display.width() / 2,
+        18,
+        "Presets"
+      );
+
+      display.drawTextCentered(
+        display.width() / 2 - 42,
+        40,
+        ">"
+      );
+
+      display.drawTextEllipsized(
+        8,
+        34,
+        display.width() - 12,
+        presets[_sms_preset_menu]
+      );
     }
     } else if (_sms_messages_submenu) {
 
@@ -516,39 +1070,61 @@ public:
       display.print(tmp);
     } else if (_page == HomePage::SETTINGS) {
 
-    if (!_settings_submenu) {
+      if (!_settings_submenu) {
 
-      display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2 + 4, 25, settings_icon, 32, 32);
+        display.setColor(UIColor::corp_blue);
+        display.drawXbm(
+          (display.width() - 32) / 2 + 4,
+          25,
+          settings_icon,
+          32,
+          32
+        );
 
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 55, "SETTINGS");
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
 
-    } else {
+        display.drawTextCentered(
+          display.width() / 2 + 2,
+          55,
+          "Definições"
+        );
 
-      display.setTextSize(1);
+      } else if (_settings_advert_submenu) {
 
-      const char* settings_items[] = {
-        "Bluetooth",
-        "Advert",
-        "Shutdown",
-        "[Next]"
-      };
+        const char* advert_items[] = {
+          "Anuncio ZeroHOP",
+          "Anuncio Flood",
+          "SAIR"
+        };
 
-      for (int i = 0; i < 4; i++) {
-        int y = 19 + (i * 11);
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
 
-        if (i == _settings_menu) {
-          display.setColor(UIColor::primary_txt);
-          display.drawTextCentered(display.width() / 2 - 42, y, ">");
-          display.drawTextCentered(display.width() / 2 + 8, y, settings_items[i]);
-        } else {
-          display.setColor(UIColor::secondary_txt);
-          display.drawTextCentered(display.width() / 2, y, settings_items[i]);
-        }
+        display.drawTextCentered(
+          display.width() / 2,
+          38,
+          advert_items[_settings_advert_menu]
+        );
+
+      } else {
+
+        const char* settings_items[] = {
+          "BLUETOOTH",
+          "ANUNCIAR NÓ",
+          "DESLIGAR",
+          "SAIR"
+        };
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          38,
+          settings_items[_settings_menu]
+        );
       }
-    }
 
 #if ENV_INCLUDE_GPS == 1
     } else if (_page == HomePage::GPS) {
@@ -672,6 +1248,78 @@ public:
       if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
       else sensors_scroll_offset = 0;
 #endif
+    } else if (_page == HomePage::HOME_ASSISTANT) {
+
+      if (!_ha_submenu) {
+
+        display.setColor(UIColor::corp_blue);
+        display.drawXbm(
+          (display.width() - 32) / 2,
+          15,
+          home_assistant_icon,
+          32,
+          32
+        );
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+        display.drawTextCentered(
+          display.width() / 2,
+          55,
+          "Home Assistant"
+        );
+
+      } else if (_ha_confirm_submenu) {
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          18,
+          "Abrir Prédio?"
+        );
+
+        const char* confirm_items[] = {
+          "SIM",
+          "NAO"
+        };
+
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          40,
+          ">"
+        );
+
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          40,
+          confirm_items[_ha_confirm]
+        );
+
+      } else {
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        const char* ha_items[] = {
+          "Abrir Prédio",
+          "[ SAIR ]"
+        };
+
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          34,
+          ">"
+        );
+
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          34,
+          ha_items[_ha_menu]
+        );
+      }
+
     } else if (_page == HomePage::CLOCK) {
       uint32_t now = _rtc->getCurrentTime();
 
@@ -860,22 +1508,667 @@ public:
     }
 
     // ========================================================
+    // NOVA MENSAGEM MENU
+    // ========================================================
+
+    // Este bloco tem prioridade sobre o SMS MENU.
+    // _sms_submenu permanece TRUE durante todo o fluxo.
+
+    if (_page == HomePage::MESSAGES && _sms_new_submenu) {
+
+      // ------------------------------------------------------
+      // MENU PRINCIPAL
+      // ------------------------------------------------------
+
+      if (_sms_new_stage == 0) {
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+          _sms_new_menu = (_sms_new_menu + 1) % 4;
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+          _sms_new_menu = (_sms_new_menu + 3) % 4;
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _sms_new_submenu = false;
+          _sms_submenu = true;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // Escrever
+          if (_sms_new_menu == 0) {
+
+            _sms_flow_type = 0;
+            _sms_text[0] = '\0';
+            _sms_target_menu = 0;
+            _sms_new_stage = 1;
+
+            return true;
+          }
+
+          // Presets
+          if (_sms_new_menu == 1) {
+
+            _sms_flow_type = 1;
+            _sms_preset_menu = 0;
+            _sms_target_menu = 0;
+            _sms_new_stage = 7;
+
+            return true;
+          }
+
+          // Localizacao
+          if (_sms_new_menu == 2) {
+
+            _sms_flow_type = 2;
+            _sms_target_menu = 0;
+
+            // Não capturar a posição aqui.
+            // Será capturada imediatamente antes do envio.
+            _sms_text[0] = '\0';
+
+            _sms_new_stage = 1;
+
+            return true;
+          }
+
+          // SAIR
+          if (_sms_new_menu == 3) {
+
+            _sms_new_submenu = false;
+            _sms_submenu = true;
+
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // DESTINO
+      // ------------------------------------------------------
+
+      if (_sms_new_stage == 1) {
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_target_menu =
+            (_sms_target_menu + 1) % 3;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_target_menu =
+            (_sms_target_menu + 2) % 3;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+          _sms_new_stage = 0;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // Contactos
+          if (_sms_target_menu == 0) {
+
+            _sms_target_type = 0;
+            _sms_contact_menu = 0;
+            _sms_recipient_valid = false;
+            _sms_new_stage = 2;
+
+            return true;
+          }
+
+          // Canais
+          if (_sms_target_menu == 1) {
+
+            _sms_target_type = 1;
+            _sms_channel_menu = 0;
+            _sms_channel_valid = false;
+            _sms_new_stage = 6;
+
+            return true;
+          }
+
+          // SAIR
+          if (_sms_target_menu == 2) {
+
+            _sms_new_stage = 0;
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // CONTACTOS
+      // ------------------------------------------------------
+
+      if (_sms_new_stage == 2) {
+
+        int count = the_mesh.getNumContacts();
+        int total = count + 1;
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_contact_menu =
+            (_sms_contact_menu + 1) % total;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_contact_menu =
+            (_sms_contact_menu + total - 1) % total;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+          _sms_new_stage = 1;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // SAIR
+          if (_sms_contact_menu == count) {
+
+            _sms_new_stage = 1;
+            return true;
+          }
+
+          if (count <= 0) {
+
+            _task->showAlert(
+              "Sem contactos",
+              1500
+            );
+
+            return true;
+          }
+
+          if (!the_mesh.getContactByIdx(
+                _sms_contact_menu + MAX_ANON_CONTACTS,
+                _sms_recipient
+              )) {
+
+            _task->showAlert(
+              "Contacto invalido",
+              1500
+            );
+
+            return true;
+          }
+
+          _sms_recipient_valid = true;
+
+          // Preset / localização
+          if (_sms_flow_type == 1 ||
+              _sms_flow_type == 2) {
+
+            if (_sms_flow_type == 2) {
+              prepareCurrentLocationMessage();
+            }
+
+            _sms_confirm = 0;
+            _sms_new_stage = 5;
+
+            return true;
+          }
+
+          // Escrever
+          _sms_char_index = 0;
+          _sms_new_stage = 3;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // EDITOR
+      // ------------------------------------------------------
+
+      if (_sms_new_stage == 3) {
+
+        const char* charset =
+          " ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+          "abcdefghijklmnopqrstuvwxyz"
+          "0123456789"
+          ".,!?-_/@#()";
+
+        int charset_len = strlen(charset);
+
+        // 1 clique -> letra para a frente
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_char_index =
+            (_sms_char_index + 1) % charset_len;
+
+          return true;
+        }
+
+        // 2 cliques -> letra para trás
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_char_index =
+            (_sms_char_index + charset_len - 1)
+            % charset_len;
+
+          return true;
+        }
+
+        // Cancelar -> voltar aos destinos
+        if (c == KEY_CANCEL) {
+
+          if (_sms_target_type == 0) {
+            _sms_new_stage = 2;
+          } else {
+            _sms_new_stage = 6;
+          }
+
+          return true;
+        }
+
+        // 3 cliques -> abrir menu de ações
+        if (c == KEY_SELECT) {
+
+          _sms_action_menu = 0;  // APAGAR
+          _sms_new_stage = 4;
+
+          return true;
+        }
+
+        // Pressionado -> inserir letra
+        if (c == KEY_ENTER) {
+
+          int text_len = strlen(_sms_text);
+
+          if (text_len <
+              (int)sizeof(_sms_text) - 1) {
+
+            _sms_text[text_len] =
+              charset[_sms_char_index];
+
+            _sms_text[text_len + 1] =
+              '\0';
+          }
+
+          return true;
+        }
+
+        return true;
+      }
+
+      if (_sms_new_stage == 4) {
+
+        const int ACTION_COUNT = 3;
+
+        // 1 clique -> próxima ação
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_action_menu =
+            (_sms_action_menu + 1) % ACTION_COUNT;
+
+          return true;
+        }
+
+        // 2 cliques -> ação anterior
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_action_menu =
+            (_sms_action_menu + ACTION_COUNT - 1)
+            % ACTION_COUNT;
+
+          return true;
+        }
+
+        // 3 cliques -> voltar ao editor
+        if (c == KEY_SELECT) {
+
+          _sms_new_stage = 3;
+          return true;
+        }
+
+        // Pressionado -> executar ação
+        if (c == KEY_ENTER) {
+
+          // APAGAR
+          if (_sms_action_menu == 0) {
+
+            int len = strlen(_sms_text);
+
+            if (len > 0) {
+              _sms_text[len - 1] = '\0';
+            }
+
+            _sms_new_stage = 3;
+            return true;
+          }
+
+          // ENVIAR
+          if (_sms_action_menu == 1) {
+
+            if (_sms_text[0] == '\0') {
+
+              _task->showAlert(
+                "Mensagem vazia",
+                1500
+              );
+
+              _sms_new_stage = 3;
+              return true;
+            }
+
+            _sms_confirm = 0;
+            _sms_new_stage = 5;
+
+            return true;
+          }
+
+          // SAIR
+          if (_sms_action_menu == 2) {
+
+            if (_sms_target_type == 0) {
+              _sms_new_stage = 2;
+            } else {
+              _sms_new_stage = 6;
+            }
+
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+      if (_sms_new_stage == 5) {
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_confirm =
+            (_sms_confirm + 1) % 2;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_confirm =
+            (_sms_confirm + 1) % 2;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          if (_sms_flow_type == 0) {
+            _sms_new_stage = 3;
+          } else {
+            _sms_new_stage =
+              (_sms_target_type == 0) ? 2 : 6;
+          }
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // SIM
+          if (_sms_confirm == 0) {
+
+            if (sendComposedMessage()) {
+
+              _sms_new_submenu = false;
+              _sms_submenu = true;
+              resetNewMessageState();
+            }
+
+            return true;
+          }
+
+          // NAO
+          if (_sms_confirm == 1) {
+
+            if (_sms_flow_type == 0) {
+              _sms_new_stage = 3;
+            } else {
+              _sms_new_stage =
+                (_sms_target_type == 0) ? 2 : 6;
+            }
+
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // CANAIS
+      // ------------------------------------------------------
+
+      if (_sms_new_stage == 6) {
+
+        int count = 0;
+
+#ifdef MAX_GROUP_CHANNELS
+        for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+
+          ChannelDetails channel;
+
+          if (the_mesh.getChannel(i, channel) &&
+              channel.name[0] != '\0') {
+
+            count++;
+          }
+        }
+#endif
+
+        int total = count + 1;
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_channel_menu =
+            (_sms_channel_menu + 1) % total;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_channel_menu =
+            (_sms_channel_menu + total - 1) % total;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _sms_new_stage = 1;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // SAIR
+          if (_sms_channel_menu == count) {
+
+            _sms_new_stage = 1;
+            return true;
+          }
+
+          int found = 0;
+          bool valid = false;
+
+#ifdef MAX_GROUP_CHANNELS
+          for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+
+            ChannelDetails channel;
+
+            if (the_mesh.getChannel(i, channel) &&
+                channel.name[0] != '\0') {
+
+              if (found == _sms_channel_menu) {
+
+                _sms_channel = channel;
+                valid = true;
+                break;
+              }
+
+              found++;
+            }
+          }
+#endif
+
+          if (!valid) {
+
+            _task->showAlert(
+              "Canal invalido",
+              1500
+            );
+
+            return true;
+          }
+
+          _sms_channel_valid = true;
+
+          // Preset / localização
+          if (_sms_flow_type == 1 ||
+              _sms_flow_type == 2) {
+
+            if (_sms_flow_type == 2) {
+              prepareCurrentLocationMessage();
+            }
+
+            _sms_confirm = 0;
+            _sms_new_stage = 5;
+
+            return true;
+          }
+
+          // Escrever
+          _sms_char_index = 0;
+          _sms_new_stage = 3;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // PRESETS
+      // ------------------------------------------------------
+
+      if (_sms_new_stage == 7) {
+
+        const char* presets[] = {
+          "Estou em casa",
+          "Cheguei bem",
+          "A caminho",
+          "Preciso de ajuda",
+          "Estou no trabalho",
+          "Ja vou",
+          "OK",
+          "Sim",
+          "Nao",
+          "[ SAIR ]"
+        };
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _sms_preset_menu =
+            (_sms_preset_menu + 1) % 10;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _sms_preset_menu =
+            (_sms_preset_menu + 9) % 10;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _sms_new_stage = 0;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // SAIR
+          if (_sms_preset_menu == 9) {
+
+            _sms_new_stage = 0;
+            return true;
+          }
+
+          strncpy(
+            _sms_text,
+            presets[_sms_preset_menu],
+            sizeof(_sms_text) - 1
+          );
+
+          _sms_text[
+            sizeof(_sms_text) - 1
+          ] = '\0';
+
+          _sms_target_menu = 0;
+          _sms_new_stage = 1;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      return true;
+    }
+
+    // ========================================================
     // SMS MENU
     // ========================================================
 
     if (_page == HomePage::MESSAGES && _sms_submenu) {
 
-      if (c == KEY_NEXT) {
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
+
         _sms_menu = (_sms_menu + 1) % 3;
         return true;
       }
 
-      if (c == KEY_PREV) {
+      if (c == KEY_PREV || c == KEY_LEFT) {
+
         _sms_menu = (_sms_menu + 2) % 3;
         return true;
       }
 
-      if (c == KEY_CANCEL) {
+      if (c == KEY_CANCEL || c == KEY_SELECT) {
+
         _sms_submenu = false;
         return true;
       }
@@ -884,70 +2177,35 @@ public:
 
         // Nova Mensagem
         if (_sms_menu == 0) {
+
           _sms_messages_submenu = false;
-          _sms_menu = 0;
           _sms_new_submenu = true;
           _sms_new_menu = 0;
+          resetNewMessageState();
+
           return true;
         }
 
         // Caixa de entrada
         if (_sms_menu == 1) {
+
           _sms_messages_submenu = true;
           _sms_messages_menu = 0;
+
           return true;
         }
 
-        // [ SAIR ]
+        // SAIR
         if (_sms_menu == 2) {
+
           _sms_submenu = false;
           _task->gotoHomeScreen();
+
           return true;
         }
       }
-    }
 
-    // ========================================================
-    // NOVA MENSAGEM MENU
-    // ========================================================
-
-    if (_page == HomePage::MESSAGES && _sms_new_submenu) {
-
-      if (c == KEY_NEXT) {
-        _sms_new_menu = (_sms_new_menu + 1) % 3;
-        return true;
-      }
-
-      if (c == KEY_PREV) {
-        _sms_new_menu = (_sms_new_menu + 2) % 3;
-        return true;
-      }
-
-      if (c == KEY_CANCEL) {
-        _sms_new_submenu = false;
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-
-        // Escrever
-        if (_sms_new_menu == 0) {
-          _task->showAlert("Escrever", 1000);
-          return true;
-        }
-
-        // Presets
-        if (_sms_new_menu == 1) {
-          _task->showAlert("Presets", 1000);
-          return true;
-        }
-
-        // [ SAIR ]
-        if (_sms_new_menu == 2) {
-          _sms_new_submenu = false;
-          return true;
-        }
-      }
+      return true;
     }
 
     // ========================================================
@@ -955,6 +2213,70 @@ public:
     // ========================================================
 
     if (_page == HomePage::SETTINGS && _settings_submenu) {
+
+      // ======================================================
+      // SUBMENU ANUNCIAR NÓ
+      // ======================================================
+
+      if (_settings_advert_submenu) {
+
+        if (c == KEY_NEXT) {
+          _settings_advert_menu =
+            (_settings_advert_menu + 1) % 3;
+          return true;
+        }
+
+        if (c == KEY_PREV) {
+          _settings_advert_menu =
+            (_settings_advert_menu + 2) % 3;
+          return true;
+        }
+
+        if (c == KEY_CANCEL) {
+          _settings_advert_submenu = false;
+          _settings_advert_menu = 0;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (_settings_advert_menu == 0) {
+            _task->notify(UIEventType::ack);
+
+            if (the_mesh.advert(false)) {
+              _task->showAlert("Advert ZeroHOP OK", 1000);
+            } else {
+              _task->showAlert("Advert failed..", 1000);
+            }
+
+            return true;
+          }
+
+          if (_settings_advert_menu == 1) {
+            _task->notify(UIEventType::ack);
+
+            if (the_mesh.advert(true)) {
+              _task->showAlert("Advert Flood OK", 1000);
+            } else {
+              _task->showAlert("Advert failed..", 1000);
+            }
+
+            return true;
+          }
+
+          if (_settings_advert_menu == 2) {
+            _settings_advert_submenu = false;
+            _settings_advert_menu = 0;
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // MENU DE DEFINIÇÕES
+      // ======================================================
 
       if (c == KEY_NEXT) {
         _settings_menu = (_settings_menu + 1) % 4;
@@ -968,12 +2290,15 @@ public:
 
       if (c == KEY_CANCEL) {
         _settings_submenu = false;
+        _settings_menu = 0;
+        _settings_advert_submenu = false;
+        _settings_advert_menu = 0;
         return true;
       }
 
       if (c == KEY_ENTER) {
 
-        // Bluetooth
+        // BLUETOOTH
         if (_settings_menu == 0) {
           bool bluetooth_enable = !_task->isBluetoothEnabled();
 
@@ -992,32 +2317,28 @@ public:
           return true;
         }
 
-        // Advert
+        // ANUNCIAR NÓ
         if (_settings_menu == 1) {
-          _task->notify(UIEventType::ack);
-
-          if (the_mesh.advert()) {
-            _task->showAlert("Advert sent!", 1000);
-          } else {
-            _task->showAlert("Advert failed..", 1000);
-          }
-
+          _settings_advert_submenu = true;
+          _settings_advert_menu = 0;
           return true;
         }
 
-        // Shutdown
+        // DESLIGAR
         if (_settings_menu == 2) {
           _shutdown_init = true;
           return true;
         }
 
-        // [Next]
+        // SAIR
         if (_settings_menu == 3) {
           _settings_submenu = false;
-          _page = (_page + 1) % HomePage::Count;
+          _settings_menu = 0;
           return true;
         }
       }
+
+      return true;
     }
 
     // ========================================================
@@ -1050,12 +2371,25 @@ public:
     }
 
     // ========================================================
+    // ENTER HOME ASSISTANT
+    // ========================================================
+
+    if (c == KEY_ENTER && _page == HomePage::HOME_ASSISTANT) {
+      _ha_submenu = true;
+      _ha_menu = 0;
+      _ha_confirm_submenu = false;
+      return true;
+    }
+
+    // ========================================================
     // ENTER SETTINGS
     // ========================================================
 
     if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
       _settings_submenu = true;
       _settings_menu = 0;
+      _settings_advert_submenu = false;
+      _settings_advert_menu = 0;
       return true;
     }
 
@@ -2000,7 +3334,6 @@ char UITask::handleTripleClick(char c) {
   MESH_DEBUG_PRINTLN("UITask: triple click triggered");
   checkDisplayOn(c);
   toggleBuzzer();
-  c = 0;
   return c;
 }
 
