@@ -539,6 +539,38 @@ public:
     }
   }
 
+  void renderSectionHome(
+    DisplayDriver& display,
+    const uint8_t* icon,
+    uint8_t icon_width,
+    uint8_t icon_height,
+    const char* title
+  ) {
+
+    const int centerX = display.width() / 2;
+    const int iconY = 15;
+    const int titleY = 55;
+
+    display.setColor(UIColor::corp_blue);
+
+    display.drawXbm(
+      (display.width() - icon_width) / 2,
+      iconY,
+      icon,
+      icon_width,
+      icon_height
+    );
+
+    display.setColor(UIColor::primary_txt);
+    display.setTextSize(1);
+
+    display.drawTextCentered(
+      centerX,
+      titleY,
+      title
+    );
+  }
+
   int render(DisplayDriver& display) override {
     display.setColor(UIColor::title_bkg);
     display.fillRect(0, 0, display.width(), 12);
@@ -620,12 +652,13 @@ public:
       }
     } else if (_page == HomePage::MESSAGES) {
     if (!_sms_submenu) {
-      display.setColor(UIColor::corp_blue);
-      display.drawXbm((display.width() - 32) / 2, 15, sms_icon, 32, 32);
-
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 55, "Mensagens");
+      renderSectionHome(
+        display,
+        sms_icon,
+        64,
+        32,
+        "MENSAGENS"
+      );
 
 
   } else if (_sms_new_submenu) {
@@ -1153,21 +1186,10 @@ public:
 
       if (!_settings_submenu) {
 
-        display.setColor(UIColor::corp_blue);
-        display.drawXbm(
-          (display.width() - 32) / 2 + 4,
-          25,
+        renderSectionHome(
+          display,
           settings_icon,
-          32,
-          32
-        );
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2 + 2,
-          55,
+          64, 32,
           "DEFINIÇÕES"
         );
 
@@ -1612,22 +1634,10 @@ public:
 
       else if (!_apps_submenu) {
 
-        display.setColor(UIColor::corp_blue);
-
-        display.drawXbm(
-          (display.width() - 32) / 2,
-          14,
+        renderSectionHome(
+          display,
           apps_icon,
-          32,
-          32
-        );
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          55,
+          64, 32,
           "APLICAÇÕES"
         );
 
