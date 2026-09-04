@@ -73,10 +73,10 @@ public:
     // meshcore logo
     display.setColor(UIColor::corp_blue);
     int logoWidth = 128;
-    display.drawXbm(4, 3, hivefw_logo, logoWidth, 13);
+    display.drawXbm(0, 3, hivefw_logo, logoWidth, 13);
 
     // firmware name
-    const char* firmware_name = "Companion-Repeater";
+    const char* firmware_name = "Companion&Repeater";
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
     display.drawTextCentered(display.width()/2, 22, firmware_name);
@@ -84,11 +84,70 @@ public:
     // version info
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(display.width()/2, 35, _version_info);
+    display.drawTextCentered(
+      display.width()/2,
+      35,
+      _version_info
+    );
+
+    // build date
+    char build_date[16];
+    char build_month[4] = {0};
+    int build_day = 0;
+    int build_year = 0;
+
+    // FIRMWARE_BUILD_DATE pode vir como:
+    // "Sep 04 2026" ou "Set 04 2026"
+    sscanf(
+      FIRMWARE_BUILD_DATE,
+      "%3s %d %d",
+      build_month,
+      &build_day,
+      &build_year
+    );
+
+    // Normalizar abreviatura do mês para português.
+    if (strcmp(build_month, "Jan") == 0)
+      strcpy(build_month, "JAN");
+    else if (strcmp(build_month, "Feb") == 0)
+      strcpy(build_month, "FEV");
+    else if (strcmp(build_month, "Mar") == 0)
+      strcpy(build_month, "MAR");
+    else if (strcmp(build_month, "Apr") == 0)
+      strcpy(build_month, "ABR");
+    else if (strcmp(build_month, "May") == 0)
+      strcpy(build_month, "MAI");
+    else if (strcmp(build_month, "Jun") == 0)
+      strcpy(build_month, "JUN");
+    else if (strcmp(build_month, "Jul") == 0)
+      strcpy(build_month, "JUL");
+    else if (strcmp(build_month, "Aug") == 0)
+      strcpy(build_month, "AGO");
+    else if (strcmp(build_month, "Sep") == 0)
+      strcpy(build_month, "SET");
+    else if (strcmp(build_month, "Oct") == 0)
+      strcpy(build_month, "OUT");
+    else if (strcmp(build_month, "Nov") == 0)
+      strcpy(build_month, "NOV");
+    else if (strcmp(build_month, "Dec") == 0)
+      strcpy(build_month, "DEZ");
+
+    snprintf(
+      build_date,
+      sizeof(build_date),
+      "%02d %s %04d",
+      build_day,
+      build_month,
+      build_year
+    );
 
     display.setColor(UIColor::secondary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(display.width()/2, 48, FIRMWARE_BUILD_DATE);
+    display.drawTextCentered(
+      display.width()/2,
+      48,
+      build_date
+    );
 
     return 1000;
   }
@@ -443,7 +502,7 @@ public:
     if (_sms_target_type == 0) {
 
       if (!_sms_recipient_valid) {
-        _task->showAlert("Contacto invalido", 1500);
+        _task->showAlert("Contacto inválido", 1500);
         return false;
       }
 
@@ -475,7 +534,7 @@ public:
     if (_sms_target_type == 1) {
 
       if (!_sms_channel_valid) {
-        _task->showAlert("Canal invalido", 1500);
+        _task->showAlert("Canal inválido", 1500);
         return false;
       }
 
@@ -506,7 +565,7 @@ public:
     LocationProvider* location = _sensors->getLocationProvider();
 
     if (location == NULL) {
-      _task->showAlert("GPS indisponivel", 1800);
+      _task->showAlert("GPS indisponível", 1800);
       return false;
     }
 
@@ -518,7 +577,7 @@ public:
     snprintf(
       _sms_text,
       sizeof(_sms_text),
-      "Localizacao: %.6f, %.6f",
+      "Localização: %.6f, %.6f",
       _sensors->node_lat,
       _sensors->node_lon
     );
@@ -527,7 +586,7 @@ public:
 
 #else
 
-    _task->showAlert("GPS nao compilado", 1800);
+    _task->showAlert("GPS não compilado", 1800);
     return false;
 
 #endif
@@ -537,6 +596,18 @@ public:
     if (_shutdown_init && !_task->isButtonPressed()) {  // must wait for USR button to be released
       _task->shutdown();
     }
+  }
+
+  void drawSelectedMenuText(
+    DisplayDriver& display,
+    int centerX,
+    int y,
+    const char* text
+  ) {
+    // Simula negrito desenhando o texto duas vezes,
+    // com deslocamento horizontal de 1 pixel.
+    display.drawTextCentered(centerX, y, text);
+    display.drawTextCentered(centerX + 1, y, text);
   }
 
   void renderSectionHome(
@@ -564,8 +635,15 @@ public:
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
 
+    int textCenterX = centerX;
+
+    if (strcmp(title, "DEFINIÇÕES") == 0 ||
+        strcmp(title, "APLICAÇÕES") == 0) {
+      textCenterX += 7;
+    }
+
     display.drawTextCentered(
-      centerX,
+      textCenterX,
       titleY,
       title
     );
@@ -605,7 +683,7 @@ public:
     if (_page == HomePage::FIRST) {
       display.setColor(UIColor::primary_txt);
       display.setTextSize(2);
-      sprintf(tmp, "MSG: %d", _task->getMsgCount());
+      sprintf(tmp, "Mensagens: %d", _task->getMsgCount());
       display.drawTextCentered(display.width() / 2, 22, tmp);
 
       #ifdef WIFI_SSID
@@ -617,7 +695,7 @@ public:
       if (_task->hasConnection()) {
         display.setColor(UIColor::warning_txt);
         display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 43, "< Connected >");
+        display.drawTextCentered(display.width() / 2, 43, "< Ligado >");
 
       } else if (the_mesh.getBLEPin() != 0) { // BT pin
         display.setColor(UIColor::warning_txt);
@@ -681,7 +759,7 @@ public:
       const char* items[] = {
         "Escrever",
         "Presets",
-        "Localizacao",
+        "Localização",
         "[ SAIR ]"
       };
 
@@ -691,7 +769,8 @@ public:
         ">"
       );
 
-      display.drawTextCentered(
+      drawSelectedMenuText(
+        display,
         display.width() / 2 + 8,
         40,
         items[_sms_new_menu]
@@ -721,7 +800,8 @@ public:
         ">"
       );
 
-      display.drawTextCentered(
+      drawSelectedMenuText(
+        display,
         display.width() / 2 + 8,
         40,
         items[_sms_target_menu]
@@ -856,7 +936,7 @@ public:
       display.drawTextCentered(
         display.width() / 2,
         18,
-        "Acoes"
+        "Ações"
       );
 
       const char* actions[] = {
@@ -871,7 +951,8 @@ public:
         ">"
       );
 
-      display.drawTextCentered(
+      drawSelectedMenuText(
+        display,
         display.width() / 2 + 8,
         40,
         actions[_sms_action_menu]
@@ -917,7 +998,7 @@ public:
 
       const char* confirms[] = {
         "SIM",
-        "NAO"
+        "NÃO"
       };
 
       display.drawTextCentered(
@@ -926,7 +1007,8 @@ public:
         ">"
       );
 
-      display.drawTextCentered(
+      drawSelectedMenuText(
+        display,
         display.width() / 2 + 8,
         54,
         confirms[_sms_confirm]
@@ -1031,7 +1113,7 @@ public:
         "Ja vou",
         "OK",
         "Sim",
-        "Nao",
+        "Não",
         "[ SAIR ]"
       };
 
@@ -1198,7 +1280,7 @@ public:
         const char* advert_items[] = {
           "Anuncio ZeroHOP",
           "Anuncio Flood",
-          "SAIR"
+          "[ SAIR ]"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -1667,16 +1749,17 @@ public:
         display.setTextSize(1);
 
         display.drawTextCentered(
-          display.width() / 2 - 42,
-          34,
-          ">"
-        );
+        display.width() / 2 - 42,
+        34,
+        ">"
+      );
 
-        display.drawTextCentered(
-          display.width() / 2 + 8,
-          34,
-          apps_items[_apps_menu]
-        );
+      drawSelectedMenuText(
+        display,
+        display.width() / 2 + 8,
+        34,
+        apps_items[_apps_menu]
+      );
       }
 
     } else if (_page == HomePage::INTERNAL_HOME_ASSISTANT) {
@@ -1713,20 +1796,21 @@ public:
 
         const char* confirm_items[] = {
           "SIM",
-          "NAO"
+          "NÃO"
         };
 
         display.drawTextCentered(
-          display.width() / 2 - 42,
-          40,
-          ">"
-        );
+        display.width() / 2 - 42,
+        40,
+        ">"
+      );
 
-        display.drawTextCentered(
-          display.width() / 2 + 8,
-          40,
-          confirm_items[_ha_confirm]
-        );
+      drawSelectedMenuText(
+        display,
+        display.width() / 2 + 8,
+        40,
+        confirm_items[_ha_confirm]
+      );
 
       } else {
 
@@ -1739,16 +1823,17 @@ public:
         };
 
         display.drawTextCentered(
-          display.width() / 2 - 42,
-          34,
-          ">"
-        );
+        display.width() / 2 - 42,
+        34,
+        ">"
+      );
 
-        display.drawTextCentered(
-          display.width() / 2 + 8,
-          34,
-          ha_items[_ha_menu]
-        );
+      drawSelectedMenuText(
+        display,
+        display.width() / 2 + 8,
+        34,
+        ha_items[_ha_menu]
+      );
       }
 
     } else if (_page == HomePage::INTERNAL_CLOCK) {
@@ -2140,7 +2225,7 @@ public:
               )) {
 
             _task->showAlert(
-              "Contacto invalido",
+              "Contacto inválido",
               1500
             );
 
@@ -2474,7 +2559,7 @@ public:
           if (!valid) {
 
             _task->showAlert(
-              "Canal invalido",
+              "Canal inválido",
               1500
             );
 
@@ -2522,7 +2607,7 @@ public:
           "Ja vou",
           "OK",
           "Sim",
-          "Nao",
+          "Não",
           "[ SAIR ]"
         };
 
@@ -3177,7 +3262,7 @@ public:
             if (!found) {
 
               _task->showAlert(
-                "Canal HIVE nao encontrado",
+                "Canal HIVE não encontrado",
                 1500
               );
 
@@ -3343,7 +3428,7 @@ public:
 
       if (_page == HomePage::RECENT) {
         _task->showAlert(
-          "Recent adverts",
+          "Anúncios Recentes",
           800
         );
       }
