@@ -84,70 +84,39 @@ public:
     // version info
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(
-      display.width()/2,
-      35,
-      _version_info
-    );
+    display.drawTextCentered(display.width()/2, 35, _version_info);
 
     // build date
-    char build_date[16];
-    char build_month[4] = {0};
-    int build_day = 0;
-    int build_year = 0;
+    char build_date[11];
+    const char* months = "JanFebMarAprMayJunJulAugSepOctNovDec";
 
-    // FIRMWARE_BUILD_DATE pode vir como:
-    // "Sep 04 2026" ou "Set 04 2026"
-    sscanf(
-      FIRMWARE_BUILD_DATE,
-      "%3s %d %d",
-      build_month,
-      &build_day,
-      &build_year
-    );
+    int month = 0;
+    for (int i = 0; i < 12; i++) {
+      if (strncmp(__DATE__, months + (i * 3), 3) == 0) {
+        month = i + 1;
+        break;
+      }
+    }
 
-    // Normalizar abreviatura do mês para português.
-    if (strcmp(build_month, "Jan") == 0)
-      strcpy(build_month, "JAN");
-    else if (strcmp(build_month, "Feb") == 0)
-      strcpy(build_month, "FEV");
-    else if (strcmp(build_month, "Mar") == 0)
-      strcpy(build_month, "MAR");
-    else if (strcmp(build_month, "Apr") == 0)
-      strcpy(build_month, "ABR");
-    else if (strcmp(build_month, "May") == 0)
-      strcpy(build_month, "MAI");
-    else if (strcmp(build_month, "Jun") == 0)
-      strcpy(build_month, "JUN");
-    else if (strcmp(build_month, "Jul") == 0)
-      strcpy(build_month, "JUL");
-    else if (strcmp(build_month, "Aug") == 0)
-      strcpy(build_month, "AGO");
-    else if (strcmp(build_month, "Sep") == 0)
-      strcpy(build_month, "SET");
-    else if (strcmp(build_month, "Oct") == 0)
-      strcpy(build_month, "OUT");
-    else if (strcmp(build_month, "Nov") == 0)
-      strcpy(build_month, "NOV");
-    else if (strcmp(build_month, "Dec") == 0)
-      strcpy(build_month, "DEZ");
+    int day = atoi(__DATE__ + 4);
+    int year = atoi(__DATE__ + 7);
 
     snprintf(
       build_date,
       sizeof(build_date),
-      "%02d %s %04d",
-      build_day,
-      build_month,
-      build_year
+      "%02d/%02d/%04d",
+      day,
+      month,
+      year
     );
+
+    display.setColor(UIColor::primary_txt);
+    display.setTextSize(1);
+    display.drawTextCentered(display.width()/2, 48, build_date);
 
     display.setColor(UIColor::secondary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(
-      display.width()/2,
-      48,
-      build_date
-    );
+    display.drawTextCentered(display.width()/2, 48, FIRMWARE_BUILD_DATE);
 
     return 1000;
   }
@@ -502,7 +471,7 @@ public:
     if (_sms_target_type == 0) {
 
       if (!_sms_recipient_valid) {
-        _task->showAlert("Contacto inválido", 1500);
+        _task->showAlert("Contacto invalido", 1500);
         return false;
       }
 
@@ -534,7 +503,7 @@ public:
     if (_sms_target_type == 1) {
 
       if (!_sms_channel_valid) {
-        _task->showAlert("Canal inválido", 1500);
+        _task->showAlert("Canal invalido", 1500);
         return false;
       }
 
@@ -565,7 +534,7 @@ public:
     LocationProvider* location = _sensors->getLocationProvider();
 
     if (location == NULL) {
-      _task->showAlert("GPS indisponível", 1800);
+      _task->showAlert("GPS indisponivel", 1800);
       return false;
     }
 
@@ -577,7 +546,7 @@ public:
     snprintf(
       _sms_text,
       sizeof(_sms_text),
-      "Localização: %.6f, %.6f",
+      "Localizacao: %.6f, %.6f",
       _sensors->node_lat,
       _sensors->node_lon
     );
@@ -586,7 +555,7 @@ public:
 
 #else
 
-    _task->showAlert("GPS não compilado", 1800);
+    _task->showAlert("GPS nao compilado", 1800);
     return false;
 
 #endif
@@ -596,18 +565,6 @@ public:
     if (_shutdown_init && !_task->isButtonPressed()) {  // must wait for USR button to be released
       _task->shutdown();
     }
-  }
-
-  void drawSelectedMenuText(
-    DisplayDriver& display,
-    int centerX,
-    int y,
-    const char* text
-  ) {
-    // Simula negrito desenhando o texto duas vezes,
-    // com deslocamento horizontal de 1 pixel.
-    display.drawTextCentered(centerX, y, text);
-    display.drawTextCentered(centerX + 1, y, text);
   }
 
   void renderSectionHome(
@@ -682,7 +639,7 @@ public:
 
     if (_page == HomePage::FIRST) {
       display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
+      display.setTextSize(2);
       sprintf(tmp, "Mensagens: %d", _task->getMsgCount());
       display.drawTextCentered(display.width() / 2, 22, tmp);
 
@@ -699,7 +656,7 @@ public:
 
       } else if (the_mesh.getBLEPin() != 0) { // BT pin
         display.setColor(UIColor::warning_txt);
-        display.setTextSize(1);
+        display.setTextSize(2);
         sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
         display.drawTextCentered(display.width() / 2, 43, tmp);
       }
@@ -759,7 +716,7 @@ public:
       const char* items[] = {
         "Escrever",
         "Presets",
-        "Localização",
+        "Localizacao",
         "[ SAIR ]"
       };
 
@@ -769,9 +726,8 @@ public:
         ">"
       );
 
-      drawSelectedMenuText(
-        display,
-        display.width() / 2,
+      display.drawTextCentered(
+        display.width() / 2 + 8,
         40,
         items[_sms_new_menu]
       );
@@ -800,9 +756,8 @@ public:
         ">"
       );
 
-      drawSelectedMenuText(
-        display,
-        display.width() / 2,
+      display.drawTextCentered(
+        display.width() / 2 + 8,
         40,
         items[_sms_target_menu]
       );
@@ -853,7 +808,7 @@ public:
         );
 
         display.drawTextCentered(
-          display.width() / 2,
+          display.width() / 2 + 8,
           40,
           "[ SAIR ]"
         );
@@ -936,7 +891,7 @@ public:
       display.drawTextCentered(
         display.width() / 2,
         18,
-        "Ações"
+        "Acoes"
       );
 
       const char* actions[] = {
@@ -951,8 +906,7 @@ public:
         ">"
       );
 
-      drawSelectedMenuText(
-        display,
+      display.drawTextCentered(
         display.width() / 2 + 8,
         40,
         actions[_sms_action_menu]
@@ -998,7 +952,7 @@ public:
 
       const char* confirms[] = {
         "SIM",
-        "NÃO"
+        "NAO"
       };
 
       display.drawTextCentered(
@@ -1007,8 +961,7 @@ public:
         ">"
       );
 
-      drawSelectedMenuText(
-        display,
+      display.drawTextCentered(
         display.width() / 2 + 8,
         54,
         confirms[_sms_confirm]
@@ -1113,7 +1066,7 @@ public:
         "Ja vou",
         "OK",
         "Sim",
-        "Não",
+        "Nao",
         "[ SAIR ]"
       };
 
@@ -1302,35 +1255,13 @@ public:
         };
 
         display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
+        display.setTextSize(1);
 
-        const char* text = settings_items[_settings_menu];
-        const char* space = strchr(text, ' ');
-
-        if (space && display.getTextWidth(text) > display.width() - 10) {
-          char line1[32];
-          char line2[32];
-          size_t n = space - text;
-
-          if (n >= sizeof(line1))
-            n = sizeof(line1) - 1;
-
-          memcpy(line1, text, n);
-          line1[n] = '\0';
-
-          strncpy(line2, space + 1, sizeof(line2) - 1);
-          line2[sizeof(line2) - 1] = '\0';
-
-          drawSelectedMenuText(display, display.width() / 2, 29, line1);
-          drawSelectedMenuText(display, display.width() / 2, 47, line2);
-        } else {
-          drawSelectedMenuText(
-            display,
-            display.width() / 2,
-            38,
-            text
-          );
-        }
+        display.drawTextCentered(
+          display.width() / 2,
+          38,
+          settings_items[_settings_menu]
+        );
       }
 
 #if ENV_INCLUDE_GPS == 1
@@ -1525,7 +1456,7 @@ public:
           }
 
           // Fallback visual através do Advert conhecido.
-          // Isto NÃO altera "REPETIDORES DESCOBERTOS".
+          // Isto NÃO altera "Repetidores Descobertos".
           if (name[0] == '\0') {
 
             the_mesh.getAdvertNameByPrefix(
@@ -1620,7 +1551,7 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           16,
-          "REPETIDORES DESCOBERTOS"
+          "Repetidores Descobertos"
         );
 
         if (_discover_count == 0) {
@@ -1759,44 +1690,28 @@ public:
           "GPS",
 #endif
 #if UI_SENSORS_PAGE == 1
-          "SENSORES",
+          "Sensores",
 #endif
-          "RELÓGIO",
-          "DESCOBRIR REPETIDORES",
-          "REPETIDORES DESCOBERTOS",
+          "Relógio",
+          "Descobrir Repetidores",
+          "Repetidores Descobertos",
           "[ SAIR ]"
         };
 
         display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
+        display.setTextSize(1);
 
-        const char* text = apps_items[_apps_menu];
-      const char* space = strchr(text, ' ');
-
-      if (space && display.getTextWidth(text) > display.width() - 32) {
-        char line1[32];
-        char line2[32];
-        size_t n = space - text;
-
-        if (n >= sizeof(line1))
-          n = sizeof(line1) - 1;
-
-        memcpy(line1, text, n);
-        line1[n] = '\0';
-
-        strncpy(line2, space + 1, sizeof(line2) - 1);
-        line2[sizeof(line2) - 1] = '\0';
-
-        drawSelectedMenuText(display, display.width() / 2 + 8, 29, line1);
-        drawSelectedMenuText(display, display.width() / 2 + 8, 47, line2);
-      } else {
-        drawSelectedMenuText(
-          display,
-          display.width() / 2 + 8,
-          38,
-          text
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          34,
+          ">"
         );
-      }
+
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          34,
+          apps_items[_apps_menu]
+        );
       }
 
     } else if (_page == HomePage::INTERNAL_HOME_ASSISTANT) {
@@ -1833,21 +1748,20 @@ public:
 
         const char* confirm_items[] = {
           "SIM",
-          "NÃO"
+          "NAO"
         };
 
         display.drawTextCentered(
-        display.width() / 2 - 42,
-        40,
-        ">"
-      );
+          display.width() / 2 - 42,
+          40,
+          ">"
+        );
 
-      drawSelectedMenuText(
-        display,
-        display.width() / 2 + 8,
-        40,
-        confirm_items[_ha_confirm]
-      );
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          40,
+          confirm_items[_ha_confirm]
+        );
 
       } else {
 
@@ -1860,17 +1774,16 @@ public:
         };
 
         display.drawTextCentered(
-        display.width() / 2 - 42,
-        34,
-        ">"
-      );
+          display.width() / 2 - 42,
+          34,
+          ">"
+        );
 
-      drawSelectedMenuText(
-        display,
-        display.width() / 2 + 8,
-        34,
-        ha_items[_ha_menu]
-      );
+        display.drawTextCentered(
+          display.width() / 2 + 8,
+          34,
+          ha_items[_ha_menu]
+        );
       }
 
     } else if (_page == HomePage::INTERNAL_CLOCK) {
@@ -1953,7 +1866,7 @@ public:
       );
 
       display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
+      display.setTextSize(2);
       display.drawTextCentered(display.width() / 2, 25, timeText);
 
       display.setColor(UIColor::secondary_txt);
@@ -2262,7 +2175,7 @@ public:
               )) {
 
             _task->showAlert(
-              "Contacto inválido",
+              "Contacto invalido",
               1500
             );
 
@@ -2596,7 +2509,7 @@ public:
           if (!valid) {
 
             _task->showAlert(
-              "Canal inválido",
+              "Canal invalido",
               1500
             );
 
@@ -2644,7 +2557,7 @@ public:
           "Ja vou",
           "OK",
           "Sim",
-          "Não",
+          "Nao",
           "[ SAIR ]"
         };
 
@@ -3050,7 +2963,7 @@ public:
     // APLICAÇÕES -> DESCOBRIR NÓS
     // --------------------------------------------------------
     // Discovery ATIVO.
-    // Não usa AdvertPath e não interfere em "REPETIDORES DESCOBERTOS".
+    // Não usa AdvertPath e não interfere em "Repetidores Descobertos".
     // --------------------------------------------------------
 
     if (_page == HomePage::APPS &&
@@ -3299,7 +3212,7 @@ public:
             if (!found) {
 
               _task->showAlert(
-                "Canal HIVE não encontrado",
+                "Canal HIVE nao encontrado",
                 1500
               );
 
@@ -3465,7 +3378,7 @@ public:
 
       if (_page == HomePage::RECENT) {
         _task->showAlert(
-          "Anúncios Recentes",
+          "Recent adverts",
           800
         );
       }

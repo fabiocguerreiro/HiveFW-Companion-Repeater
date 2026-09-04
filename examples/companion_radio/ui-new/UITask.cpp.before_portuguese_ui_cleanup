@@ -502,7 +502,7 @@ public:
     if (_sms_target_type == 0) {
 
       if (!_sms_recipient_valid) {
-        _task->showAlert("Contacto inválido", 1500);
+        _task->showAlert("Contacto invalido", 1500);
         return false;
       }
 
@@ -534,7 +534,7 @@ public:
     if (_sms_target_type == 1) {
 
       if (!_sms_channel_valid) {
-        _task->showAlert("Canal inválido", 1500);
+        _task->showAlert("Canal invalido", 1500);
         return false;
       }
 
@@ -565,7 +565,7 @@ public:
     LocationProvider* location = _sensors->getLocationProvider();
 
     if (location == NULL) {
-      _task->showAlert("GPS indisponível", 1800);
+      _task->showAlert("GPS indisponivel", 1800);
       return false;
     }
 
@@ -577,7 +577,7 @@ public:
     snprintf(
       _sms_text,
       sizeof(_sms_text),
-      "Localização: %.6f, %.6f",
+      "Localizacao: %.6f, %.6f",
       _sensors->node_lat,
       _sensors->node_lon
     );
@@ -586,7 +586,7 @@ public:
 
 #else
 
-    _task->showAlert("GPS não compilado", 1800);
+    _task->showAlert("GPS nao compilado", 1800);
     return false;
 
 #endif
@@ -682,7 +682,7 @@ public:
 
     if (_page == HomePage::FIRST) {
       display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
+      display.setTextSize(2);
       sprintf(tmp, "Mensagens: %d", _task->getMsgCount());
       display.drawTextCentered(display.width() / 2, 22, tmp);
 
@@ -699,7 +699,7 @@ public:
 
       } else if (the_mesh.getBLEPin() != 0) { // BT pin
         display.setColor(UIColor::warning_txt);
-        display.setTextSize(1);
+        display.setTextSize(2);
         sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
         display.drawTextCentered(display.width() / 2, 43, tmp);
       }
@@ -759,7 +759,7 @@ public:
       const char* items[] = {
         "Escrever",
         "Presets",
-        "Localização",
+        "Localizacao",
         "[ SAIR ]"
       };
 
@@ -771,7 +771,7 @@ public:
 
       drawSelectedMenuText(
         display,
-        display.width() / 2,
+        display.width() / 2 + 8,
         40,
         items[_sms_new_menu]
       );
@@ -802,7 +802,7 @@ public:
 
       drawSelectedMenuText(
         display,
-        display.width() / 2,
+        display.width() / 2 + 8,
         40,
         items[_sms_target_menu]
       );
@@ -853,7 +853,7 @@ public:
         );
 
         display.drawTextCentered(
-          display.width() / 2,
+          display.width() / 2 + 8,
           40,
           "[ SAIR ]"
         );
@@ -936,7 +936,7 @@ public:
       display.drawTextCentered(
         display.width() / 2,
         18,
-        "Ações"
+        "Acoes"
       );
 
       const char* actions[] = {
@@ -998,7 +998,7 @@ public:
 
       const char* confirms[] = {
         "SIM",
-        "NÃO"
+        "NAO"
       };
 
       display.drawTextCentered(
@@ -1113,7 +1113,7 @@ public:
         "Ja vou",
         "OK",
         "Sim",
-        "Não",
+        "Nao",
         "[ SAIR ]"
       };
 
@@ -1302,35 +1302,13 @@ public:
         };
 
         display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
+        display.setTextSize(1);
 
-        const char* text = settings_items[_settings_menu];
-        const char* space = strchr(text, ' ');
-
-        if (space && display.getTextWidth(text) > display.width() - 10) {
-          char line1[32];
-          char line2[32];
-          size_t n = space - text;
-
-          if (n >= sizeof(line1))
-            n = sizeof(line1) - 1;
-
-          memcpy(line1, text, n);
-          line1[n] = '\0';
-
-          strncpy(line2, space + 1, sizeof(line2) - 1);
-          line2[sizeof(line2) - 1] = '\0';
-
-          drawSelectedMenuText(display, display.width() / 2, 29, line1);
-          drawSelectedMenuText(display, display.width() / 2, 47, line2);
-        } else {
-          drawSelectedMenuText(
-            display,
-            display.width() / 2,
-            38,
-            text
-          );
-        }
+        display.drawTextCentered(
+          display.width() / 2,
+          38,
+          settings_items[_settings_menu]
+        );
       }
 
 #if ENV_INCLUDE_GPS == 1
@@ -1525,7 +1503,7 @@ public:
           }
 
           // Fallback visual através do Advert conhecido.
-          // Isto NÃO altera "REPETIDORES DESCOBERTOS".
+          // Isto NÃO altera "Repetidores Descobertos".
           if (name[0] == '\0') {
 
             the_mesh.getAdvertNameByPrefix(
@@ -1620,7 +1598,7 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           16,
-          "REPETIDORES DESCOBERTOS"
+          "Repetidores Descobertos"
         );
 
         if (_discover_count == 0) {
@@ -1759,44 +1737,29 @@ public:
           "GPS",
 #endif
 #if UI_SENSORS_PAGE == 1
-          "SENSORES",
+          "Sensores",
 #endif
-          "RELÓGIO",
-          "DESCOBRIR REPETIDORES",
-          "REPETIDORES DESCOBERTOS",
+          "Relógio",
+          "Descobrir Repetidores",
+          "Repetidores Descobertos",
           "[ SAIR ]"
         };
 
         display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
+        display.setTextSize(1);
 
-        const char* text = apps_items[_apps_menu];
-      const char* space = strchr(text, ' ');
+        display.drawTextCentered(
+        display.width() / 2 - 42,
+        34,
+        ">"
+      );
 
-      if (space && display.getTextWidth(text) > display.width() - 32) {
-        char line1[32];
-        char line2[32];
-        size_t n = space - text;
-
-        if (n >= sizeof(line1))
-          n = sizeof(line1) - 1;
-
-        memcpy(line1, text, n);
-        line1[n] = '\0';
-
-        strncpy(line2, space + 1, sizeof(line2) - 1);
-        line2[sizeof(line2) - 1] = '\0';
-
-        drawSelectedMenuText(display, display.width() / 2 + 8, 29, line1);
-        drawSelectedMenuText(display, display.width() / 2 + 8, 47, line2);
-      } else {
-        drawSelectedMenuText(
-          display,
-          display.width() / 2 + 8,
-          38,
-          text
-        );
-      }
+      drawSelectedMenuText(
+        display,
+        display.width() / 2 + 8,
+        34,
+        apps_items[_apps_menu]
+      );
       }
 
     } else if (_page == HomePage::INTERNAL_HOME_ASSISTANT) {
@@ -1833,7 +1796,7 @@ public:
 
         const char* confirm_items[] = {
           "SIM",
-          "NÃO"
+          "NAO"
         };
 
         display.drawTextCentered(
@@ -1953,7 +1916,7 @@ public:
       );
 
       display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
+      display.setTextSize(2);
       display.drawTextCentered(display.width() / 2, 25, timeText);
 
       display.setColor(UIColor::secondary_txt);
@@ -2262,7 +2225,7 @@ public:
               )) {
 
             _task->showAlert(
-              "Contacto inválido",
+              "Contacto invalido",
               1500
             );
 
@@ -2596,7 +2559,7 @@ public:
           if (!valid) {
 
             _task->showAlert(
-              "Canal inválido",
+              "Canal invalido",
               1500
             );
 
@@ -2644,7 +2607,7 @@ public:
           "Ja vou",
           "OK",
           "Sim",
-          "Não",
+          "Nao",
           "[ SAIR ]"
         };
 
@@ -3050,7 +3013,7 @@ public:
     // APLICAÇÕES -> DESCOBRIR NÓS
     // --------------------------------------------------------
     // Discovery ATIVO.
-    // Não usa AdvertPath e não interfere em "REPETIDORES DESCOBERTOS".
+    // Não usa AdvertPath e não interfere em "Repetidores Descobertos".
     // --------------------------------------------------------
 
     if (_page == HomePage::APPS &&
@@ -3299,7 +3262,7 @@ public:
             if (!found) {
 
               _task->showAlert(
-                "Canal HIVE não encontrado",
+                "Canal HIVE nao encontrado",
                 1500
               );
 
