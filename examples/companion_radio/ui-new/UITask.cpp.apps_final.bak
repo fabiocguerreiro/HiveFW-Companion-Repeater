@@ -106,15 +106,16 @@ class HomeScreen : public UIScreen {
     RECENT,
     MESSAGES,
     RADIO,
+#if ENV_INCLUDE_GPS == 1
+    GPS,
+#endif
+#if UI_SENSORS_PAGE == 1
+    SENSORS,
+#endif
     SETTINGS,
-    APPS,
-    Count,    // keep as last
-
-    // Estados internos das APPS.
-    INTERNAL_HOME_ASSISTANT,
-    INTERNAL_CLOCK,
-    INTERNAL_GPS,
-    INTERNAL_SENSORS
+    HOME_ASSISTANT,
+    CLOCK,
+    Count    // keep as last
   };
 
   UITask* _task;
@@ -171,85 +172,6 @@ class HomeScreen : public UIScreen {
   bool _ha_submenu;
   uint8_t _ha_confirm;
   bool _ha_confirm_submenu;
-
-  // APLICAÇÕES
-  // 0 = menu
-  // 1 = relógio
-  // 2 = Home Assistant
-  // 3 = GPS
-  // 4 = Sensores
-  // 5 = Descobrir Repetidores
-  // 6 = Repetidores Descobertos
-  uint8_t _apps_menu;
-  uint8_t _apps_view;
-  bool _apps_submenu;
-  bool _apps_return;
-
-  // Discovery ativo — INDEPENDENTE de AdvertPath.
-  static const uint8_t ACTIVE_DISCOVERY_MAX_NODES = 8;
-  NodeDiscoveryResult _active_discovery_nodes[ACTIVE_DISCOVERY_MAX_NODES];
-  uint8_t _active_discovery_count;
-  uint8_t _active_discovery_menu;
-
-  void refreshActiveDiscoveryNodes() {
-
-    _active_discovery_count =
-      the_mesh.getNodeDiscoveryResults(
-        _active_discovery_nodes,
-        ACTIVE_DISCOVERY_MAX_NODES
-      );
-
-    if (_active_discovery_count == 0) {
-      _active_discovery_menu = 0;
-    } else if (_active_discovery_menu >= _active_discovery_count) {
-      _active_discovery_menu = 0;
-    }
-  }
-
-  // Nós descobertos = tabela AdvertPath (PASSIVO / ADVERT).
-  static const uint8_t DISCOVER_MAX_NODES = 8;
-  AdvertPath _discover_nodes[DISCOVER_MAX_NODES];
-  uint8_t _discover_count;
-  uint8_t _discover_menu;
-
-  void refreshDiscoveredNodes() {
-
-    AdvertPath temp[DISCOVER_MAX_NODES];
-
-    int total =
-      the_mesh.getRecentlyHeard(
-        temp,
-        DISCOVER_MAX_NODES
-      );
-
-    _discover_count = 0;
-
-    for (int i = 0;
-         i < total &&
-         _discover_count < DISCOVER_MAX_NODES;
-         i++) {
-
-      if (temp[i].recv_timestamp == 0)
-        continue;
-
-      _discover_nodes[_discover_count] =
-        temp[i];
-
-      _discover_count++;
-    }
-
-    if (_discover_count == 0) {
-
-      _discover_menu = 0;
-
-    } else if (
-      _discover_menu >= _discover_count
-    ) {
-
-      _discover_menu = 0;
-    }
-  }
-
   bool _shutdown_init;
   AdvertPath recent[UI_RECENT_LIST_SIZE];
 
@@ -336,9 +258,6 @@ public:
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
       _ha_confirm(0), _ha_confirm_submenu(false),
-       _apps_menu(0), _apps_view(0), _apps_submenu(false), _apps_return(false),
-       _active_discovery_count(0), _active_discovery_menu(0),
-       _discover_count(0), _discover_menu(0),
        _shutdown_init(false), sensors_lpp(200) {
     _sms_text[0] = '\0';
     memset(&_sms_recipient, 0, sizeof(_sms_recipient));
@@ -1168,7 +1087,7 @@ public:
         display.drawTextCentered(
           display.width() / 2 + 2,
           55,
-          "DEFINIÇÕES"
+          "Definições"
         );
 
       } else if (_settings_advert_submenu) {
@@ -1194,7 +1113,7 @@ public:
           "BLUETOOTH",
           "ANUNCIAR NÓ",
           "DESLIGAR",
-          "[ SAIR ]"
+          "SAIR"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -1208,7 +1127,7 @@ public:
       }
 
 #if ENV_INCLUDE_GPS == 1
-    } else if (_page == HomePage::INTERNAL_GPS) {
+    } else if (_page == HomePage::GPS) {
       LocationProvider* nmea = sensors.getLocationProvider();
       char buf[50];
       int y = 18;
@@ -1256,7 +1175,7 @@ public:
       }
 #endif
 #if UI_SENSORS_PAGE == 1
-    } else if (_page == HomePage::INTERNAL_SENSORS) {
+    } else if (_page == HomePage::SENSORS) {
       int y = 18;
       refresh_sensors();
       char buf[30];
@@ -1329,347 +1248,7 @@ public:
       if (sensors_scroll) sensors_scroll_offset = (sensors_scroll_offset+1)%sensors_nb;
       else sensors_scroll_offset = 0;
 #endif
-
-    } else if (_page == HomePage::APPS) {
-
-      // ======================================================
-      // APLICAÇÕES
-      // ======================================================
-
-      // ------------------------------------------------------
-      // APLICAÇÕES -> DESCOBRIR NÓS
-      // ------------------------------------------------------
-      // Discovery ATIVO. Não usa AdvertPath.
-      // ------------------------------------------------------
-
-      if (!_apps_submenu && _apps_view == 5) {
-
-        refreshActiveDiscoveryNodes();
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        if (_active_discovery_count == 0) {
-
-          // Linha reservada intencionalmente vazia.
-
-          display.drawTextCentered(
-            display.width() / 2,
-            37,
-            "Prima demoradamente"
-          );
-
-        } else {
-
-
-          NodeDiscoveryResult& result =
-            _active_discovery_nodes[_active_discovery_menu];
-          char counterText[12];
-
-          snprintf(
-            counterText,
-            sizeof(counterText),
-            "%d/%d",
-            (int)(_active_discovery_menu + 1),
-            (int)_active_discovery_count
-          );
-
-          display.setColor(UIColor::secondary_txt);
-
-          display.drawTextCentered(
-            display.width() - 12,
-            14,
-            counterText
-          );
-
-
-          char name[33];
-          name[0] = '\0';
-
-          // Nome obtido através do próprio Discovery/ANON.
-          if (result.name[0] != '\0') {
-
-            strncpy(
-              name,
-              result.name,
-              sizeof(name) - 1
-            );
-
-            name[sizeof(name) - 1] = '\0';
-          }
-
-          // Fallback visual através do Advert conhecido.
-          // Isto NÃO altera "Repetidores Descobertos".
-          if (name[0] == '\0') {
-
-            the_mesh.getAdvertNameByPrefix(
-              result.pub_key,
-              name,
-              sizeof(name)
-            );
-          }
-
-          if (name[0] == '\0') {
-
-            if (result.node_type == ADV_TYPE_REPEATER) {
-              strcpy(name, "Repetidor");
-            } else if (result.node_type == ADV_TYPE_ROOM) {
-              strcpy(name, "Room");
-            } else {
-              strcpy(name, "Nó descoberto");
-            }
-          }
-
-          display.setColor(UIColor::primary_txt);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            28,
-            name
-          );
-
-          char keyText[32];
-
-          snprintf(
-            keyText,
-            sizeof(keyText),
-            "%02X%02X%02X%02X%02X%02X%02X",
-            result.pub_key[0],
-            result.pub_key[1],
-            result.pub_key[2],
-            result.pub_key[3],
-            result.pub_key[4],
-            result.pub_key[5],
-            result.pub_key[6]
-          );
-
-          display.setColor(UIColor::secondary_txt);
-
-          display.setColor(UIColor::secondary_txt);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            42,
-            keyText
-          );
-
-          char infoText[32];
-
-          const char* typeText =
-            (result.node_type == ADV_TYPE_REPEATER)
-              ? "REPEATER"
-              : (result.node_type == ADV_TYPE_ROOM)
-                ? "ROOM"
-                : "NODE";
-
-          snprintf(
-            infoText,
-            sizeof(infoText),
-            "SNR %d",
-            (int)result.snr
-          );
-
-          display.setColor(UIColor::secondary_txt);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            56,
-            infoText
-          );
-        }
-}
-
-      // ------------------------------------------------------
-      // APLICAÇÕES -> NÓS DESCOBERTOS
-      // render discovered nodes final
-      // ------------------------------------------------------
-
-      else if (!_apps_submenu && _apps_view == 6) {
-
-        refreshDiscoveredNodes();
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          16,
-          "Repetidores Descobertos"
-        );
-
-        if (_discover_count == 0) {
-
-          display.drawTextCentered(
-            display.width() / 2,
-            33,
-            "Nenhum nó conhecido"
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            49,
-            "A aguardar anúncios..."
-          );
-
-        } else {
-
-          AdvertPath& node =
-            _discover_nodes[_discover_menu];
-
-          char name[33];
-
-          strncpy(
-            name,
-            node.name,
-            sizeof(name) - 1
-          );
-
-          name[sizeof(name) - 1] = '\0';
-
-          if (name[0] == '\0') {
-            strcpy(name, "Nó sem nome");
-          }
-
-          display.drawTextCentered(
-            display.width() / 2,
-            29,
-            name
-          );
-
-          uint32_t now =
-            _rtc->getCurrentTime();
-
-          uint32_t age = 0;
-
-          if (now >= node.recv_timestamp) {
-            age = now - node.recv_timestamp;
-          }
-
-          char ageText[24];
-
-          if (age < 60) {
-
-            snprintf(
-              ageText,
-              sizeof(ageText),
-              "há %lus",
-              (unsigned long)age
-            );
-
-          } else if (age < 3600) {
-
-            snprintf(
-              ageText,
-              sizeof(ageText),
-              "há %lum",
-              (unsigned long)(age / 60)
-            );
-
-          } else {
-
-            snprintf(
-              ageText,
-              sizeof(ageText),
-              "há %luh",
-              (unsigned long)(age / 3600)
-            );
-          }
-
-          display.drawTextCentered(
-            display.width() / 2,
-            41,
-            ageText
-          );
-
-          char infoText[24];
-
-          snprintf(
-            infoText,
-            sizeof(infoText),
-            "%d saltos   %d/%d",
-            (int)(node.path_len & 0x3F),
-            (int)(_discover_menu + 1),
-            (int)_discover_count
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            53,
-            infoText
-          );
-        }
-
-        display.drawTextCentered(
-          display.width() / 2,
-          63,
-          "[ SAIR ]"
-        );
-      }
-
-      // ------------------------------------------------------
-      // APLICAÇÕES -> PÁGINA PRINCIPAL
-      // ------------------------------------------------------
-
-      else if (!_apps_submenu) {
-
-        display.setColor(UIColor::corp_blue);
-
-        display.drawXbm(
-          (display.width() - 32) / 2,
-          14,
-          apps_icon,
-          32,
-          32
-        );
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          55,
-          "APLICAÇÕES"
-        );
-
-      }
-
-      // ------------------------------------------------------
-      // APLICAÇÕES -> MENU
-      // ------------------------------------------------------
-
-      else {
-
-        const char* apps_items[] = {
-          "HOME ASSISTANT",
-#if ENV_INCLUDE_GPS == 1
-          "GPS",
-#endif
-#if UI_SENSORS_PAGE == 1
-          "Sensores",
-#endif
-          "Relógio",
-          "Descobrir Repetidores",
-          "Repetidores Descobertos",
-          "[ SAIR ]"
-        };
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2 - 42,
-          34,
-          ">"
-        );
-
-        display.drawTextCentered(
-          display.width() / 2 + 8,
-          34,
-          apps_items[_apps_menu]
-        );
-      }
-
-    } else if (_page == HomePage::INTERNAL_HOME_ASSISTANT) {
+    } else if (_page == HomePage::HOME_ASSISTANT) {
 
       if (!_ha_submenu) {
 
@@ -1741,7 +1320,7 @@ public:
         );
       }
 
-    } else if (_page == HomePage::INTERNAL_CLOCK) {
+    } else if (_page == HomePage::CLOCK) {
       uint32_t now = _rtc->getCurrentTime();
 
       // Lisbon timezone:
@@ -2763,579 +2342,19 @@ public:
     }
 
     // ========================================================
-    // APLICAÇÕES MENU
-    // ========================================================
-
-    if (_page == HomePage::APPS && _apps_submenu) {
-
-      // Número real de opções.
-      int apps_count = 5;
-      // HOME ASSISTANT
-      // RELÓGIO
-      // DESCOBRIR REPETIDORES
-      // REPETIDORES DESCOBERTOS
-      // SAIR
-
-#if ENV_INCLUDE_GPS == 1
-      apps_count++;
-#endif
-
-#if UI_SENSORS_PAGE == 1
-      apps_count++;
-#endif
-
-      if (c == KEY_NEXT || c == KEY_RIGHT) {
-
-        _apps_menu =
-          (_apps_menu + 1) % apps_count;
-
-        return true;
-      }
-
-      if (c == KEY_PREV || c == KEY_LEFT) {
-
-        _apps_menu =
-          (_apps_menu + apps_count - 1)
-          % apps_count;
-
-        return true;
-      }
-
-      if (c == KEY_CANCEL ||
-          c == KEY_SELECT) {
-
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-
-        int app_index = 0;
-
-        // HOME ASSISTANT
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 2;
-          _apps_return = true;
-
-          _ha_submenu = true;
-          _ha_menu = 0;
-          _ha_confirm = 0;
-          _ha_confirm_submenu = false;
-
-          _page = HomePage::INTERNAL_HOME_ASSISTANT;
-
-          return true;
-        }
-
-#if ENV_INCLUDE_GPS == 1
-        // GPS
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 3;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_GPS;
-
-          return true;
-        }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-        // SENSORES
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 4;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_SENSORS;
-
-          return true;
-        }
-#endif
-
-        // RELÓGIO
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 1;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_CLOCK;
-
-          return true;
-        }
-
-        // DESCOBRIR REPETIDORES
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 5;
-          _apps_return = true;
-
-          _discover_menu = 0;
-          refreshDiscoveredNodes();
-
-          return true;
-        }
-
-        // REPETIDORES DESCOBERTOS
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 6;
-          _apps_return = true;
-
-          _discover_menu = 0;
-          refreshDiscoveredNodes();
-
-          return true;
-        }
-
-        // SAIR
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_menu = 0;
-          _apps_view = 0;
-          _apps_return = false;
-
-          return true;
-        }
-      }
-
-      return true;
-    }
-
-    // --------------------------------------------------------
-    // APLICAÇÕES -> DESCOBRIR NÓS
-    // --------------------------------------------------------
-    // Discovery ATIVO.
-    // Não usa AdvertPath e não interfere em "Repetidores Descobertos".
-    // --------------------------------------------------------
-
-    if (_page == HomePage::APPS &&
-        !_apps_submenu &&
-        _apps_view == 5) {
-
-      // 1 CLICK -> próximo resultado
-      if (c == KEY_NEXT ||
-          c == KEY_RIGHT) {
-
-        refreshActiveDiscoveryNodes();
-
-        if (_active_discovery_count > 0) {
-
-          _active_discovery_menu =
-            (_active_discovery_menu + 1)
-            % _active_discovery_count;
-        }
-
-        return true;
-      }
-
-      // 2 CLICKS -> voltar para APPS
-      if (c == KEY_PREV ||
-          c == KEY_LEFT) {
-
-        _page = HomePage::APPS;
-
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        _active_discovery_menu = 0;
-        _active_discovery_count = 0;
-        the_mesh.clearNodeDiscoveryResults();
-
-        return true;
-      }
-
-      // LONG PRESS
-      //
-      // Sem resultados:
-      //   iniciar nova pesquisa Discovery.
-      //
-      // Com resultado selecionado:
-      //   pedir o nome real ao nó.
-      if (c == KEY_ENTER) {
-
-        refreshActiveDiscoveryNodes();
-
-        if (_active_discovery_count == 0) {
-
-          _active_discovery_menu = 0;
-
-          the_mesh.clearNodeDiscoveryResults();
-
-          if (!the_mesh.sendNodeDiscoveryReq()) {
-
-            _task->showAlert(
-              "Falha ao descobrir",
-              1500
-            );
-
-          } else {
-
-            _task->showAlert(
-              "A procurar nos...",
-              1200
-            );
-          }
-
-        } else {
-
-          if (!the_mesh.requestNodeDiscoveryName(
-                _active_discovery_menu
-              )) {
-
-            _task->showAlert(
-              "Falha ao pedir nome",
-              1500
-            );
-
-          } else {
-
-            _task->showAlert(
-              "A obter nome...",
-              1200
-            );
-          }
-        }
-
-        return true;
-      }
-
-      // 3 CLICKS / CANCEL -> sair
-      if (c == KEY_SELECT ||
-          c == KEY_CANCEL) {
-
-        _page = HomePage::APPS;
-
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        _active_discovery_menu = 0;
-        _active_discovery_count = 0;
-        the_mesh.clearNodeDiscoveryResults();
-
-        return true;
-      }
-
-      return true;
-    }
-
-    // --------------------------------------------------------
-    // APLICAÇÕES -> NÓS DESCOBERTOS
-    // handler discovered nodes final
-    // --------------------------------------------------------
-
-    if (_page == HomePage::APPS &&
-        !_apps_submenu &&
-        _apps_view == 6) {
-
-      // 1 CLICK -> próximo
-      if (c == KEY_NEXT ||
-          c == KEY_RIGHT) {
-
-        refreshDiscoveredNodes();
-
-        if (_discover_count > 0) {
-
-          _discover_menu =
-            (_discover_menu + 1)
-            % _discover_count;
-        }
-
-        return true;
-      }
-
-      // 2 CLICKS -> voltar
-      if (c == KEY_PREV ||
-          c == KEY_LEFT) {
-
-        _page = HomePage::APPS;
-
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      // 3 CLICKS / CANCEL -> sair
-      if (c == KEY_SELECT ||
-          c == KEY_CANCEL) {
-
-        _page = HomePage::APPS;
-
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      return true;
-    }
-
-    // --------------------------------------------------------
-    // APLICAÇÕES -> RELÓGIO
-    //
-    // O render continua sendo o bloco CLOCK original.
-    // --------------------------------------------------------
-
-    if (_page == HomePage::INTERNAL_CLOCK &&
-        _apps_return) {
-
-      // Qualquer ação de saída regressa diretamente à
-      // aba principal APPS.
-
-      if (c == KEY_CANCEL ||
-          c == KEY_SELECT ||
-          c == KEY_ENTER) {
-
-        _page = HomePage::APPS;
-
-        _apps_submenu = false;
-        _apps_view = 0;
-        _apps_menu = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      return true;
-    }
-
-    // --------------------------------------------------------
-    // APLICAÇÕES -> HOME ASSISTANT
-    // --------------------------------------------------------
-
-    if (_page == HomePage::INTERNAL_HOME_ASSISTANT &&
-        _apps_return) {
-
-      if (_ha_confirm_submenu) {
-
-        if (c == KEY_NEXT ||
-            c == KEY_RIGHT ||
-            c == KEY_PREV ||
-            c == KEY_LEFT) {
-
-          _ha_confirm =
-            (_ha_confirm + 1) % 2;
-
-          return true;
-        }
-
-        if (c == KEY_CANCEL ||
-            c == KEY_SELECT) {
-
-          _ha_confirm_submenu = false;
-          return true;
-        }
-
-        if (c == KEY_ENTER) {
-
-          if (_ha_confirm == 0) {
-
-            ChannelDetails channel;
-            bool found = false;
-
-            for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
-
-              if (the_mesh.getChannel(i, channel) &&
-                  strcmp(channel.name, "HIVE") == 0) {
-
-                found = true;
-                break;
-              }
-            }
-
-            if (!found) {
-
-              _task->showAlert(
-                "Canal HIVE nao encontrado",
-                1500
-              );
-
-              return true;
-            }
-
-            const char* command =
-              "!portapredio";
-
-            bool success =
-              the_mesh.sendGroupMessage(
-                _rtc->getCurrentTime(),
-                channel.channel,
-                _node_prefs->node_name,
-                command,
-                strlen(command)
-              );
-
-            _task->notify(
-              UIEventType::ack
-            );
-
-            _task->showAlert(
-              success
-                ? "Comando enviado"
-                : "Falha ao enviar",
-              1200
-            );
-
-            return true;
-          }
-
-          _ha_confirm_submenu = false;
-          return true;
-        }
-
-        return true;
-      }
-
-      if (c == KEY_NEXT ||
-          c == KEY_RIGHT) {
-
-        _ha_menu =
-          (_ha_menu + 1) % 2;
-
-        return true;
-      }
-
-      if (c == KEY_PREV ||
-          c == KEY_LEFT) {
-
-        _ha_menu =
-          (_ha_menu + 1) % 2;
-
-        return true;
-      }
-
-      if (c == KEY_CANCEL ||
-          c == KEY_SELECT ||
-          c == KEY_ENTER) {
-
-        _page = HomePage::APPS;
-
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        _ha_submenu = false;
-        _ha_confirm_submenu = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-
-        if (_ha_menu == 0) {
-
-          _ha_confirm = 0;
-          _ha_confirm_submenu = true;
-
-          return true;
-        }
-
-        if (_ha_menu == 1) {
-
-          _page = HomePage::APPS;
-
-          _apps_submenu = false;
-          _apps_menu = 0;
-          _apps_view = 0;
-          _apps_return = false;
-
-          _ha_submenu = false;
-          _ha_confirm_submenu = false;
-
-          return true;
-        }
-      }
-
-      return true;
-    }
-
-    // ========================================================
-    // APLICAÇÕES -> GPS / SENSORES
-    // Voltar ao menu APPS antes da navegação geral.
-    // ========================================================
-
-#if ENV_INCLUDE_GPS == 1
-    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
-
-      if (c == KEY_NEXT || c == KEY_RIGHT ||
-          c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-    }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
-
-      if (c == KEY_NEXT || c == KEY_RIGHT ||
-          c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-    }
-#endif
-
-    // ========================================================
     // NORMAL PAGE NAVIGATION
     // ========================================================
 
     if (c == KEY_LEFT || c == KEY_PREV) {
-
-      _page =
-        (_page + HomePage::Count - 1)
-        % HomePage::Count;
-
+      _page = (_page + HomePage::Count - 1) % HomePage::Count;
       return true;
     }
 
     if (c == KEY_NEXT || c == KEY_RIGHT) {
-
-      _page =
-        (_page + 1)
-        % HomePage::Count;
+      _page = (_page + 1) % HomePage::Count;
 
       if (_page == HomePage::RECENT) {
-        _task->showAlert(
-          "Recent adverts",
-          800
-        );
+        _task->showAlert("Recent adverts", 800);
       }
 
       return true;
@@ -3355,7 +2374,7 @@ public:
     // ENTER HOME ASSISTANT
     // ========================================================
 
-    if (c == KEY_ENTER && _page == HomePage::INTERNAL_HOME_ASSISTANT) {
+    if (c == KEY_ENTER && _page == HomePage::HOME_ASSISTANT) {
       _ha_submenu = true;
       _ha_menu = 0;
       _ha_confirm_submenu = false;
@@ -3363,20 +2382,6 @@ public:
     }
 
     // ========================================================
-    // ========================================================
-    // ENTER APLICAÇÕES
-    // ========================================================
-
-    if (c == KEY_ENTER && _page == HomePage::APPS) {
-
-      _apps_submenu = true;
-      _apps_menu = 0;
-      _apps_view = 0;
-      _apps_return = true;
-
-      return true;
-    }
-
     // ENTER SETTINGS
     // ========================================================
 
@@ -3389,50 +2394,16 @@ public:
     }
 
 #if ENV_INCLUDE_GPS == 1
-    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
-
-      if (c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-        _task->toggleGPS();
-        return true;
-      }
-
+    if (c == KEY_ENTER && _page == HomePage::GPS) {
+      _task->toggleGPS();
       return true;
     }
 #endif
 
 #if UI_SENSORS_PAGE == 1
-    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
-
-      if (c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-        _task->toggleGPS();
-        next_sensors_refresh = 0;
-        return true;
-      }
-
+    if (c == KEY_ENTER && _page == HomePage::SENSORS) {
+      _task->toggleGPS();
+      next_sensors_refresh=0;
       return true;
     }
 #endif

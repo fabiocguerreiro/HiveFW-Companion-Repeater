@@ -87,16 +87,6 @@ struct AdvertPath {
   uint8_t path[MAX_PATH_SIZE];
 };
 
-// Resultado de uma pesquisa DISCOVER real.
-// Independente da tabela AdvertPath.
-struct NodeDiscoveryResult {
-  uint8_t pub_key[PUB_KEY_SIZE];
-  uint8_t node_type;
-  int8_t  snr;
-  uint32_t received_timestamp;
-  char name[32];
-};
-
 class MyMesh : public BaseChatMesh, public DataStoreHost {
 public:
   MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store, AbstractUITask* ui=NULL);
@@ -118,13 +108,6 @@ public:
   void enterCLIRescue();
 
   int  getRecentlyHeard(AdvertPath dest[], int max_num);
-  bool sendNodeDiscoveryReq();
-
-  // Resultados de Discovery ativo.
-  void clearNodeDiscoveryResults();
-  int getNodeDiscoveryResults(NodeDiscoveryResult dest[], int max_num);
-  bool getAdvertNameByPrefix(const uint8_t prefix[7], char *dest, int dest_len);
-  bool requestNodeDiscoveryName(int index);
 
 protected:
   float getAirtimeBudgetFactor() const override;
@@ -237,15 +220,6 @@ private:
   uint32_t pending_login;
   uint32_t pending_status;
   uint32_t pending_telemetry, pending_discovery;   // pending _TELEMETRY_REQ
-  uint32_t pending_discover_tag;
-  unsigned long pending_discover_until;
-
-  uint32_t pending_node_name_tag;
-
-  static const uint8_t NODE_DISCOVERY_RESULTS_MAX = 8;
-  NodeDiscoveryResult node_discovery_results[NODE_DISCOVERY_RESULTS_MAX];
-  uint8_t node_discovery_result_count;
-
   uint32_t pending_req;   // pending _BINARY_REQ
   BaseSerialInterface *_serial;
   AbstractUITask* _ui;

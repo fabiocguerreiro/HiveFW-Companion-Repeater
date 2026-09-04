@@ -106,15 +106,19 @@ class HomeScreen : public UIScreen {
     RECENT,
     MESSAGES,
     RADIO,
+#if ENV_INCLUDE_GPS == 1
+    GPS,
+#endif
+#if UI_SENSORS_PAGE == 1
+    SENSORS,
+#endif
     SETTINGS,
     APPS,
     Count,    // keep as last
 
     // Estados internos das APPS.
     INTERNAL_HOME_ASSISTANT,
-    INTERNAL_CLOCK,
-    INTERNAL_GPS,
-    INTERNAL_SENSORS
+    INTERNAL_CLOCK
   };
 
   UITask* _task;
@@ -172,14 +176,11 @@ class HomeScreen : public UIScreen {
   uint8_t _ha_confirm;
   bool _ha_confirm_submenu;
 
-  // APLICAÇÕES
+  // APPS
   // 0 = menu
   // 1 = relógio
   // 2 = Home Assistant
-  // 3 = GPS
-  // 4 = Sensores
-  // 5 = Descobrir Repetidores
-  // 6 = Repetidores Descobertos
+  // 3 = Descobrir Nós
   uint8_t _apps_menu;
   uint8_t _apps_view;
   bool _apps_submenu;
@@ -1168,7 +1169,7 @@ public:
         display.drawTextCentered(
           display.width() / 2 + 2,
           55,
-          "DEFINIÇÕES"
+          "Definições"
         );
 
       } else if (_settings_advert_submenu) {
@@ -1194,7 +1195,7 @@ public:
           "BLUETOOTH",
           "ANUNCIAR NÓ",
           "DESLIGAR",
-          "[ SAIR ]"
+          "SAIR"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -1208,7 +1209,7 @@ public:
       }
 
 #if ENV_INCLUDE_GPS == 1
-    } else if (_page == HomePage::INTERNAL_GPS) {
+    } else if (_page == HomePage::GPS) {
       LocationProvider* nmea = sensors.getLocationProvider();
       char buf[50];
       int y = 18;
@@ -1256,7 +1257,7 @@ public:
       }
 #endif
 #if UI_SENSORS_PAGE == 1
-    } else if (_page == HomePage::INTERNAL_SENSORS) {
+    } else if (_page == HomePage::SENSORS) {
       int y = 18;
       refresh_sensors();
       char buf[30];
@@ -1333,16 +1334,16 @@ public:
     } else if (_page == HomePage::APPS) {
 
       // ======================================================
-      // APLICAÇÕES
+      // APPS
       // ======================================================
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> DESCOBRIR NÓS
+      // APPS -> DESCOBRIR NÓS
       // ------------------------------------------------------
       // Discovery ATIVO. Não usa AdvertPath.
       // ------------------------------------------------------
 
-      if (!_apps_submenu && _apps_view == 5) {
+      if (!_apps_submenu && _apps_view == 3) {
 
         refreshActiveDiscoveryNodes();
 
@@ -1399,7 +1400,7 @@ public:
           }
 
           // Fallback visual através do Advert conhecido.
-          // Isto NÃO altera "Repetidores Descobertos".
+          // Isto NÃO altera "Nós descobertos".
           if (name[0] == '\0') {
 
             the_mesh.getAdvertNameByPrefix(
@@ -1480,11 +1481,11 @@ public:
 }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> NÓS DESCOBERTOS
+      // APPS -> NÓS DESCOBERTOS
       // render discovered nodes final
       // ------------------------------------------------------
 
-      else if (!_apps_submenu && _apps_view == 6) {
+      else if (!_apps_submenu && _apps_view == 4) {
 
         refreshDiscoveredNodes();
 
@@ -1494,7 +1495,7 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           16,
-          "Repetidores Descobertos"
+          "Nós descobertos"
         );
 
         if (_discover_count == 0) {
@@ -1607,7 +1608,7 @@ public:
       }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> PÁGINA PRINCIPAL
+      // APPS -> PÁGINA PRINCIPAL
       // ------------------------------------------------------
 
       else if (!_apps_submenu) {
@@ -1628,28 +1629,22 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           55,
-          "APLICAÇÕES"
+          "APPS"
         );
 
       }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> MENU
+      // APPS -> MENU
       // ------------------------------------------------------
 
       else {
 
         const char* apps_items[] = {
-          "HOME ASSISTANT",
-#if ENV_INCLUDE_GPS == 1
-          "GPS",
-#endif
-#if UI_SENSORS_PAGE == 1
-          "Sensores",
-#endif
           "Relógio",
-          "Descobrir Repetidores",
-          "Repetidores Descobertos",
+          "Descobrir Nós",
+          "Nós descobertos",
+          "HOME ASSISTANT",
           "[ SAIR ]"
         };
 
@@ -2763,31 +2758,19 @@ public:
     }
 
     // ========================================================
-    // APLICAÇÕES MENU
+    // APPS MENU
     // ========================================================
 
     if (_page == HomePage::APPS && _apps_submenu) {
 
-      // Número real de opções.
-      int apps_count = 5;
-      // HOME ASSISTANT
-      // RELÓGIO
-      // DESCOBRIR REPETIDORES
-      // REPETIDORES DESCOBERTOS
-      // SAIR
-
-#if ENV_INCLUDE_GPS == 1
-      apps_count++;
-#endif
-
-#if UI_SENSORS_PAGE == 1
-      apps_count++;
-#endif
+      // ------------------------------------------------------
+      // MENU APPS
+      // ------------------------------------------------------
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 
         _apps_menu =
-          (_apps_menu + 1) % apps_count;
+          (_apps_menu + 1) % 5;
 
         return true;
       }
@@ -2795,8 +2778,7 @@ public:
       if (c == KEY_PREV || c == KEY_LEFT) {
 
         _apps_menu =
-          (_apps_menu + apps_count - 1)
-          % apps_count;
+          (_apps_menu + 4) % 5;
 
         return true;
       }
@@ -2814,10 +2796,47 @@ public:
 
       if (c == KEY_ENTER) {
 
-        int app_index = 0;
+        // RELÓGIO
+        if (_apps_menu == 0) {
+
+          _apps_submenu = false;
+          _apps_view = 1;
+          _apps_return = true;
+
+          _page = HomePage::INTERNAL_CLOCK;
+
+          return true;
+        }
+
+        // DESCOBRIR NÓS
+        if (_apps_menu == 1) {
+
+          _apps_submenu = false;
+          _apps_view = 3;
+          _apps_return = true;
+
+          _active_discovery_menu = 0;
+          _active_discovery_count = 0;
+          the_mesh.clearNodeDiscoveryResults();
+
+          return true;
+        }
+
+        // NÓS DESCOBERTOS
+        if (_apps_menu == 2) {
+
+          _apps_submenu = false;
+          _apps_view = 4;
+          _apps_return = true;
+
+          _discover_menu = 0;
+          refreshDiscoveredNodes();
+
+          return true;
+        }
 
         // HOME ASSISTANT
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 3) {
 
           _apps_submenu = false;
           _apps_view = 2;
@@ -2833,74 +2852,8 @@ public:
           return true;
         }
 
-#if ENV_INCLUDE_GPS == 1
-        // GPS
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 3;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_GPS;
-
-          return true;
-        }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-        // SENSORES
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 4;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_SENSORS;
-
-          return true;
-        }
-#endif
-
-        // RELÓGIO
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 1;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_CLOCK;
-
-          return true;
-        }
-
-        // DESCOBRIR REPETIDORES
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 5;
-          _apps_return = true;
-
-          _discover_menu = 0;
-          refreshDiscoveredNodes();
-
-          return true;
-        }
-
-        // REPETIDORES DESCOBERTOS
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 6;
-          _apps_return = true;
-
-          _discover_menu = 0;
-          refreshDiscoveredNodes();
-
-          return true;
-        }
-
         // SAIR
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 4) {
 
           _apps_submenu = false;
           _apps_menu = 0;
@@ -2915,15 +2868,15 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> DESCOBRIR NÓS
+    // APPS -> DESCOBRIR NÓS
     // --------------------------------------------------------
     // Discovery ATIVO.
-    // Não usa AdvertPath e não interfere em "Repetidores Descobertos".
+    // Não usa AdvertPath e não interfere em "Nós descobertos".
     // --------------------------------------------------------
 
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
-        _apps_view == 5) {
+        _apps_view == 3) {
 
       // 1 CLICK -> próximo resultado
       if (c == KEY_NEXT ||
@@ -3036,13 +2989,13 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> NÓS DESCOBERTOS
+    // APPS -> NÓS DESCOBERTOS
     // handler discovered nodes final
     // --------------------------------------------------------
 
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
-        _apps_view == 6) {
+        _apps_view == 4) {
 
       // 1 CLICK -> próximo
       if (c == KEY_NEXT ||
@@ -3092,7 +3045,7 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> RELÓGIO
+    // APPS -> RELÓGIO
     //
     // O render continua sendo o bloco CLOCK original.
     // --------------------------------------------------------
@@ -3121,7 +3074,7 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> HOME ASSISTANT
+    // APPS -> HOME ASSISTANT
     // --------------------------------------------------------
 
     if (_page == HomePage::INTERNAL_HOME_ASSISTANT &&
@@ -3272,47 +3225,6 @@ public:
     }
 
     // ========================================================
-    // APLICAÇÕES -> GPS / SENSORES
-    // Voltar ao menu APPS antes da navegação geral.
-    // ========================================================
-
-#if ENV_INCLUDE_GPS == 1
-    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
-
-      if (c == KEY_NEXT || c == KEY_RIGHT ||
-          c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-    }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
-
-      if (c == KEY_NEXT || c == KEY_RIGHT ||
-          c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-    }
-#endif
-
-    // ========================================================
     // NORMAL PAGE NAVIGATION
     // ========================================================
 
@@ -3364,7 +3276,7 @@ public:
 
     // ========================================================
     // ========================================================
-    // ENTER APLICAÇÕES
+    // ENTER APPS
     // ========================================================
 
     if (c == KEY_ENTER && _page == HomePage::APPS) {
@@ -3389,50 +3301,16 @@ public:
     }
 
 #if ENV_INCLUDE_GPS == 1
-    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
-
-      if (c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-        _task->toggleGPS();
-        return true;
-      }
-
+    if (c == KEY_ENTER && _page == HomePage::GPS) {
+      _task->toggleGPS();
       return true;
     }
 #endif
 
 #if UI_SENSORS_PAGE == 1
-    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
-
-      if (c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-        _task->toggleGPS();
-        next_sensors_refresh = 0;
-        return true;
-      }
-
+    if (c == KEY_ENTER && _page == HomePage::SENSORS) {
+      _task->toggleGPS();
+      next_sensors_refresh=0;
       return true;
     }
 #endif

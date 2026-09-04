@@ -1163,13 +1163,12 @@ void MyMesh::onControlDataRecv(mesh::Packet *packet) {
       packet->payload[0] & 0xF0;
 
     if (type == CTL_TYPE_NODE_DISCOVER_RESP) {
-      do {
 
       // Precisamos de ter uma pesquisa ativa.
       if (pending_discover_tag == 0 ||
           (long)(pending_discover_until - millis()) <= 0) {
 
-          break;
+        return;
       }
 
       uint32_t tag = 0;
@@ -1182,7 +1181,7 @@ void MyMesh::onControlDataRecv(mesh::Packet *packet) {
 
       // A resposta tem de pertencer à pesquisa atual.
       if (tag != pending_discover_tag) {
-          break;
+        return;
       }
 
       const uint8_t node_type =
@@ -1197,7 +1196,7 @@ void MyMesh::onControlDataRecv(mesh::Packet *packet) {
         prefix_only ? 8 : PUB_KEY_SIZE;
 
       if (packet->payload_len < (6 + key_len)) {
-          break;
+        return;
       }
 
       NodeDiscoveryResult result;
@@ -1291,7 +1290,6 @@ void MyMesh::onControlDataRecv(mesh::Packet *packet) {
       // A resposta DISCOVER continua a ser tratada pelo HiveFW,
       // mas também tem de seguir o fluxo original do Companion
       // para chegar à aplicação MeshCore.
-      } while (false);
     }
   }
 

@@ -172,7 +172,7 @@ class HomeScreen : public UIScreen {
   uint8_t _ha_confirm;
   bool _ha_confirm_submenu;
 
-  // APLICAÇÕES
+  // APPS
   // 0 = menu
   // 1 = relógio
   // 2 = Home Assistant
@@ -1168,7 +1168,7 @@ public:
         display.drawTextCentered(
           display.width() / 2 + 2,
           55,
-          "DEFINIÇÕES"
+          "Definições"
         );
 
       } else if (_settings_advert_submenu) {
@@ -1194,7 +1194,7 @@ public:
           "BLUETOOTH",
           "ANUNCIAR NÓ",
           "DESLIGAR",
-          "[ SAIR ]"
+          "SAIR"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -1333,11 +1333,11 @@ public:
     } else if (_page == HomePage::APPS) {
 
       // ======================================================
-      // APLICAÇÕES
+      // APPS
       // ======================================================
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> DESCOBRIR NÓS
+      // APPS -> DESCOBRIR NÓS
       // ------------------------------------------------------
       // Discovery ATIVO. Não usa AdvertPath.
       // ------------------------------------------------------
@@ -1480,7 +1480,7 @@ public:
 }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> NÓS DESCOBERTOS
+      // APPS -> NÓS DESCOBERTOS
       // render discovered nodes final
       // ------------------------------------------------------
 
@@ -1607,7 +1607,7 @@ public:
       }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> PÁGINA PRINCIPAL
+      // APPS -> PÁGINA PRINCIPAL
       // ------------------------------------------------------
 
       else if (!_apps_submenu) {
@@ -1628,13 +1628,13 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           55,
-          "APLICAÇÕES"
+          "APPS"
         );
 
       }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> MENU
+      // APPS -> MENU
       // ------------------------------------------------------
 
       else {
@@ -2763,31 +2763,19 @@ public:
     }
 
     // ========================================================
-    // APLICAÇÕES MENU
+    // APPS MENU
     // ========================================================
 
     if (_page == HomePage::APPS && _apps_submenu) {
 
-      // Número real de opções.
-      int apps_count = 5;
-      // HOME ASSISTANT
-      // RELÓGIO
-      // DESCOBRIR REPETIDORES
-      // REPETIDORES DESCOBERTOS
-      // SAIR
-
-#if ENV_INCLUDE_GPS == 1
-      apps_count++;
-#endif
-
-#if UI_SENSORS_PAGE == 1
-      apps_count++;
-#endif
+      // ------------------------------------------------------
+      // MENU APPS
+      // ------------------------------------------------------
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 
         _apps_menu =
-          (_apps_menu + 1) % apps_count;
+          (_apps_menu + 1) % 7;
 
         return true;
       }
@@ -2795,8 +2783,7 @@ public:
       if (c == KEY_PREV || c == KEY_LEFT) {
 
         _apps_menu =
-          (_apps_menu + apps_count - 1)
-          % apps_count;
+          (_apps_menu + 6) % 7;
 
         return true;
       }
@@ -2814,10 +2801,8 @@ public:
 
       if (c == KEY_ENTER) {
 
-        int app_index = 0;
-
         // HOME ASSISTANT
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 0) {
 
           _apps_submenu = false;
           _apps_view = 2;
@@ -2835,7 +2820,7 @@ public:
 
 #if ENV_INCLUDE_GPS == 1
         // GPS
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 1) {
 
           _apps_submenu = false;
           _apps_view = 3;
@@ -2849,7 +2834,7 @@ public:
 
 #if UI_SENSORS_PAGE == 1
         // SENSORES
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 2) {
 
           _apps_submenu = false;
           _apps_view = 4;
@@ -2862,7 +2847,7 @@ public:
 #endif
 
         // RELÓGIO
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 3) {
 
           _apps_submenu = false;
           _apps_view = 1;
@@ -2874,7 +2859,7 @@ public:
         }
 
         // DESCOBRIR REPETIDORES
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 4) {
 
           _apps_submenu = false;
           _apps_view = 5;
@@ -2887,7 +2872,7 @@ public:
         }
 
         // REPETIDORES DESCOBERTOS
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 5) {
 
           _apps_submenu = false;
           _apps_view = 6;
@@ -2899,8 +2884,9 @@ public:
           return true;
         }
 
+
         // SAIR
-        if (_apps_menu == app_index++) {
+        if (_apps_menu == 6) {
 
           _apps_submenu = false;
           _apps_menu = 0;
@@ -2915,7 +2901,7 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> DESCOBRIR NÓS
+    // APPS -> DESCOBRIR NÓS
     // --------------------------------------------------------
     // Discovery ATIVO.
     // Não usa AdvertPath e não interfere em "Repetidores Descobertos".
@@ -3036,7 +3022,7 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> NÓS DESCOBERTOS
+    // APPS -> NÓS DESCOBERTOS
     // handler discovered nodes final
     // --------------------------------------------------------
 
@@ -3092,7 +3078,7 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> RELÓGIO
+    // APPS -> RELÓGIO
     //
     // O render continua sendo o bloco CLOCK original.
     // --------------------------------------------------------
@@ -3121,7 +3107,7 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> HOME ASSISTANT
+    // APPS -> HOME ASSISTANT
     // --------------------------------------------------------
 
     if (_page == HomePage::INTERNAL_HOME_ASSISTANT &&
@@ -3272,7 +3258,7 @@ public:
     }
 
     // ========================================================
-    // APLICAÇÕES -> GPS / SENSORES
+    // APPS -> GPS / SENSORES
     // Voltar ao menu APPS antes da navegação geral.
     // ========================================================
 
@@ -3364,7 +3350,7 @@ public:
 
     // ========================================================
     // ========================================================
-    // ENTER APLICAÇÕES
+    // ENTER APPS
     // ========================================================
 
     if (c == KEY_ENTER && _page == HomePage::APPS) {
