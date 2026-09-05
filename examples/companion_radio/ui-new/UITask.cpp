@@ -31,6 +31,207 @@
 
 #include "icons.h"
 
+
+// ============================================================================
+// HIVEFW — MAPA OFICIAL DA ESTRUTURA DO MENU
+// ============================================================================
+//
+// IMPORTANTE:
+// Este bloco é a referência estrutural oficial do sistema de menus.
+//
+// REGRAS:
+//   MENU       = entrada seleccionável a partir de outro menu
+//   SUBMENU    = segundo nível de navegação
+//   SELECTOR   = lista de itens navegáveis
+//   PÁGINA     = vista/conteúdo
+//   VIEW/STATE = estado interno temporário de um fluxo
+//
+// Sempre que a estrutura de navegação for alterada, este mapa DEVE ser
+// actualizado juntamente com o código.
+//
+// ---------------------------------------------------------------------------
+//
+// MENU PRINCIPAL
+// │
+// ├── MP-00 — FIRST
+// │   └── PÁGINA INICIAL
+// │       ├── Mensagens: X
+// │       ├── Estado da ligação
+// │       ├── PIN Bluetooth
+// │       └── IP (Wi-Fi)
+// │
+// ├── MP-01 — RECENTES
+// │   └── LISTA DE NÓS RECENTES
+// │       └── Nó
+// │           ├── Nome
+// │           └── Tempo desde receção
+// │
+// ├── MP-02 — MENSAGENS
+// │   │
+// │   ├── MP-02.1 — PÁGINA MENSAGENS
+// │   │
+// │   └── MP-02.2 — MENU MENSAGENS
+// │       │
+// │       ├── MP-02.2.1 — NOVA MENSAGEM
+// │       │   │
+// │       │   └── MP-02.2.1.1 — MENU NOVA MENSAGEM
+// │       │       │
+// │       │       ├── ESCREVER
+// │       │       │   └── MP-02.2.1.1.1 — ENVIAR PARA
+// │       │       │       │
+// │       │       │       ├── CONTACTOS
+// │       │       │       │   └── SELECTOR DE CONTACTOS
+// │       │       │       │       ├── Contacto
+// │       │       │       │       └── [ SAIR ]
+// │       │       │       │
+// │       │       │       ├── CANAIS
+// │       │       │       │   └── SELECTOR DE CANAIS
+// │       │       │       │       ├── Canal
+// │       │       │       │       └── [ SAIR ]
+// │       │       │       │
+// │       │       │       └── [ SAIR ]
+// │       │       │
+// │       │       ├── PRESETS
+// │       │       │   └── SELECTOR DE PRESETS
+// │       │       │       ├── Estou em casa
+// │       │       │       ├── Cheguei bem
+// │       │       │       ├── A caminho
+// │       │       │       ├── Preciso de ajuda
+// │       │       │       ├── Estou no trabalho
+// │       │       │       ├── Ja vou
+// │       │       │       ├── OK
+// │       │       │       ├── Sim
+// │       │       │       ├── Não
+// │       │       │       └── [ SAIR ]
+// │       │       │
+// │       │       ├── LOCALIZAÇÃO
+// │       │       │   └── MP-02.2.1.1.2 — ENVIAR PARA
+// │       │       │       │
+// │       │       │       ├── CONTACTOS
+// │       │       │       │   └── SELECTOR DE CONTACTOS
+// │       │       │       │
+// │       │       │       ├── CANAIS
+// │       │       │       │   └── SELECTOR DE CANAIS
+// │       │       │       │
+// │       │       │       └── [ SAIR ]
+// │       │       │
+// │       │       └── [ SAIR ]
+// │       │
+// │       └── MP-02.2.2 — CAIXA DE ENTRADA
+// │           │
+// │           └── SELECTOR DE CANAIS
+// │               ├── Canal
+// │               │   └── HISTÓRICO DE MENSAGENS DO CANAL
+// │               │       └── Mensagem
+// │               │           ├── Origem
+// │               │           ├── Texto
+// │               │           └── Timestamp
+// │               │
+// │               └── [ SAIR ]
+// │
+// ├── MP-03 — RADIO
+// │   └── PÁGINA INFORMAÇÃO DO RÁDIO
+// │       ├── FQ
+// │       ├── SF
+// │       ├── BW
+// │       ├── CR
+// │       ├── TX
+// │       └── Noise floor
+// │
+// ├── MP-04 — REPETIDOR
+// │   │
+// │   └── MP-04.1 — PÁGINA REPETIDOR (logo standard 64x32)
+// │       │
+// │       └── ENTER
+// │           │
+// │           └── MP-04.2 — MENU REPETIDOR
+// │               ├── MP-04.2.1 — REPETIDOR
+// │               │   └── ON/OFF
+// │               ├── MP-04.2.2 — AUTOADVERT
+// │               │   └── ON/OFF
+// │               ├── MP-04.2.3 — INFO REPETIDOR
+// │               │   └── MP-04.3 — SELECTOR DE ESTATÍSTICAS
+// │               │       ├── MP-04.3.1 — RSSI
+// │               │       ├── MP-04.3.2 — ATIVIDADE TX
+// │               │       ├── MP-04.3.3 — MENSAGENS OUT
+// │               │       ├── MP-04.3.4 — MENSAGENS IN
+// │               │       └── MP-04.3.5 — LOCALIZAÇÃO
+// │               └── MP-04.2.4 — [ SAIR ]
+// │
+// ├── MP-05 — APLICAÇÕES
+// │   │
+// │   ├── MP-05.1 — PÁGINA APLICAÇÕES
+// │   │
+// │   └── MP-05.2 — MENU APLICAÇÕES
+// │       │
+// │       ├── MP-05.2.1 — HOME ASSISTANT
+// │       │   │
+// │       │   └── MP-05.2.1.1 — MENU HOME ASSISTANT
+// │       │       ├── Abrir Prédio
+// │       │       │   └── CONFIRMAÇÃO
+// │       │       │       ├── SIM
+// │       │       │       └── NÃO
+// │       │       └── [ SAIR ]
+// │       │
+// │       ├── MP-05.2.2 — GPS
+// │       │   └── PÁGINA GPS
+// │       │       ├── GPS ON/OFF
+// │       │       ├── FIX / NO FIX
+// │       │       ├── SAT
+// │       │       ├── POS
+// │       │       └── ALT
+// │       │
+// │       ├── MP-05.2.3 — SENSORES
+// │       │   └── PÁGINA SENSORES
+// │       │       └── Lista de sensores/valores
+// │       │
+// │       ├── MP-05.2.4 — RELÓGIO
+// │       │   └── PÁGINA RELÓGIO
+// │       │       ├── Hora
+// │       │       ├── Data
+// │       │       └── Horário de Verão/Inverno
+// │       │
+// │       ├── MP-05.2.5 — DESCOBRIR REPETIDORES
+// │       │   └── PÁGINA DE DESCOBERTA ATIVA
+// │       │       ├── Resultado X/Y
+// │       │       ├── Nome
+// │       │       ├── Chave
+// │       │       ├── Tipo
+// │       │       └── SNR
+// │       │
+// │       ├── MP-05.2.6 — REPETIDORES DESCOBERTOS
+// │       │   └── PÁGINA DE NÓS DESCOBERTOS
+// │       │       ├── Nome
+// │       │       ├── Idade
+// │       │       ├── Número de saltos
+// │       │       └── X/Y
+// │       │
+// │       └── [ SAIR ]
+// │
+// └── MP-06 — DEFINIÇÕES
+//     │
+//     ├── MP-06.1 — PÁGINA DEFINIÇÕES
+//     │
+//     └── MP-06.2 — MENU DEFINIÇÕES
+//         │
+//         ├── BLUETOOTH
+//         │   └── ON/OFF
+//         │
+//         ├── ANUNCIAR NÓ
+//         │   └── MP-06.2.1 — SELECTOR DE ANÚNCIOS
+//         │       ├── Anúncio ZeroHOP
+//         │       ├── Anúncio Flood
+//         │       └── [ SAIR ]
+//         │
+//         ├── DESLIGAR
+//         │
+//         └── [ SAIR ]
+//
+// ============================================================================
+// FIM DO MAPA OFICIAL DA ESTRUTURA DO MENU
+// ============================================================================
+
+
 class SplashScreen : public UIScreen {
   UITask* _task;
   unsigned long dismiss_after;
@@ -76,7 +277,7 @@ public:
     display.drawXbm(0, 3, hivefw_logo, logoWidth, 13);
 
     // firmware name
-    const char* firmware_name = "Companion&Repeater";
+    const char* firmware_name = "Companion & Repeater";
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
     display.drawTextCentered(display.width()/2, 22, firmware_name);
@@ -251,10 +452,26 @@ class HomeScreen : public UIScreen {
   // 4 Location
   uint8_t _repeater_stats_page;
 
-  // REPETIDOR
-  // false = página intermédia com logo/título
-  // true  = menu das 5 estatísticas
+  // ========================================================================
+  // MP-04 — REPETIDOR
+  //
+  // _repeater_submenu:
+  //   false = MP-04.1 página/logo do REPETIDOR
+  //   true  = MP-04.2 menu principal do REPETIDOR
+  //
+  // _repeater_info_submenu:
+  //   false = página/logo ou menu principal
+  //   true  = MP-04.3 selector de estatísticas
+  //
+  // _repeater_menu:
+  //   0 = REPETIDOR
+  //   1 = AUTOADVERT
+  //   2 = INFO REPETIDOR
+  //   3 = [ SAIR ]
+  // ========================================================================
   bool _repeater_submenu;
+  bool _repeater_info_submenu;
+  uint8_t _repeater_menu;
 
   bool _apps_submenu;
   bool _apps_return;
@@ -406,6 +623,9 @@ public:
        _sms_channel_menu(0),
        _sms_channel_valid(false),
        _settings_menu(0), _settings_submenu(false),
+       _repeater_submenu(false),
+       _repeater_info_submenu(false),
+       _repeater_menu(0),
       _settings_advert_menu(0), _settings_advert_submenu(false),
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
@@ -686,23 +906,26 @@ public:
     }
     int y = 14;
 
-    // Número real de páginas visíveis.
-    // REPETIDOR só entra no indicador quando está ativo.
-    int visible_pages = HomePage::Count;
+    // ====================================================================
+    // MAPA OFICIAL — INDICADOR DO MENU PRINCIPAL
+    //
+    // MP-00 FIRST
+    // MP-01 RECENTES
+    // MP-02 MENSAGENS
+    // MP-03 RADIO
+    // MP-04 REPETIDOR
+    // MP-05 APLICAÇÕES
+    // MP-06 DEFINIÇÕES
+    //
+    // O REPETIDOR é uma PÁGINA PRINCIPAL permanente.
+    // O estado ON/OFF do repetidor pertence ao MP-04.2 e NÃO
+    // determina se a página MP-04 existe ou não.
+    // ====================================================================
 
-    if (!the_mesh.getNodePrefs()->isRepeatEn()) {
-      visible_pages--;
-    }
-
+    const int visible_pages = HomePage::Count;
     int x = display.width() / 2 - 5 * (visible_pages - 1);
 
     for (uint8_t i = 0; i < HomePage::Count; i++) {
-
-      // REPETIDOR OFF: não desenhar nem contar esta página.
-      if (i == HomePage::REPETIDOR &&
-          !the_mesh.getNodePrefs()->isRepeatEn()) {
-        continue;
-      }
 
       if (i == _page) {
         display.fillRect(x-1, y-1, 4, 4);
@@ -1297,18 +1520,24 @@ public:
       display.setCursor(0, 53);
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
       display.print(tmp);
-    } else // ------------------------------------------------------
-    // PÁGINA PRINCIPAL -> REPETIDOR
-    // ------------------------------------------------------
-    // Estatísticas do REPETIDOR
-    // ------------------------------------------------------
+    } else if (_page == HomePage::REPETIDOR) {
+      // ======================================================
+      // MP-04 — REPETIDOR
+      //
+      // MP-04.1 — Página/logo
+      // MP-04.2 — Menu REPETIDOR
+      // MP-04.3 — Selector de estatísticas
+      // ======================================================
 
-    if (_page == HomePage::REPETIDOR) {
+      // ======================================================
+      // MP-04.1 — PÁGINA REPETIDOR
+      //
+      // Apenas logo + título.
+      // ENTER -> MP-04.2 MENU REPETIDOR
+      // CANCEL/SELECT -> RADIO
+      // ======================================================
 
-      // ------------------------------------------------------
-      // Página intermédia do REPETIDOR
-      // ------------------------------------------------------
-      if (!_repeater_submenu) {
+      if (!_repeater_submenu && !_repeater_info_submenu) {
 
         renderSectionHome(
           display,
@@ -1316,8 +1545,67 @@ public:
           64, 32,
           "REPETIDOR"
         );
+      }
 
-      } else {
+      // ======================================================
+      // MP-04.2 — MENU REPETIDOR
+      //
+      // 1. REPETIDOR
+      // 2. AUTOADVERT
+      // 3. INFO REPETIDOR
+      // 4. SAIR
+      // ======================================================
+
+      else if (_repeater_submenu && !_repeater_info_submenu) {
+
+        const char* repeater_items[] = {
+          "REPETIDOR",
+          "AUTOADVERT",
+          "INFO REPETIDOR",
+          "[ SAIR ]"
+        };
+
+        int y = 20;
+
+        for (int i = 0; i < 4; i++) {
+
+          if (i == _repeater_menu) {
+
+            display.setColor(UIColor::primary_txt);
+
+            display.fillRect(
+              0,
+              y - 1,
+              display.width(),
+              10
+            );
+
+            display.setColor(UIColor::window_bkg);
+
+          } else {
+
+            display.setColor(UIColor::secondary_txt);
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            y,
+            repeater_items[i]
+          );
+
+          y += 10;
+        }
+      }
+
+      // ======================================================
+      // MP-04.3 — INFO REPETIDOR
+      //
+      // Selector das 5 estatísticas.
+      // ======================================================
+
+      else if (_repeater_info_submenu) {
+
+
 
         // ----------------------------------------------------
         // Estatísticas do REPETIDOR
@@ -1536,7 +1824,6 @@ public:
         const char* settings_items[] = {
           "BLUETOOTH",
           "ANUNCIAR NÓ",
-          "REPETIDOR",
           "DESLIGAR",
           "[ SAIR ]"
         };
@@ -3009,19 +3296,19 @@ public:
 
       if (_settings_advert_submenu) {
 
-        if (c == KEY_NEXT) {
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
           _settings_advert_menu =
             (_settings_advert_menu + 1) % 3;
           return true;
         }
 
-        if (c == KEY_PREV) {
+        if (c == KEY_PREV || c == KEY_LEFT) {
           _settings_advert_menu =
             (_settings_advert_menu + 2) % 3;
           return true;
         }
 
-        if (c == KEY_CANCEL) {
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
           _settings_advert_submenu = false;
           _settings_advert_menu = 0;
           return true;
@@ -3067,17 +3354,17 @@ public:
       // MENU DE DEFINIÇÕES
       // ======================================================
 
-      if (c == KEY_NEXT) {
-        _settings_menu = (_settings_menu + 1) % 5;
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
+        _settings_menu = (_settings_menu + 1) % 4;
         return true;
       }
 
-      if (c == KEY_PREV) {
-        _settings_menu = (_settings_menu + 4) % 5;
+      if (c == KEY_PREV || c == KEY_LEFT) {
+        _settings_menu = (_settings_menu + 3) % 4;
         return true;
       }
 
-      if (c == KEY_CANCEL) {
+      if (c == KEY_CANCEL || c == KEY_SELECT) {
         _settings_submenu = false;
         _settings_menu = 0;
         _settings_advert_submenu = false;
@@ -3113,32 +3400,14 @@ public:
           return true;
         }
 
-        // REPETIDOR
-        if (_settings_menu == 2) {
-          bool repeater_enable =
-            !the_mesh.getNodePrefs()->isRepeatEn();
-
-          the_mesh.getNodePrefs()->setRepeatEn(repeater_enable);
-          the_mesh.savePrefs();
-
-          _task->notify(UIEventType::ack);
-
-          _task->showAlert(
-            repeater_enable ? "Repetidor: ON" : "Repetidor: OFF",
-            1000
-          );
-
-          return true;
-        }
-
         // DESLIGAR
-        if (_settings_menu == 3) {
+        if (_settings_menu == 2) {
           _shutdown_init = true;
           return true;
         }
 
         // SAIR
-        if (_settings_menu == 4) {
+        if (_settings_menu == 3) {
           _settings_submenu = false;
           _settings_menu = 0;
           return true;
@@ -3261,7 +3530,7 @@ public:
           _apps_view = 5;
           _apps_return = true;
 
-          _discover_menu = 0;
+          _active_discovery_menu = 0;
           refreshActiveDiscoveryNodes();
 
           return true;
@@ -3653,100 +3922,287 @@ public:
     }
 
     // ========================================================
-    // APLICAÇÕES -> GPS / SENSORES
-    // Voltar ao menu APPS antes da navegação geral.
-    // ========================================================
-
-#if ENV_INCLUDE_GPS == 1
-    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
-
-      if (c == KEY_NEXT || c == KEY_RIGHT ||
-          c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-    }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
-
-      if (c == KEY_NEXT || c == KEY_RIGHT ||
-          c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-    }
-#endif
-
-    // ========================================================
-    // REPETIDOR
-    // Página intermédia -> ENTER -> estatísticas
+    // MP-04 — REPETIDOR
+    //
+    // ESTRUTURA OFICIAL:
+    //
+    // MP-04.1 — PÁGINA REPETIDOR
+    //   false/false
+    //   Logo + título
+    //   ENTER -> MP-04.2
+    //   CANCEL/SELECT -> RADIO
+    //
+    // MP-04.2 — MENU REPETIDOR
+    //   0 REPETIDOR
+    //   1 AUTOADVERT
+    //   2 INFO REPETIDOR
+    //   3 SAIR
+    //
+    // MP-04.3 — SELECTOR DE ESTATÍSTICAS
+    //   0 RSSI
+    //   1 ATIVIDADE TX
+    //   2 MENSAGENS OUT
+    //   3 MENSAGENS IN
+    //   4 LOCALIZAÇÃO
+    //
+    // IMPORTANTE:
+    //   _repeater_submenu == false
+    //       -> página/logo
+    //
+    //   _repeater_submenu == true
+    //       -> menu principal do repetidor
+    //
+    //   _repeater_info_submenu == true
+    //       -> selector de estatísticas
     // ========================================================
 
     if (_page == HomePage::REPETIDOR) {
 
-      // Página intermédia
-      if (!_repeater_submenu) {
+      // ======================================================
+      // MP-04.1 — PÁGINA REPETIDOR
+      // ======================================================
+
+      if (!_repeater_submenu && !_repeater_info_submenu) {
 
         if (c == KEY_ENTER) {
           _repeater_submenu = true;
-          _repeater_stats_page = 0;
+          _repeater_info_submenu = false;
+          _repeater_menu = 0;
           return true;
         }
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _repeater_menu = 0;
+          _repeater_info_submenu = false;
+          _repeater_submenu = false;
           _page = HomePage::RADIO;
+          return true;
+        }
+
+        // Navegação das páginas principais.
+        // Nesta função o return false NÃO encaminha o evento
+        // para a navegação abaixo, por isso tratamos aqui.
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+          _page =
+            (_page + 1)
+            % HomePage::Count;
+
+          if (_page == HomePage::RECENT) {
+            _task->showAlert(
+              "Anúncios Recentes",
+              800
+            );
+          }
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+          _page =
+            (_page + HomePage::Count - 1)
+            % HomePage::Count;
+
           return true;
         }
 
         return true;
       }
 
-      // ------------------------------------------------------
-      // Menu das 5 estatísticas
-      // ------------------------------------------------------
+      // ======================================================
+      // MP-04.2 — MENU REPETIDOR
+      // ======================================================
 
-      if (c == KEY_NEXT || c == KEY_RIGHT) {
+      if (_repeater_submenu && !_repeater_info_submenu) {
 
-        _repeater_stats_page =
-          (_repeater_stats_page + 1) % 5;
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+          _repeater_menu =
+            (_repeater_menu + 1) % 4;
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+          _repeater_menu =
+            (_repeater_menu + 3) % 4;
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _repeater_menu = 0;
+          _repeater_submenu = false;
+          _repeater_info_submenu = false;
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // ------------------------------------------------
+          // 1. REPETIDOR
+          // ------------------------------------------------
+
+          if (_repeater_menu == 0) {
+
+            bool repeater_enable =
+              !the_mesh.getNodePrefs()->isRepeatEn();
+
+            the_mesh.getNodePrefs()->setRepeatEn(
+              repeater_enable
+            );
+
+            the_mesh.savePrefs();
+
+            _task->notify(UIEventType::ack);
+
+            _task->showAlert(
+              repeater_enable
+                ? "Repetidor: ON"
+                : "Repetidor: OFF",
+              1000
+            );
+
+            return true;
+          }
+
+          // ------------------------------------------------
+          // 2. AUTOADVERT
+          // ------------------------------------------------
+
+          if (_repeater_menu == 1) {
+
+            bool auto_advert =
+              !the_mesh.getNodePrefs()->isAutoAdvertEn();
+
+            the_mesh.getNodePrefs()->setAutoAdvertEn(
+              auto_advert
+            );
+
+            the_mesh.savePrefs();
+
+            _task->notify(UIEventType::ack);
+
+            _task->showAlert(
+              auto_advert
+                ? "AutoAdvert: ON"
+                : "AutoAdvert: OFF",
+              1000
+            );
+
+            return true;
+          }
+
+          // ------------------------------------------------
+          // 3. INFO REPETIDOR
+          // ------------------------------------------------
+
+          if (_repeater_menu == 2) {
+
+            _repeater_info_submenu = true;
+            _repeater_stats_page = 0;
+
+            return true;
+          }
+
+          // ------------------------------------------------
+          // 4. SAIR
+          // ------------------------------------------------
+
+          if (_repeater_menu == 3) {
+
+            _repeater_menu = 0;
+            _repeater_info_submenu = false;
+            _repeater_submenu = false;
+            _page = HomePage::RADIO;
+
+            return true;
+          }
+        }
 
         return true;
       }
 
-      if (c == KEY_PREV || c == KEY_LEFT) {
+      // ======================================================
+      // MP-04.3 — SELECTOR DE ESTATÍSTICAS
+      // ======================================================
 
-        _repeater_stats_page =
-          (_repeater_stats_page + 4) % 5;
+      if (_repeater_info_submenu) {
 
-        return true;
-      }
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
 
-      if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _repeater_stats_page =
+            (_repeater_stats_page + 1) % 5;
 
-        _repeater_stats_page = 0;
-        _repeater_submenu = false;
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _repeater_stats_page =
+            (_repeater_stats_page + 4) % 5;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+          _repeater_stats_page = 0;
+          _repeater_info_submenu = false;
+          _repeater_submenu = true;
+
+          return true;
+        }
 
         return true;
       }
 
       return true;
     }
+
+#if ENV_INCLUDE_GPS == 1
+    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
+
+      if (c == KEY_PREV || c == KEY_LEFT ||
+          c == KEY_CANCEL || c == KEY_SELECT) {
+
+        _page = HomePage::APPS;
+        _apps_submenu = true;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+        _task->toggleGPS();
+        return true;
+      }
+
+      return true;
+    }
+#endif
+
+#if UI_SENSORS_PAGE == 1
+    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
+
+      if (c == KEY_PREV || c == KEY_LEFT ||
+          c == KEY_CANCEL || c == KEY_SELECT) {
+
+        _page = HomePage::APPS;
+        _apps_submenu = true;
+        _apps_menu = 0;
+        _apps_view = 0;
+        _apps_return = false;
+
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+        next_sensors_refresh = 0;
+        return true;
+      }
+
+      return true;
+    }
+#endif
 
     // ========================================================
     // NORMAL PAGE NAVIGATION
@@ -3754,30 +4210,18 @@ public:
 
     if (c == KEY_LEFT || c == KEY_PREV) {
 
-      do {
-        _page =
-          (_page + HomePage::Count - 1)
-          % HomePage::Count;
-
-      } while (
-        _page == HomePage::REPETIDOR &&
-        !the_mesh.getNodePrefs()->isRepeatEn()
-      );
+      _page =
+        (_page + HomePage::Count - 1)
+        % HomePage::Count;
 
       return true;
     }
 
     if (c == KEY_NEXT || c == KEY_RIGHT) {
 
-      do {
-        _page =
-          (_page + 1)
-          % HomePage::Count;
-
-      } while (
-        _page == HomePage::REPETIDOR &&
-        !the_mesh.getNodePrefs()->isRepeatEn()
-      );
+      _page =
+        (_page + 1)
+        % HomePage::Count;
 
       if (_page == HomePage::RECENT) {
         _task->showAlert(
@@ -3836,54 +4280,9 @@ public:
       return true;
     }
 
-#if ENV_INCLUDE_GPS == 1
-    if (_page == HomePage::INTERNAL_GPS && _apps_return) {
 
-      if (c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
 
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
 
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-        _task->toggleGPS();
-        return true;
-      }
-
-      return true;
-    }
-#endif
-
-#if UI_SENSORS_PAGE == 1
-    if (_page == HomePage::INTERNAL_SENSORS && _apps_return) {
-
-      if (c == KEY_PREV || c == KEY_LEFT ||
-          c == KEY_CANCEL || c == KEY_SELECT) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-
-        return true;
-      }
-
-      if (c == KEY_ENTER) {
-        _task->toggleGPS();
-        next_sensors_refresh = 0;
-        return true;
-      }
-
-      return true;
-    }
-#endif
 
     return false;
   }};
