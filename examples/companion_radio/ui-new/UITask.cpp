@@ -165,16 +165,16 @@ class HomeScreen : public UIScreen {
     RECENT,
     MESSAGES,
     RADIO,
-    GPS,
     REPETIDOR,
-    SENSORES,
-    RELÓGIO,
     SETTINGS,
     APPS,
     Count,    // keep as last
 
     // Estados internos das APPS.
-    INTERNAL_HOME_ASSISTANT
+    INTERNAL_HOME_ASSISTANT,
+    INTERNAL_CLOCK,
+    INTERNAL_GPS,
+    INTERNAL_SENSORS
   };
 
   UITask* _task;
@@ -1273,7 +1273,234 @@ public:
       display.setCursor(0, 53);
       sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
       display.print(tmp);
-    } else if (_page == HomePage::SETTINGS) {
+    } else // ------------------------------------------------------
+    // PÁGINA PRINCIPAL -> REPETIDOR
+    // ------------------------------------------------------
+    // Estatísticas do REPETIDOR
+    // ------------------------------------------------------
+
+    if (_page == HomePage::REPETIDOR) {
+      display.setColor(UIColor::secondary_txt);
+      display.setTextSize(1);
+
+      char repeater_counter[8];
+
+      snprintf(
+        repeater_counter,
+        sizeof(repeater_counter),
+        "%d/5",
+        (int)(_repeater_stats_page + 1)
+      );
+
+      display.drawTextRightAlign(
+        display.width() - 1,
+        8,
+        repeater_counter
+      );
+
+
+
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(1);
+
+      char value[40];
+
+      switch (_repeater_stats_page) {
+
+        case 0: {
+          // LAST RSSI
+          display.drawTextCentered(
+            display.width() / 2,
+            18,
+            "RSSI"
+          );
+
+          snprintf(
+            value,
+            sizeof(value),
+            "%d dBm",
+            (int)the_mesh.getRepeaterRSSI()
+          );
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            39,
+            value
+          );
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            60,
+            "LAST RSSI"
+          );
+
+          break;
+        }
+
+        case 1: {
+          // TX AIRTIME
+          uint32_t ms = the_mesh.getRepeaterTXAirtime();
+          uint32_t seconds = ms / 1000;
+
+          display.drawTextCentered(
+            display.width() / 2,
+            18,
+            "ATIVIDADE TX"
+          );
+
+          snprintf(
+            value,
+            sizeof(value),
+            "%lus",
+            (unsigned long)seconds
+          );
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            39,
+            value
+          );
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            60,
+            "TX AIRTIME"
+          );
+
+          break;
+        }
+
+        case 2: {
+          // MENSAGENS OUT
+          display.drawTextCentered(
+            display.width() / 2,
+            18,
+            "MENSAGENS OUT"
+          );
+
+          snprintf(
+            value,
+            sizeof(value),
+            "%lu",
+            (unsigned long)the_mesh.getRepeaterMessagesOut()
+          );
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            39,
+            value
+          );
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            60,
+            "TRANSMITIDAS"
+          );
+
+          break;
+        }
+
+        case 3: {
+          // MENSAGENS IN
+          display.drawTextCentered(
+            display.width() / 2,
+            18,
+            "MENSAGENS IN"
+          );
+
+          snprintf(
+            value,
+            sizeof(value),
+            "%lu",
+            (unsigned long)the_mesh.getRepeaterMessagesIn()
+          );
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            39,
+            value
+          );
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            60,
+            "RECEBIDAS"
+          );
+
+          break;
+        }
+
+        case 4: {
+          // LOCALIZAÇÃO
+          NodePrefs *prefs = the_mesh.getNodePrefs();
+
+          double lat = (double)prefs->node_lat / 1000000.0;
+          double lon = (double)prefs->node_lon / 1000000.0;
+
+          display.drawTextCentered(
+            display.width() / 2,
+            14,
+            "LOCALIZAÇÃO"
+          );
+
+          char line1[32];
+          char line2[32];
+
+          snprintf(
+            line1,
+            sizeof(line1),
+            "LAT %.5f",
+            lat
+          );
+
+          snprintf(
+            line2,
+            sizeof(line2),
+            "LON %.5f",
+            lon
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            32,
+            line1
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            48,
+            line2
+          );
+
+          display.drawTextCentered(
+            display.width() / 2,
+            62,
+            "NO ANÚNCIO"
+          );
+
+          break;
+        }
+      }
+
+      return 0;
+    }
+    else if (_page == HomePage::SETTINGS) {
 
       if (!_settings_submenu) {
 
@@ -1478,214 +1705,7 @@ public:
       // Discovery ATIVO. Não usa AdvertPath.
       // ------------------------------------------------------
 
-      // ------------------------------------------------------
-      // APLICAÇÕES -> ESTATÍSTICAS DO REPETIDOR
-      // ------------------------------------------------------
-      // _apps_view == 7
-      // ------------------------------------------------------
 
-      if (!_apps_submenu && _apps_view == 7) {
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        char value[40];
-
-        switch (_repeater_stats_page) {
-
-          case 0: {
-            // LAST RSSI
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "RSSI"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%d dBm",
-              (int)the_mesh.getRepeaterRSSI()
-            );
-
-            display.setTextSize(2);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "LAST RSSI"
-            );
-
-            break;
-          }
-
-          case 1: {
-            // TX AIRTIME
-            uint32_t ms = the_mesh.getRepeaterTXAirtime();
-            uint32_t seconds = ms / 1000;
-
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "ATIVIDADE TX"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%lus",
-              (unsigned long)seconds
-            );
-
-            display.setTextSize(2);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "TX AIRTIME"
-            );
-
-            break;
-          }
-
-          case 2: {
-            // MENSAGENS OUT
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "MENSAGENS OUT"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%lu",
-              (unsigned long)the_mesh.getRepeaterMessagesOut()
-            );
-
-            display.setTextSize(2);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "TRANSMITIDAS"
-            );
-
-            break;
-          }
-
-          case 3: {
-            // MENSAGENS IN
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "MENSAGENS IN"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%lu",
-              (unsigned long)the_mesh.getRepeaterMessagesIn()
-            );
-
-            display.setTextSize(2);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "RECEBIDAS"
-            );
-
-            break;
-          }
-
-          case 4: {
-            // LOCALIZAÇÃO
-            NodePrefs *prefs = the_mesh.getNodePrefs();
-
-            double lat = (double)prefs->node_lat / 1000000.0;
-            double lon = (double)prefs->node_lon / 1000000.0;
-
-            display.drawTextCentered(
-              display.width() / 2,
-              14,
-              "LOCALIZAÇÃO"
-            );
-
-            char line1[32];
-            char line2[32];
-
-            snprintf(
-              line1,
-              sizeof(line1),
-              "LAT %.5f",
-              lat
-            );
-
-            snprintf(
-              line2,
-              sizeof(line2),
-              "LON %.5f",
-              lon
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              32,
-              line1
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              48,
-              line2
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              62,
-              "NO ANÚNCIO"
-            );
-
-            break;
-          }
-        }
-
-        return 0;
-      }
 
       if (!_apps_submenu && _apps_view == 5) {
 
@@ -1974,6 +1994,13 @@ public:
 
         const char* apps_items[] = {
           "HOME ASSISTANT",
+#if ENV_INCLUDE_GPS == 1
+          "GPS",
+#endif
+#if UI_SENSORS_PAGE == 1
+          "SENSORES",
+#endif
+          "RELÓGIO",
           "DESCOBRIR REPETIDORES",
           "REPETIDORES DESCOBERTOS",
           "[ SAIR ]"
@@ -3130,10 +3157,18 @@ public:
 
     if (_page == HomePage::APPS && _apps_submenu) {
 
-      // Número de opções do menu APLICAÇÕES.
-      int apps_count = 4;
+      // Número real de opções do menu APLICAÇÕES.
+      int apps_count = 5;
 
-    if (c == KEY_NEXT || c == KEY_RIGHT) {
+#if ENV_INCLUDE_GPS == 1
+      apps_count++;
+#endif
+
+#if UI_SENSORS_PAGE == 1
+      apps_count++;
+#endif
+
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
 
         _apps_menu =
           (_apps_menu + 1) % apps_count;
@@ -3178,6 +3213,46 @@ public:
           _ha_confirm_submenu = false;
 
           _page = HomePage::INTERNAL_HOME_ASSISTANT;
+
+          return true;
+        }
+
+#if ENV_INCLUDE_GPS == 1
+        // GPS
+        if (_apps_menu == app_index++) {
+
+          _apps_submenu = false;
+          _apps_view = 3;
+          _apps_return = true;
+
+          _page = HomePage::INTERNAL_GPS;
+
+          return true;
+        }
+#endif
+
+#if UI_SENSORS_PAGE == 1
+        // SENSORES
+        if (_apps_menu == app_index++) {
+
+          _apps_submenu = false;
+          _apps_view = 4;
+          _apps_return = true;
+
+          _page = HomePage::INTERNAL_SENSORS;
+
+          return true;
+        }
+#endif
+
+        // RELÓGIO
+        if (_apps_menu == app_index++) {
+
+          _apps_submenu = false;
+          _apps_view = 1;
+          _apps_return = true;
+
+          _page = HomePage::INTERNAL_CLOCK;
 
           return true;
         }
@@ -3230,23 +3305,12 @@ public:
     // Não usa AdvertPath e não interfere em "REPETIDORES DESCOBERTOS".
     // --------------------------------------------------------
 
-    // --------------------------------------------------------
-    // APLICAÇÕES -> ESTATÍSTICAS DO REPETIDOR
-    // --------------------------------------------------------
 
-    if (_page == HomePage::APPS &&
-        !_apps_submenu &&
-        _apps_view == 7) {
+      // ========================================================
+      // REPETIDOR — NAVEGAÇÃO DAS 5 ESTATÍSTICAS
+      // ========================================================
 
-      // NEXT / RIGHT -> próxima estatística
-      if (c == KEY_NEXT ||
-          c == KEY_RIGHT) {
-
-        _repeater_stats_page =
-          (_repeater_stats_page + 1) % 5;
-
-        return true;
-      }
+      if (_page == HomePage::REPETIDOR) {
 
       // PREV / LEFT -> estatística anterior
       if (c == KEY_PREV ||
@@ -3668,23 +3732,68 @@ public:
 #endif
 
     // ========================================================
+    // REPETIDOR — NAVEGAÇÃO DAS 5 ESTATÍSTICAS
+    // ========================================================
+
+    if (_page == HomePage::REPETIDOR) {
+
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+        _repeater_stats_page =
+          (_repeater_stats_page + 1) % 5;
+
+        return true;
+      }
+
+      if (c == KEY_PREV || c == KEY_LEFT) {
+
+        _repeater_stats_page =
+          (_repeater_stats_page + 4) % 5;
+
+        return true;
+      }
+
+      if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+        _repeater_stats_page = 0;
+        _page = HomePage::RADIO;
+
+        return true;
+      }
+
+      return true;
+    }
+
+    // ========================================================
     // NORMAL PAGE NAVIGATION
     // ========================================================
 
     if (c == KEY_LEFT || c == KEY_PREV) {
 
-      _page =
-        (_page + HomePage::Count - 1)
-        % HomePage::Count;
+      do {
+        _page =
+          (_page + HomePage::Count - 1)
+          % HomePage::Count;
+
+      } while (
+        _page == HomePage::REPETIDOR &&
+        !the_mesh.getNodePrefs()->isRepeatEn()
+      );
 
       return true;
     }
 
     if (c == KEY_NEXT || c == KEY_RIGHT) {
 
-      _page =
-        (_page + 1)
-        % HomePage::Count;
+      do {
+        _page =
+          (_page + 1)
+          % HomePage::Count;
+
+      } while (
+        _page == HomePage::REPETIDOR &&
+        !the_mesh.getNodePrefs()->isRepeatEn()
+      );
 
       if (_page == HomePage::RECENT) {
         _task->showAlert(

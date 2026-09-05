@@ -126,6 +126,15 @@ public:
   bool getAdvertNameByPrefix(const uint8_t prefix[7], char *dest, int dest_len);
   bool requestNodeDiscoveryName(int index);
 
+  // ========================================================
+  // HiveFW Repeater UI statistics
+  // ========================================================
+
+  int16_t getRepeaterRSSI() const;
+  uint32_t getRepeaterTXAirtime() const;
+  uint32_t getRepeaterMessagesOut() const;
+  uint32_t getRepeaterMessagesIn() const;
+
 protected:
   float getAirtimeBudgetFactor() const override;
   int getInterferenceThreshold() const override;

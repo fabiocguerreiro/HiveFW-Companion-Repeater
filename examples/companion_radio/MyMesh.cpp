@@ -1422,6 +1422,31 @@ uint32_t MyMesh::calcDirectTimeoutMillisFor(uint32_t pkt_airtime_millis, uint8_t
 
 void MyMesh::onSendTimeout() {}
 
+
+// ============================================================
+// HiveFW Repeater UI statistics
+// ============================================================
+
+int16_t MyMesh::getRepeaterRSSI() const
+{
+  return (int16_t)radio_driver.getLastRSSI();
+}
+
+uint32_t MyMesh::getRepeaterTXAirtime() const
+{
+  return getTotalAirTime();
+}
+
+uint32_t MyMesh::getRepeaterMessagesOut() const
+{
+  return radio_driver.getPacketsSent();
+}
+
+uint32_t MyMesh::getRepeaterMessagesIn() const
+{
+  return radio_driver.getPacketsRecv();
+}
+
 MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store, AbstractUITask* ui)
     : BaseChatMesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(16), tables),
       _serial(NULL), telemetry(MAX_PACKET_PAYLOAD - 4), _store(&store), _ui(ui), _iter(0) {
