@@ -339,7 +339,6 @@ O projeto pretende evoluir em conjunto com o ecossistema MeshCore.
 
 # Versão
 
-**HiveFW v1.17.1-hivefw**
 
 ---
 

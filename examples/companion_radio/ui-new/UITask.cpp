@@ -166,8 +166,8 @@ class HomeScreen : public UIScreen {
     MESSAGES,
     RADIO,
     REPETIDOR,
-    SETTINGS,
     APPS,
+    SETTINGS,
     Count,    // keep as last
 
     // Estados internos das APPS.
@@ -250,6 +250,11 @@ class HomeScreen : public UIScreen {
   // 3 Messages IN
   // 4 Location
   uint8_t _repeater_stats_page;
+
+  // REPETIDOR
+  // false = página intermédia com logo/título
+  // true  = menu das 5 estatísticas
+  bool _repeater_submenu;
 
   bool _apps_submenu;
   bool _apps_return;
@@ -680,13 +685,32 @@ public:
       display.setColor(UIColor::title_bkg);
     }
     int y = 14;
-    int x = display.width() / 2 - 5 * (HomePage::Count-1);
-    for (uint8_t i = 0; i < HomePage::Count; i++, x += 10) {
+
+    // Número real de páginas visíveis.
+    // REPETIDOR só entra no indicador quando está ativo.
+    int visible_pages = HomePage::Count;
+
+    if (!the_mesh.getNodePrefs()->isRepeatEn()) {
+      visible_pages--;
+    }
+
+    int x = display.width() / 2 - 5 * (visible_pages - 1);
+
+    for (uint8_t i = 0; i < HomePage::Count; i++) {
+
+      // REPETIDOR OFF: não desenhar nem contar esta página.
+      if (i == HomePage::REPETIDOR &&
+          !the_mesh.getNodePrefs()->isRepeatEn()) {
+        continue;
+      }
+
       if (i == _page) {
         display.fillRect(x-1, y-1, 4, 4);
       } else {
         display.fillRect(x, y, 2, 2);
       }
+
+      x += 10;
     }
 
     if (_page == HomePage::FIRST) {
@@ -1280,226 +1304,205 @@ public:
     // ------------------------------------------------------
 
     if (_page == HomePage::REPETIDOR) {
-      display.setColor(UIColor::secondary_txt);
-      display.setTextSize(1);
 
-      char repeater_counter[8];
+      // ------------------------------------------------------
+      // Página intermédia do REPETIDOR
+      // ------------------------------------------------------
+      if (!_repeater_submenu) {
 
-      snprintf(
-        repeater_counter,
-        sizeof(repeater_counter),
-        "%d/5",
-        (int)(_repeater_stats_page + 1)
-      );
+        renderSectionHome(
+          display,
+          repeater_icon,
+          64, 32,
+          "REPETIDOR"
+        );
 
-      display.drawTextRightAlign(
-        display.width() - 1,
-        8,
-        repeater_counter
-      );
+      } else {
 
+        // ----------------------------------------------------
+        // Estatísticas do REPETIDOR
+        // ----------------------------------------------------
+        display.setColor(UIColor::secondary_txt);
+        display.setTextSize(1);
 
+        char repeater_counter[8];
 
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
+        snprintf(
+          repeater_counter,
+          sizeof(repeater_counter),
+          "%d/5",
+          (int)(_repeater_stats_page + 1)
+        );
 
-      char value[40];
+        display.drawTextRightAlign(
+          display.width() - 1,
+          8,
+          repeater_counter
+        );
 
-      switch (_repeater_stats_page) {
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
 
-        case 0: {
-          // LAST RSSI
-          display.drawTextCentered(
-            display.width() / 2,
-            18,
-            "RSSI"
-          );
+        char value[40];
 
-          snprintf(
-            value,
-            sizeof(value),
-            "%d dBm",
-            (int)the_mesh.getRepeaterRSSI()
-          );
+        switch (_repeater_stats_page) {
 
-          display.setTextSize(2);
+          case 0: {
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "RSSI"
+            );
 
-          display.drawTextCentered(
-            display.width() / 2,
-            39,
-            value
-          );
+            snprintf(
+              value,
+              sizeof(value),
+              "%d dBm",
+              (int)the_mesh.getRepeaterRSSI()
+            );
 
-          display.setTextSize(1);
+            display.setTextSize(1);
 
-          display.drawTextCentered(
-            display.width() / 2,
-            60,
-            "LAST RSSI"
-          );
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
 
-          break;
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "LAST RSSI"
+            );
+
+            break;
+          }
+
+          case 1: {
+            uint32_t ms = the_mesh.getRepeaterTXAirtime();
+            uint32_t seconds = ms / 1000;
+
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "ATIVIDADE TX"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lus",
+              (unsigned long)seconds
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "TX AIRTIME"
+            );
+
+            break;
+          }
+
+          case 2: {
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "MENSAGENS OUT"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu",
+              (unsigned long)the_mesh.getRepeaterMessagesOut()
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "TRANSMITIDAS"
+            );
+
+            break;
+          }
+
+          case 3: {
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "MENSAGENS IN"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu",
+              (unsigned long)the_mesh.getRepeaterMessagesIn()
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              value
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "RECEBIDAS"
+            );
+
+            break;
+          }
+
+          case 4: {
+            display.drawTextCentered(
+              display.width() / 2,
+              18,
+              "LOCALIZAÇÃO"
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              39,
+              "GPS"
+            );
+
+            display.drawTextCentered(
+              display.width() / 2,
+              60,
+              "LOCALIZAÇÃO"
+            );
+
+            break;
+          }
         }
 
-        case 1: {
-          // TX AIRTIME
-          uint32_t ms = the_mesh.getRepeaterTXAirtime();
-          uint32_t seconds = ms / 1000;
-
-          display.drawTextCentered(
-            display.width() / 2,
-            18,
-            "ATIVIDADE TX"
-          );
-
-          snprintf(
-            value,
-            sizeof(value),
-            "%lus",
-            (unsigned long)seconds
-          );
-
-          display.setTextSize(2);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            39,
-            value
-          );
-
-          display.setTextSize(1);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            60,
-            "TX AIRTIME"
-          );
-
-          break;
-        }
-
-        case 2: {
-          // MENSAGENS OUT
-          display.drawTextCentered(
-            display.width() / 2,
-            18,
-            "MENSAGENS OUT"
-          );
-
-          snprintf(
-            value,
-            sizeof(value),
-            "%lu",
-            (unsigned long)the_mesh.getRepeaterMessagesOut()
-          );
-
-          display.setTextSize(2);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            39,
-            value
-          );
-
-          display.setTextSize(1);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            60,
-            "TRANSMITIDAS"
-          );
-
-          break;
-        }
-
-        case 3: {
-          // MENSAGENS IN
-          display.drawTextCentered(
-            display.width() / 2,
-            18,
-            "MENSAGENS IN"
-          );
-
-          snprintf(
-            value,
-            sizeof(value),
-            "%lu",
-            (unsigned long)the_mesh.getRepeaterMessagesIn()
-          );
-
-          display.setTextSize(2);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            39,
-            value
-          );
-
-          display.setTextSize(1);
-
-          display.drawTextCentered(
-            display.width() / 2,
-            60,
-            "RECEBIDAS"
-          );
-
-          break;
-        }
-
-        case 4: {
-          // LOCALIZAÇÃO
-          NodePrefs *prefs = the_mesh.getNodePrefs();
-
-          double lat = (double)prefs->node_lat / 1000000.0;
-          double lon = (double)prefs->node_lon / 1000000.0;
-
-          display.drawTextCentered(
-            display.width() / 2,
-            14,
-            "LOCALIZAÇÃO"
-          );
-
-          char line1[32];
-          char line2[32];
-
-          snprintf(
-            line1,
-            sizeof(line1),
-            "LAT %.5f",
-            lat
-          );
-
-          snprintf(
-            line2,
-            sizeof(line2),
-            "LON %.5f",
-            lon
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            32,
-            line1
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            48,
-            line2
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            62,
-            "NO ANÚNCIO"
-          );
-
-          break;
-        }
+        display.setTextSize(1);
       }
-
-      return 0;
     }
+
     else if (_page == HomePage::SETTINGS) {
 
       if (!_settings_submenu) {
@@ -1855,12 +1858,6 @@ public:
 
         display.setColor(UIColor::primary_txt);
         display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          16,
-          "REPETIDORES DESCOBERTOS"
-        );
 
         if (_discover_count == 0) {
 
@@ -3306,40 +3303,6 @@ public:
     // --------------------------------------------------------
 
 
-      // ========================================================
-      // REPETIDOR — NAVEGAÇÃO DAS 5 ESTATÍSTICAS
-      // ========================================================
-
-      if (_page == HomePage::REPETIDOR) {
-
-      // PREV / LEFT -> estatística anterior
-      if (c == KEY_PREV ||
-          c == KEY_LEFT) {
-
-        _repeater_stats_page =
-          (_repeater_stats_page + 4) % 5;
-
-        return true;
-      }
-
-      // CANCEL / SELECT -> voltar a APLICAÇÕES
-      if (c == KEY_CANCEL ||
-          c == KEY_SELECT ||
-          c == KEY_ENTER) {
-
-        _page = HomePage::APPS;
-        _apps_submenu = true;
-        _apps_menu = 0;
-        _apps_view = 0;
-        _apps_return = false;
-        _repeater_stats_page = 0;
-
-        return true;
-      }
-
-      return true;
-    }
-
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
         _apps_view == 5) {
@@ -3611,7 +3574,7 @@ public:
 
             _task->showAlert(
               success
-                ? "Comando enviado"
+                ? "Comando Enviado"
                 : "Falha ao enviar",
               1200
             );
@@ -3645,8 +3608,7 @@ public:
       }
 
       if (c == KEY_CANCEL ||
-          c == KEY_SELECT ||
-          c == KEY_ENTER) {
+          c == KEY_SELECT) {
 
         _page = HomePage::APPS;
 
@@ -3732,10 +3694,32 @@ public:
 #endif
 
     // ========================================================
-    // REPETIDOR — NAVEGAÇÃO DAS 5 ESTATÍSTICAS
+    // REPETIDOR
+    // Página intermédia -> ENTER -> estatísticas
     // ========================================================
 
     if (_page == HomePage::REPETIDOR) {
+
+      // Página intermédia
+      if (!_repeater_submenu) {
+
+        if (c == KEY_ENTER) {
+          _repeater_submenu = true;
+          _repeater_stats_page = 0;
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _page = HomePage::RADIO;
+          return true;
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // Menu das 5 estatísticas
+      // ------------------------------------------------------
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 
@@ -3756,7 +3740,7 @@ public:
       if (c == KEY_CANCEL || c == KEY_SELECT) {
 
         _repeater_stats_page = 0;
-        _page = HomePage::RADIO;
+        _repeater_submenu = false;
 
         return true;
       }
