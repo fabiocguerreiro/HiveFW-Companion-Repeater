@@ -2834,7 +2834,8 @@ void MyMesh::loop() {
   }
 
   // Smart Advert is exclusively a Repeater feature.
-  if (_prefs.isRepeatEn()) {
+  // It also requires AUTOADVERT to be enabled.
+  if (_prefs.isRepeatEn() && _prefs.isAutoAdvertEn()) {
     if (next_smart_advert == 0) {
       updateSmartAdvertTimer();
     } else if (millisHasNowPassed(next_smart_advert)) {
@@ -2905,7 +2906,8 @@ mesh::Packet* MyMesh::createSelfAdvert(const char* name, double lat, double lon)
 
 void MyMesh::updateSmartAdvertTimer() {
   // Smart Advert is exclusively a Repeater feature.
-  if (!_prefs.isRepeatEn()) {
+  // It also requires AUTOADVERT to be enabled.
+  if (!_prefs.isRepeatEn() || !_prefs.isAutoAdvertEn()) {
     next_smart_advert = 0;
     return;
   }

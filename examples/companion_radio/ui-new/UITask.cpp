@@ -473,6 +473,29 @@ class HomeScreen : public UIScreen {
   bool _repeater_info_submenu;
   uint8_t _repeater_menu;
 
+  // ========================================================================
+  // MP-03 — RÁDIO
+  //
+  // _radio_submenu:
+  //   false = página principal do Rádio
+  //   true  = menu Rádio
+  //
+  // _radio_info_submenu:
+  //   true = INFO RÁDIO
+  //
+  // _radio_config_submenu:
+  //   true = CONFIG RÁDIO
+  //
+  // _radio_menu:
+  //   0 = INFO RÁDIO
+  //   1 = CONFIG RÁDIO
+  //   2 = [ SAIR ]
+  // ========================================================================
+  bool _radio_submenu;
+  bool _radio_info_submenu;
+  bool _radio_config_submenu;
+  uint8_t _radio_menu;
+
   bool _apps_submenu;
   bool _apps_return;
 
@@ -626,6 +649,10 @@ public:
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_menu(0),
+       _radio_submenu(false),
+       _radio_info_submenu(false),
+       _radio_config_submenu(false),
+       _radio_menu(0),
       _settings_advert_menu(0), _settings_advert_submenu(false),
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
@@ -1502,24 +1529,187 @@ public:
     }
 
   } else if (_page == HomePage::RADIO) {
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
-      // freq / sf
-      display.setCursor(0, 20);
-      sprintf(tmp, "FQ: %06.3f   SF: %d", _node_prefs->freq, _node_prefs->sf);
-      display.print(tmp);
 
-      display.setCursor(0, 31);
-      sprintf(tmp, "BW: %03.2f     CR: %d", _node_prefs->bw, _node_prefs->cr);
-      display.print(tmp);
+      // ======================================================
+      // MP-03 — RÁDIO
+      // ======================================================
 
-      // tx power,  noise floor
-      display.setCursor(0, 42);
-      sprintf(tmp, "TX: %ddBm", _node_prefs->tx_power_dbm);
-      display.print(tmp);
-      display.setCursor(0, 53);
-      sprintf(tmp, "Noise floor: %d", radio_driver.getNoiseFloor());
-      display.print(tmp);
+      // ======================================================
+      // MP-03.1 — PÁGINA RÁDIO
+      // ======================================================
+
+      if (!_radio_submenu &&
+          !_radio_info_submenu &&
+          !_radio_config_submenu) {
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+        display.drawTextCentered(
+          display.width() / 2,
+          32,
+          "RÁDIO"
+        );
+      }
+
+      // ======================================================
+      // MP-03.2 — MENU RÁDIO
+      // ======================================================
+
+      else if (_radio_submenu &&
+               !_radio_info_submenu &&
+               !_radio_config_submenu) {
+
+        const char* radio_items[] = {
+          "INFO RÁDIO",
+          "CONFIG RÁDIO",
+          "[ SAIR ]"
+        };
+
+        int y = 20;
+
+        for (int i = 0; i < 3; i++) {
+
+          if (i == _radio_menu) {
+
+            display.setColor(UIColor::primary_txt);
+
+            display.fillRect(
+              0,
+              y - 1,
+              display.width(),
+              10
+            );
+
+            display.setColor(UIColor::window_bkg);
+
+          } else {
+
+            display.setColor(UIColor::secondary_txt);
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            y,
+            radio_items[i]
+          );
+
+          y += 10;
+        }
+      }
+
+      // ======================================================
+      // MP-03.3 — INFO RÁDIO
+      // ======================================================
+
+      else if (_radio_info_submenu) {
+
+        display.setTextSize(1);
+
+        display.setColor(UIColor::secondary_txt);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          8,
+          "INFO RÁDIO"
+        );
+
+        char radio_info[40];
+
+        display.setColor(UIColor::primary_txt);
+
+        snprintf(
+          radio_info,
+          sizeof(radio_info),
+          "FQ: %.3f MHz",
+          _node_prefs->freq
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          18,
+          radio_info
+        );
+
+        snprintf(
+          radio_info,
+          sizeof(radio_info),
+          "SF: %d",
+          _node_prefs->sf
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          27,
+          radio_info
+        );
+
+        snprintf(
+          radio_info,
+          sizeof(radio_info),
+          "BW: %.2f",
+          _node_prefs->bw
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          36,
+          radio_info
+        );
+
+        snprintf(
+          radio_info,
+          sizeof(radio_info),
+          "CR: %d",
+          _node_prefs->cr
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          45,
+          radio_info
+        );
+
+        snprintf(
+          radio_info,
+          sizeof(radio_info),
+          "TX: %d dBm",
+          _node_prefs->tx_power_dbm
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          54,
+          radio_info
+        );
+
+        snprintf(
+          radio_info,
+          sizeof(radio_info),
+          "NF:%d",
+          radio_driver.getNoiseFloor()
+        );
+
+        display.setColor(UIColor::secondary_txt);
+      }
+
+      // ======================================================
+      // MP-03.4 — CONFIG RÁDIO
+      //
+      // Reservado para futura configuração.
+      // ======================================================
+
+      else if (_radio_config_submenu) {
+
+        display.setColor(UIColor::secondary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          20,
+          "CONFIG RÁDIO"
+        );
+      }
+
     } else if (_page == HomePage::REPETIDOR) {
       // ======================================================
       // MP-04 — REPETIDOR
@@ -3922,6 +4112,187 @@ public:
     }
 
     // ========================================================
+    // MP-03 — RÁDIO
+    //
+    // MP-03.1 — Página RÁDIO
+    //   ENTER -> MENU RÁDIO
+    //   CANCEL/SELECT -> MENSAGENS
+    //
+    // MP-03.2 — MENU RÁDIO
+    //   0 -> INFO RÁDIO
+    //   1 -> CONFIG RÁDIO
+    //   2 -> [ SAIR ] -> MENSAGENS
+    //
+    // MP-03.3 — INFO RÁDIO
+    //   PREV/CANCEL/SELECT -> MENU RÁDIO
+    //
+    // MP-03.4 — CONFIG RÁDIO
+    //   PREV/CANCEL/SELECT -> MENU RÁDIO
+    //
+    // Não alteramos a lógica original dos botões.
+    // ========================================================
+
+    if (_page == HomePage::RADIO) {
+
+      // ======================================================
+      // MP-03.1 — PÁGINA PRINCIPAL
+      // ======================================================
+
+      if (!_radio_submenu &&
+          !_radio_info_submenu &&
+          !_radio_config_submenu) {
+
+        if (c == KEY_ENTER) {
+
+          _radio_submenu = true;
+          _radio_info_submenu = false;
+          _radio_config_submenu = false;
+          _radio_menu = 0;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+          _radio_menu = 0;
+          _radio_submenu = false;
+          _radio_info_submenu = false;
+          _radio_config_submenu = false;
+
+          _page = HomePage::MESSAGES;
+
+          return true;
+        }
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _page = (_page + 1) % HomePage::Count;
+
+          if (_page == HomePage::RECENT) {
+            _task->showAlert("Anúncios Recentes", 800);
+          }
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _page = (_page + HomePage::Count - 1) % HomePage::Count;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // MP-03.2 — MENU RÁDIO
+      // ======================================================
+
+      if (_radio_submenu &&
+          !_radio_info_submenu &&
+          !_radio_config_submenu) {
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _radio_menu = (_radio_menu + 1) % 3;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _radio_menu = (_radio_menu + 2) % 3;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+          _radio_menu = 0;
+          _radio_submenu = false;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (_radio_menu == 0) {
+
+            _radio_info_submenu = true;
+            _radio_config_submenu = false;
+
+            return true;
+          }
+
+          if (_radio_menu == 1) {
+
+            _radio_config_submenu = true;
+            _radio_info_submenu = false;
+
+            return true;
+          }
+
+          if (_radio_menu == 2) {
+
+            _radio_menu = 0;
+            _radio_submenu = false;
+            _radio_info_submenu = false;
+            _radio_config_submenu = false;
+
+            _page = HomePage::MESSAGES;
+
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // MP-03.3 — INFO RÁDIO
+      // ======================================================
+
+      if (_radio_info_submenu) {
+
+        if (c == KEY_PREV ||
+            c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _radio_info_submenu = false;
+          _radio_config_submenu = false;
+          _radio_submenu = true;
+          _radio_menu = 0;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // MP-03.4 — CONFIG RÁDIO
+      // ======================================================
+
+      if (_radio_config_submenu) {
+
+        if (c == KEY_PREV ||
+            c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _radio_config_submenu = false;
+          _radio_info_submenu = false;
+          _radio_submenu = true;
+          _radio_menu = 1;
+
+          return true;
+        }
+
+        return true;
+      }
+    }
+
+
     // MP-04 — REPETIDOR
     //
     // ESTRUTURA OFICIAL:
@@ -3956,6 +4327,7 @@ public:
     //       -> selector de estatísticas
     // ========================================================
 
+    // ========================================================
     if (_page == HomePage::REPETIDOR) {
 
       // ======================================================

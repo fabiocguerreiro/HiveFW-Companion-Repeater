@@ -89,9 +89,11 @@ private:
   class RepeatPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
   public:
     uint8_t disable_fwd = 1;
+    uint8_t auto_advert = 0;
   protected:
     void structure() override {
       def("disable", disable_fwd);
+      def("auto_adv", auto_advert);
       //def("f_max", flood_max);
       //def("f_max_uns", flood_max_unscoped);
       //def("f_max_adv", flood_max_advert);
@@ -142,4 +144,7 @@ public:
   // new accessor methods
   bool isRepeatEn() const { return repeat.disable_fwd == 0; }
   void setRepeatEn(bool en) { repeat.disable_fwd = en ? 0 : 1; }
+
+  bool isAutoAdvertEn() const { return repeat.auto_advert == 1; }
+  void setAutoAdvertEn(bool en) { repeat.auto_advert = en ? 1 : 0; }
 };
