@@ -36,197 +36,85 @@
 // HIVEFW — MAPA OFICIAL DA ESTRUTURA DO MENU
 // ============================================================================
 //
-// IMPORTANTE:
-// Este bloco é a referência estrutural oficial do sistema de menus.
+// MP-00 — FIRST
+//   └── Página inicial
 //
-// REGRAS:
-//   MENU       = entrada seleccionável a partir de outro menu
-//   SUBMENU    = segundo nível de navegação
-//   SELECTOR   = lista de itens navegáveis
-//   PÁGINA     = vista/conteúdo
-//   VIEW/STATE = estado interno temporário de um fluxo
+// MP-01 — RECENTES
+//   └── Anúncios recentes
 //
-// Sempre que a estrutura de navegação for alterada, este mapa DEVE ser
-// actualizado juntamente com o código.
+// MP-02 — MENSAGENS
+//   ├── Página principal
+//   ├── Nova mensagem
+//   │   ├── Contactos
+//   │   ├── Canais
+//   │   ├── Presets
+//   │   └── [ SAIR ]
+//   ├── Caixa de entrada
+//   │   └── Histórico de mensagens
+//   └── [ SAIR ]
 //
-// ---------------------------------------------------------------------------
+// MP-03 — RÁDIO
+//   ├── Página RÁDIO
+//   │   └── ENTER → MENU RÁDIO
+//   ├── MENU RÁDIO
+//   │   ├── INFO RÁDIO
+//   │   │   ├── FQ
+//   │   │   ├── SF
+//   │   │   ├── BW
+//   │   │   ├── CR
+//   │   │   ├── TX
+//   │   │   └── Noise floor
+//   │   ├── CONFIG RÁDIO
+//   │   │   └── Reservado para futura configuração
+//   │   └── [ SAIR ]
+//   └── [ SAIR ] → MENSAGENS
 //
-// MENU PRINCIPAL
-// │
-// ├── MP-00 — FIRST
-// │   └── PÁGINA INICIAL
-// │       ├── Mensagens: X
-// │       ├── Estado da ligação
-// │       ├── PIN Bluetooth
-// │       └── IP (Wi-Fi)
-// │
-// ├── MP-01 — RECENTES
-// │   └── LISTA DE NÓS RECENTES
-// │       └── Nó
-// │           ├── Nome
-// │           └── Tempo desde receção
-// │
-// ├── MP-02 — MENSAGENS
-// │   │
-// │   ├── MP-02.1 — PÁGINA MENSAGENS
-// │   │
-// │   └── MP-02.2 — MENU MENSAGENS
-// │       │
-// │       ├── MP-02.2.1 — NOVA MENSAGEM
-// │       │   │
-// │       │   └── MP-02.2.1.1 — MENU NOVA MENSAGEM
-// │       │       │
-// │       │       ├── ESCREVER
-// │       │       │   └── MP-02.2.1.1.1 — ENVIAR PARA
-// │       │       │       │
-// │       │       │       ├── CONTACTOS
-// │       │       │       │   └── SELECTOR DE CONTACTOS
-// │       │       │       │       ├── Contacto
-// │       │       │       │       └── [ SAIR ]
-// │       │       │       │
-// │       │       │       ├── CANAIS
-// │       │       │       │   └── SELECTOR DE CANAIS
-// │       │       │       │       ├── Canal
-// │       │       │       │       └── [ SAIR ]
-// │       │       │       │
-// │       │       │       └── [ SAIR ]
-// │       │       │
-// │       │       ├── PRESETS
-// │       │       │   └── SELECTOR DE PRESETS
-// │       │       │       ├── Estou em casa
-// │       │       │       ├── Cheguei bem
-// │       │       │       ├── A caminho
-// │       │       │       ├── Preciso de ajuda
-// │       │       │       ├── Estou no trabalho
-// │       │       │       ├── Ja vou
-// │       │       │       ├── OK
-// │       │       │       ├── Sim
-// │       │       │       ├── Não
-// │       │       │       └── [ SAIR ]
-// │       │       │
-// │       │       ├── LOCALIZAÇÃO
-// │       │       │   └── MP-02.2.1.1.2 — ENVIAR PARA
-// │       │       │       │
-// │       │       │       ├── CONTACTOS
-// │       │       │       │   └── SELECTOR DE CONTACTOS
-// │       │       │       │
-// │       │       │       ├── CANAIS
-// │       │       │       │   └── SELECTOR DE CANAIS
-// │       │       │       │
-// │       │       │       └── [ SAIR ]
-// │       │       │
-// │       │       └── [ SAIR ]
-// │       │
-// │       └── MP-02.2.2 — CAIXA DE ENTRADA
-// │           │
-// │           └── SELECTOR DE CANAIS
-// │               ├── Canal
-// │               │   └── HISTÓRICO DE MENSAGENS DO CANAL
-// │               │       └── Mensagem
-// │               │           ├── Origem
-// │               │           ├── Texto
-// │               │           └── Timestamp
-// │               │
-// │               └── [ SAIR ]
-// │
-// ├── MP-03 — RADIO
-// │   └── PÁGINA INFORMAÇÃO DO RÁDIO
-// │       ├── FQ
-// │       ├── SF
-// │       ├── BW
-// │       ├── CR
-// │       ├── TX
-// │       └── Noise floor
-// │
-// ├── MP-04 — REPETIDOR
-// │   │
-// │   └── MP-04.1 — PÁGINA REPETIDOR (logo standard 64x32)
-// │       │
-// │       └── ENTER
-// │           │
-// │           └── MP-04.2 — MENU REPETIDOR
-// │               ├── MP-04.2.1 — REPETIDOR
-// │               │   └── ON/OFF
-// │               ├── MP-04.2.2 — AUTOADVERT
-// │               │   └── ON/OFF
-// │               ├── MP-04.2.3 — INFO REPETIDOR
-// │               │   └── MP-04.3 — SELECTOR DE ESTATÍSTICAS
-// │               │       ├── MP-04.3.1 — RSSI
-// │               │       ├── MP-04.3.2 — ATIVIDADE TX
-// │               │       ├── MP-04.3.3 — MENSAGENS OUT
-// │               │       ├── MP-04.3.4 — MENSAGENS IN
-// │               │       └── MP-04.3.5 — LOCALIZAÇÃO
-// │               └── MP-04.2.4 — [ SAIR ]
-// │
-// ├── MP-05 — APLICAÇÕES
-// │   │
-// │   ├── MP-05.1 — PÁGINA APLICAÇÕES
-// │   │
-// │   └── MP-05.2 — MENU APLICAÇÕES
-// │       │
-// │       ├── MP-05.2.1 — HOME ASSISTANT
-// │       │   │
-// │       │   └── MP-05.2.1.1 — MENU HOME ASSISTANT
-// │       │       ├── Abrir Prédio
-// │       │       │   └── CONFIRMAÇÃO
-// │       │       │       ├── SIM
-// │       │       │       └── NÃO
-// │       │       └── [ SAIR ]
-// │       │
-// │       ├── MP-05.2.2 — GPS
-// │       │   └── PÁGINA GPS
-// │       │       ├── GPS ON/OFF
-// │       │       ├── FIX / NO FIX
-// │       │       ├── SAT
-// │       │       ├── POS
-// │       │       └── ALT
-// │       │
-// │       ├── MP-05.2.3 — SENSORES
-// │       │   └── PÁGINA SENSORES
-// │       │       └── Lista de sensores/valores
-// │       │
-// │       ├── MP-05.2.4 — RELÓGIO
-// │       │   └── PÁGINA RELÓGIO
-// │       │       ├── Hora
-// │       │       ├── Data
-// │       │       └── Horário de Verão/Inverno
-// │       │
-// │       ├── MP-05.2.5 — DESCOBRIR REPETIDORES
-// │       │   └── PÁGINA DE DESCOBERTA ATIVA
-// │       │       ├── Resultado X/Y
-// │       │       ├── Nome
-// │       │       ├── Chave
-// │       │       ├── Tipo
-// │       │       └── SNR
-// │       │
-// │       ├── MP-05.2.6 — REPETIDORES DESCOBERTOS
-// │       │   └── PÁGINA DE NÓS DESCOBERTOS
-// │       │       ├── Nome
-// │       │       ├── Idade
-// │       │       ├── Número de saltos
-// │       │       └── X/Y
-// │       │
-// │       └── [ SAIR ]
-// │
-// └── MP-06 — DEFINIÇÕES
-//     │
-//     ├── MP-06.1 — PÁGINA DEFINIÇÕES
-//     │
-//     └── MP-06.2 — MENU DEFINIÇÕES
-//         │
-//         ├── BLUETOOTH
-//         │   └── ON/OFF
-//         │
-//         ├── ANUNCIAR NÓ
-//         │   └── MP-06.2.1 — SELECTOR DE ANÚNCIOS
-//         │       ├── Anúncio ZeroHOP
-//         │       ├── Anúncio Flood
-//         │       └── [ SAIR ]
-//         │
-//         ├── DESLIGAR
-//         │
-//         └── [ SAIR ]
+// MP-04 — REPETIDOR
+//   ├── Página REPETIDOR
+//   │   └── Logo standard 64x32
+//   │       └── ENTER → MENU REPETIDOR
+//   ├── MENU REPETIDOR
+//   │   ├── REPETIDOR
+//   │   │   └── ON/OFF
+//   │   ├── AUTOADVERT
+//   │   │   └── ON/OFF
+//   │   ├── INFO REPETIDOR
+//   │   │   └── Selector de estatísticas
+//   │   │       ├── RSSI
+//   │   │       ├── TX Airtime
+//   │   │       ├── Messages OUT
+//   │   │       ├── Messages IN
+//   │   │       └── Location
+//   │   └── [ SAIR ] → RÁDIO
 //
+// MP-05 — APLICAÇÕES
+//   ├── HOME ASSISTANT
+//   ├── GPS              (quando disponível)
+//   ├── SENSORES         (quando disponível)
+//   ├── RELÓGIO
+//   ├── DESCOBRIR REPETIDORES
+//   │   └── Descoberta activa
+//   │       ├── Resultado X/Y
+//   │       ├── Nome
+//   │       ├── Chave
+//   │       ├── Tipo
+//   │       └── SNR
+//   ├── REPETIDORES DESCOBERTOS
+//   │   └── Lista de descobertos
+//   └── [ SAIR ]
+//
+// MP-06 — DEFINIÇÕES
+//   ├── BLUETOOTH
+//   ├── ANUNCIAR NÓ
+//   ├── DESLIGAR
+//   └── [ SAIR ] → FIRST
+//
+// NAVEGAÇÃO PRINCIPAL
+//   FIRST → RECENTES → MENSAGENS → RÁDIO → REPETIDOR
+//         → APLICAÇÕES → DEFINIÇÕES → FIRST
+//
+// NOTA:
+// A lógica original dos botões não deve ser alterada sem necessidade.
 // ============================================================================
 // FIM DO MAPA OFICIAL DA ESTRUTURA DO MENU
 // ============================================================================
@@ -1532,28 +1420,78 @@ public:
 
       // ======================================================
       // MP-03 — RÁDIO
+      //
+      // MP-03.1 — Página Rádio original
+      // MP-03.2 — Menu Rádio
       // ======================================================
 
-      // ======================================================
+      // ------------------------------------------------------
       // MP-03.1 — PÁGINA RÁDIO
-      // ======================================================
+      //
+      // Página principal: logo 64x32 + título.
+      // INFO RÁDIO usa exclusivamente os dados técnicos.
+      // ------------------------------------------------------
 
-      if (!_radio_submenu &&
-          !_radio_info_submenu &&
-          !_radio_config_submenu) {
+      if (!_radio_submenu && !_radio_info_submenu) {
 
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-        display.drawTextCentered(
-          display.width() / 2,
-          32,
+        renderSectionHome(
+          display,
+          radio_icon,
+          64, 32,
           "RÁDIO"
         );
+
+      } else if (_radio_info_submenu) {
+
+        // INFO RÁDIO — layout original HiveFW.
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        // FQ / SF
+        display.setCursor(0, 20);
+        sprintf(
+          tmp,
+          "FQ: %06.3f   SF: %d",
+          _node_prefs->freq,
+          _node_prefs->sf
+        );
+        display.print(tmp);
+
+        // BW / CR
+        display.setCursor(0, 31);
+        sprintf(
+          tmp,
+          "BW: %03.2f     CR: %d",
+          _node_prefs->bw,
+          _node_prefs->cr
+        );
+        display.print(tmp);
+
+        // TX
+        display.setCursor(0, 42);
+        sprintf(
+          tmp,
+          "TX: %ddBm",
+          _node_prefs->tx_power_dbm
+        );
+        display.print(tmp);
+
+        // Noise floor
+        display.setCursor(0, 53);
+        sprintf(
+          tmp,
+          "Noise floor: %d",
+          radio_driver.getNoiseFloor()
+        );
+        display.print(tmp);
       }
 
-      // ======================================================
+      // ------------------------------------------------------
       // MP-03.2 — MENU RÁDIO
-      // ======================================================
+      //
+      // Selector oficial HiveFW:
+      // texto centrado, tamanho 2 e duas linhas quando necessário.
+      // ------------------------------------------------------
 
       else if (_radio_submenu &&
                !_radio_info_submenu &&
@@ -1565,138 +1503,43 @@ public:
           "[ SAIR ]"
         };
 
-        int y = 20;
-
-        for (int i = 0; i < 3; i++) {
-
-          if (i == _radio_menu) {
-
-            display.setColor(UIColor::primary_txt);
-
-            display.fillRect(
-              0,
-              y - 1,
-              display.width(),
-              10
-            );
-
-            display.setColor(UIColor::window_bkg);
-
-          } else {
-
-            display.setColor(UIColor::secondary_txt);
-          }
-
-          display.drawTextCentered(
-            display.width() / 2,
-            y,
-            radio_items[i]
-          );
-
-          y += 10;
-        }
-      }
-
-      // ======================================================
-      // MP-03.3 — INFO RÁDIO
-      // ======================================================
-
-      else if (_radio_info_submenu) {
-
-        display.setTextSize(1);
-
-        display.setColor(UIColor::secondary_txt);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          8,
-          "INFO RÁDIO"
-        );
-
-        char radio_info[40];
-
         display.setColor(UIColor::primary_txt);
+        display.setTextSize(2);
 
-        snprintf(
-          radio_info,
-          sizeof(radio_info),
-          "FQ: %.3f MHz",
-          _node_prefs->freq
-        );
+        const char* text = radio_items[_radio_menu];
+        const char* space = strchr(text, ' ');
 
-        display.drawTextCentered(
-          display.width() / 2,
-          18,
-          radio_info
-        );
+        if (space && display.getTextWidth(text) > display.width() - 32) {
+          char line1[32];
+          char line2[32];
+          size_t n = space - text;
 
-        snprintf(
-          radio_info,
-          sizeof(radio_info),
-          "SF: %d",
-          _node_prefs->sf
-        );
+          if (n >= sizeof(line1))
+            n = sizeof(line1) - 1;
 
-        display.drawTextCentered(
-          display.width() / 2,
-          27,
-          radio_info
-        );
+          memcpy(line1, text, n);
+          line1[n] = '\0';
 
-        snprintf(
-          radio_info,
-          sizeof(radio_info),
-          "BW: %.2f",
-          _node_prefs->bw
-        );
+          strncpy(line2, space + 1, sizeof(line2) - 1);
+          line2[sizeof(line2) - 1] = '\0';
 
-        display.drawTextCentered(
-          display.width() / 2,
-          36,
-          radio_info
-        );
+          drawSelectedMenuText(display, display.width() / 2, 29, line1);
+          drawSelectedMenuText(display, display.width() / 2, 47, line2);
+        } else {
+          drawSelectedMenuText(
+            display,
+            display.width() / 2,
+            38,
+            text
+          );
+        }
 
-        snprintf(
-          radio_info,
-          sizeof(radio_info),
-          "CR: %d",
-          _node_prefs->cr
-        );
-
-        display.drawTextCentered(
-          display.width() / 2,
-          45,
-          radio_info
-        );
-
-        snprintf(
-          radio_info,
-          sizeof(radio_info),
-          "TX: %d dBm",
-          _node_prefs->tx_power_dbm
-        );
-
-        display.drawTextCentered(
-          display.width() / 2,
-          54,
-          radio_info
-        );
-
-        snprintf(
-          radio_info,
-          sizeof(radio_info),
-          "NF:%d",
-          radio_driver.getNoiseFloor()
-        );
-
-        display.setColor(UIColor::secondary_txt);
       }
-
-      // ======================================================
-      // MP-03.4 — CONFIG RÁDIO
+      // ------------------------------------------------------
+      // MP-03.3 — CONFIG RÁDIO
       //
       // Reservado para futura configuração.
-      // ======================================================
+      // ------------------------------------------------------
 
       else if (_radio_config_submenu) {
 
@@ -1748,45 +1591,64 @@ public:
 
       else if (_repeater_submenu && !_repeater_info_submenu) {
 
+        char repeater_state[32];
+        char autoadvert_state[32];
+
+        snprintf(
+          repeater_state,
+          sizeof(repeater_state),
+          "REPETIDOR: %s",
+          the_mesh.getNodePrefs()->isRepeatEn() ? "ON" : "OFF"
+        );
+
+        snprintf(
+          autoadvert_state,
+          sizeof(autoadvert_state),
+          "AUTOADVERT: %s",
+          the_mesh.getNodePrefs()->isAutoAdvertEn() ? "ON" : "OFF"
+        );
+
         const char* repeater_items[] = {
-          "REPETIDOR",
-          "AUTOADVERT",
+          repeater_state,
+          autoadvert_state,
           "INFO REPETIDOR",
           "[ SAIR ]"
         };
 
-        int y = 20;
+        // Selector oficial HiveFW:
+        // texto centrado, tamanho 2 e duas linhas quando necessário.
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(2);
 
-        for (int i = 0; i < 4; i++) {
+        const char* text = repeater_items[_repeater_menu];
+        const char* space = strchr(text, ' ');
 
-          if (i == _repeater_menu) {
+        if (space && display.getTextWidth(text) > display.width() - 32) {
+          char line1[32];
+          char line2[32];
+          size_t n = space - text;
 
-            display.setColor(UIColor::primary_txt);
+          if (n >= sizeof(line1))
+            n = sizeof(line1) - 1;
 
-            display.fillRect(
-              0,
-              y - 1,
-              display.width(),
-              10
-            );
+          memcpy(line1, text, n);
+          line1[n] = '\0';
 
-            display.setColor(UIColor::window_bkg);
+          strncpy(line2, space + 1, sizeof(line2) - 1);
+          line2[sizeof(line2) - 1] = '\0';
 
-          } else {
-
-            display.setColor(UIColor::secondary_txt);
-          }
-
-          display.drawTextCentered(
+          drawSelectedMenuText(display, display.width() / 2, 29, line1);
+          drawSelectedMenuText(display, display.width() / 2, 47, line2);
+        } else {
+          drawSelectedMenuText(
+            display,
             display.width() / 2,
-            y,
-            repeater_items[i]
+            38,
+            text
           );
-
-          y += 10;
         }
-      }
 
+      }
       // ======================================================
       // MP-04.3 — INFO REPETIDOR
       //
@@ -4136,13 +3998,15 @@ public:
 
       // ======================================================
       // MP-03.1 — PÁGINA PRINCIPAL
+      //
+      // Página inicial do Rádio: logo 64x32 + título.
+      // INFO RÁDIO apresenta os dados técnicos originais.
       // ======================================================
 
-      if (!_radio_submenu &&
-          !_radio_info_submenu &&
-          !_radio_config_submenu) {
+      if (!_radio_submenu ||
+          _radio_info_submenu) {
 
-        if (c == KEY_ENTER) {
+        if (c == KEY_ENTER && !_radio_info_submenu) {
 
           _radio_submenu = true;
           _radio_info_submenu = false;
@@ -4153,6 +4017,14 @@ public:
         }
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+          if (_radio_info_submenu) {
+            _radio_info_submenu = false;
+            _radio_config_submenu = false;
+            _radio_submenu = true;
+            _radio_menu = 0;
+            return true;
+          }
 
           _radio_menu = 0;
           _radio_submenu = false;
@@ -4166,6 +4038,13 @@ public:
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
+          if (_radio_info_submenu) {
+            _radio_info_submenu = false;
+            _radio_submenu = true;
+            _radio_menu = 0;
+            return true;
+          }
+
           _page = (_page + 1) % HomePage::Count;
 
           if (_page == HomePage::RECENT) {
@@ -4176,6 +4055,13 @@ public:
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
+
+          if (_radio_info_submenu) {
+            _radio_info_submenu = false;
+            _radio_submenu = true;
+            _radio_menu = 0;
+            return true;
+          }
 
           _page = (_page + HomePage::Count - 1) % HomePage::Count;
 
@@ -4250,28 +4136,7 @@ public:
       }
 
       // ======================================================
-      // MP-03.3 — INFO RÁDIO
-      // ======================================================
-
-      if (_radio_info_submenu) {
-
-        if (c == KEY_PREV ||
-            c == KEY_CANCEL ||
-            c == KEY_SELECT) {
-
-          _radio_info_submenu = false;
-          _radio_config_submenu = false;
-          _radio_submenu = true;
-          _radio_menu = 0;
-
-          return true;
-        }
-
-        return true;
-      }
-
-      // ======================================================
-      // MP-03.4 — CONFIG RÁDIO
+      // MP-03.3 — CONFIG RÁDIO
       // ======================================================
 
       if (_radio_config_submenu) {
@@ -4292,42 +4157,6 @@ public:
       }
     }
 
-
-    // MP-04 — REPETIDOR
-    //
-    // ESTRUTURA OFICIAL:
-    //
-    // MP-04.1 — PÁGINA REPETIDOR
-    //   false/false
-    //   Logo + título
-    //   ENTER -> MP-04.2
-    //   CANCEL/SELECT -> RADIO
-    //
-    // MP-04.2 — MENU REPETIDOR
-    //   0 REPETIDOR
-    //   1 AUTOADVERT
-    //   2 INFO REPETIDOR
-    //   3 SAIR
-    //
-    // MP-04.3 — SELECTOR DE ESTATÍSTICAS
-    //   0 RSSI
-    //   1 ATIVIDADE TX
-    //   2 MENSAGENS OUT
-    //   3 MENSAGENS IN
-    //   4 LOCALIZAÇÃO
-    //
-    // IMPORTANTE:
-    //   _repeater_submenu == false
-    //       -> página/logo
-    //
-    //   _repeater_submenu == true
-    //       -> menu principal do repetidor
-    //
-    //   _repeater_info_submenu == true
-    //       -> selector de estatísticas
-    // ========================================================
-
-    // ========================================================
     if (_page == HomePage::REPETIDOR) {
 
       // ======================================================

@@ -67,7 +67,7 @@
 #endif
 
 #ifndef BLE_NAME_PREFIX
-#define BLE_NAME_PREFIX "MeshCore-"
+#define BLE_NAME_PREFIX "HiveFW-"
 #endif
 
 #include <helpers/BaseChatMesh.h>
