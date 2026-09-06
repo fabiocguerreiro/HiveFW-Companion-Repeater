@@ -369,6 +369,9 @@ class HomeScreen : public UIScreen {
   uint8_t _settings_menu;
   bool _settings_submenu;
 
+  bool _settings_channel_submenu;
+  uint8_t _settings_channel_menu;
+
   uint8_t _settings_advert_menu;
   bool _settings_advert_submenu;
   bool _settings_confirm;
@@ -389,12 +392,24 @@ class HomeScreen : public UIScreen {
   uint8_t _apps_menu;
   uint8_t _apps_view;
 
-  // HiveFW Repeater statistics page:
+  bool _sos_submenu;
+  uint8_t _sos_menu;
+  bool _sos_confirm_submenu;
+
+  // HiveFW Repeater information pages:
   // 0 RSSI
-  // 1 TX Airtime
-  // 2 Messages OUT
-  // 3 Messages IN
-  // 4 Location
+  // 1 SNR
+  // 2 TX Airtime
+  // 3 RX Airtime
+  // 4 Uptime
+  // 5 Battery
+  // 6 Noise Floor
+  // 7 Packets RX
+  // 8 Packets TX
+  // 9 RX Errors
+  // 10 Flood RX/TX
+  // 11 Direct RX/TX
+  // 12 Localização
   uint8_t _repeater_stats_page;
 
   // ========================================================================
@@ -460,6 +475,123 @@ class HomeScreen : public UIScreen {
   NodeDiscoveryResult _active_discovery_nodes[ACTIVE_DISCOVERY_MAX_NODES];
   uint8_t _active_discovery_count;
   uint8_t _active_discovery_menu;
+
+  // ========================================================
+  // CANAL APPS
+  // ========================================================
+
+  int getAppsChannelCount() {
+    int count = 0;
+
+#ifdef MAX_GROUP_CHANNELS
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      ChannelDetails channel;
+
+      if (the_mesh.getChannel(i, channel) &&
+          channel.name[0] != '\0') {
+        count++;
+      }
+    }
+#endif
+
+    return count;
+  }
+
+  bool getAppsChannel(ChannelDetails& selected) {
+    bool configured = false;
+
+    for (int i = 0; i < PATH_HASH_SIZE; i++) {
+      if (_node_prefs->apps_channel_hash[i] != 0) {
+        configured = true;
+        break;
+      }
+    }
+
+    if (!configured)
+      return false;
+
+#ifdef MAX_GROUP_CHANNELS
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      ChannelDetails channel;
+
+      if (the_mesh.getChannel(i, channel) &&
+          channel.name[0] != '\0' &&
+          memcmp(
+            channel.channel.hash,
+            _node_prefs->apps_channel_hash,
+            PATH_HASH_SIZE
+          ) == 0) {
+
+        selected = channel;
+        return true;
+      }
+    }
+#endif
+
+    return false;
+  }
+
+  int getAppsChannelMenuIndex() {
+    ChannelDetails selected;
+
+    if (!getAppsChannel(selected))
+      return getAppsChannelCount();
+
+    int found = 0;
+
+#ifdef MAX_GROUP_CHANNELS
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      ChannelDetails channel;
+
+      if (the_mesh.getChannel(i, channel) &&
+          channel.name[0] != '\0') {
+
+        if (memcmp(
+              channel.channel.hash,
+              selected.channel.hash,
+              PATH_HASH_SIZE
+            ) == 0) {
+          return found;
+        }
+
+        found++;
+      }
+    }
+#endif
+
+    return getAppsChannelCount();
+  }
+
+  bool selectAppsChannelByMenuIndex(int menu_index) {
+    int found = 0;
+
+#ifdef MAX_GROUP_CHANNELS
+    for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+      ChannelDetails channel;
+
+      if (the_mesh.getChannel(i, channel) &&
+          channel.name[0] != '\0') {
+
+        if (found == menu_index) {
+
+          memcpy(
+            _node_prefs->apps_channel_hash,
+            channel.channel.hash,
+            PATH_HASH_SIZE
+          );
+
+          the_mesh.savePrefs();
+
+          return true;
+        }
+
+        found++;
+      }
+    }
+#endif
+
+    return false;
+  }
 
   void refreshActiveDiscoveryNodes() {
 
@@ -602,6 +734,8 @@ public:
        _sms_channel_menu(0),
        _sms_channel_valid(false),
        _settings_menu(0), _settings_submenu(false),
+       _settings_channel_submenu(false),
+       _settings_channel_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_menu(0),
@@ -620,6 +754,8 @@ public:
       _ha_menu(0), _ha_submenu(false),
       _ha_confirm(0), _ha_confirm_submenu(false),
        _apps_menu(0), _apps_view(0),
+       _sos_submenu(false), _sos_menu(0),
+       _sos_confirm_submenu(false),
        _repeater_stats_page(0),
        _apps_submenu(false), _apps_return(false),
        _active_discovery_count(0), _active_discovery_menu(0),
@@ -1972,18 +2108,19 @@ public:
       //
       // Estatísticas do repetidor.
       //
-      //  1/12  RSSI
-      //  2/12  SNR
-      //  3/12  TX AIRTIME
-      //  4/12  RX AIRTIME
-      //  5/12  UPTIME
-      //  6/12  BATERIA
-      //  7/12  NOISE FLOOR
-      //  8/12  PACOTES RX
-      //  9/12  PACOTES TX
-      // 10/12  RX ERRORS
-      // 11/12  FLOOD RX/TX
-      // 12/12  DIRECT RX/TX
+      //  1/13  RSSI
+      //  2/13  SNR
+      //  3/13  TX AIRTIME
+      //  4/13  RX AIRTIME
+      //  5/13  UPTIME
+      //  6/13  BATERIA
+      //  7/13  NOISE FLOOR
+      //  8/13  PACOTES RX
+      //  9/13  PACOTES TX
+      // 10/13  RX ERRORS
+      // 11/13  FLOOD RX/TX
+      // 12/13  DIRECT RX/TX
+      // 13/13  LOCALIZAÇÃO
       //
       // Uma única designação por página.
       // ======================================================
@@ -1998,7 +2135,7 @@ public:
         snprintf(
           repeater_counter,
           sizeof(repeater_counter),
-          "%d/12",
+          "%d/13",
           (int)(_repeater_stats_page + 1)
         );
 
@@ -2193,6 +2330,25 @@ public:
               (unsigned long)the_mesh.getNumSentDirect()
             );
             break;
+
+          case 12:
+            snprintf(
+              title,
+              sizeof(title),
+              "%s",
+              the_mesh.getNodePrefs()->advert_loc_policy == ADVERT_LOC_SHARE
+                ? "LOCALIZAÇÃO ATIVA"
+                : "LOCALIZAÇÃO OCULTA"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%.4f %.4f",
+              _sensors->node_lat,
+              _sensors->node_lon
+            );
+            break;
         }
 
         display.setTextSize(1);
@@ -2241,6 +2397,80 @@ public:
           advert_items[_settings_advert_menu]
         );
 
+      } else if (_settings_channel_submenu) {
+
+        int channel_count = getAppsChannelCount();
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        if (channel_count == 0) {
+
+          display.drawTextCentered(
+            display.width() / 2,
+            38,
+            "SEM CANAIS"
+          );
+
+        } else {
+
+          int selected_index = _settings_channel_menu;
+
+          if (selected_index >= channel_count)
+            selected_index = 0;
+
+          int found = 0;
+          ChannelDetails channel;
+          bool valid = false;
+
+          for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
+
+            ChannelDetails candidate;
+
+            if (the_mesh.getChannel(i, candidate) &&
+                candidate.name[0] != '\0') {
+
+              if (found == selected_index) {
+                channel = candidate;
+                valid = true;
+                break;
+              }
+
+              found++;
+            }
+          }
+
+          if (valid) {
+
+            char channel_text[32];
+
+            snprintf(
+              channel_text,
+              sizeof(channel_text),
+              "%d/%d %s",
+              selected_index + 1,
+              channel_count,
+              channel.name
+            );
+
+            display.setTextSize(1);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              29,
+              "CANAL APPS"
+            );
+
+            display.setTextSize(2);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              47,
+              channel_text
+            );
+          }
+        }
+
       } else {
 
         char bluetooth_item[32];
@@ -2255,6 +2485,7 @@ public:
         const char* settings_items[] = {
           bluetooth_item,
           "ANUNCIAR NÓ",
+          "CANAL APPS",
           "DESLIGAR",
           "[ SAIR ]"
         };
@@ -2687,6 +2918,42 @@ public:
       }
 
       // ------------------------------------------------------
+      // APLICAÇÕES -> SOS
+      // ------------------------------------------------------
+
+      else if (!_apps_submenu &&
+               _apps_view == 7 &&
+               _sos_confirm_submenu) {
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          18,
+          "QUER ENVIAR?"
+        );
+
+        const char* sos_confirm_items[] = {
+          "SIM",
+          "NÃO"
+        };
+
+        display.drawTextCentered(
+          display.width() / 2 - 42,
+          40,
+          ">"
+        );
+
+        drawSelectedMenuText(
+          display,
+          display.width() / 2 + 8,
+          40,
+          sos_confirm_items[_sos_menu]
+        );
+      }
+
+      // ------------------------------------------------------
       // APLICAÇÕES -> PÁGINA PRINCIPAL
       // ------------------------------------------------------
 
@@ -2718,6 +2985,7 @@ public:
           "RELÓGIO",
           "DESCOBRIR REPETIDORES",
           "REPETIDORES DESCOBERTOS",
+          "SOS",
           "[ SAIR ]"
         };
 
@@ -3782,16 +4050,92 @@ public:
       }
 
       // ======================================================
+      // SUBMENU CANAL APPS
+      // ======================================================
+
+      if (_settings_channel_submenu) {
+
+        int channel_count = getAppsChannelCount();
+
+        if (channel_count == 0) {
+
+          if (c == KEY_CANCEL ||
+              c == KEY_SELECT ||
+              c == KEY_ENTER) {
+
+            _settings_channel_submenu = false;
+            _settings_channel_menu = 0;
+          }
+
+          return true;
+        }
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          _settings_channel_menu =
+            (_settings_channel_menu + 1)
+            % channel_count;
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          _settings_channel_menu =
+            (_settings_channel_menu + channel_count - 1)
+            % channel_count;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _settings_channel_submenu = false;
+          _settings_channel_menu = 0;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (selectAppsChannelByMenuIndex(
+                _settings_channel_menu)) {
+
+            _settings_channel_submenu = false;
+            _settings_channel_menu = 0;
+
+            _task->notify(UIEventType::ack);
+            _task->showAlert(
+              "Canal APPS guardado",
+              1000
+            );
+
+          } else {
+
+            _task->showAlert(
+              "Falha ao guardar",
+              1000
+            );
+          }
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
       // MENU DE DEFINIÇÕES
       // ======================================================
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
-        _settings_menu = (_settings_menu + 1) % 4;
+        _settings_menu = (_settings_menu + 1) % 5;
         return true;
       }
 
       if (c == KEY_PREV || c == KEY_LEFT) {
-        _settings_menu = (_settings_menu + 3) % 4;
+        _settings_menu = (_settings_menu + 4) % 5;
         return true;
       }
 
@@ -3800,6 +4144,8 @@ public:
         _settings_menu = 0;
         _settings_advert_submenu = false;
         _settings_advert_menu = 0;
+        _settings_channel_submenu = false;
+        _settings_channel_menu = 0;
         return true;
       }
 
@@ -3807,7 +4153,9 @@ public:
 
         // BLUETOOTH
         if (_settings_menu == 0) {
-          bool bluetooth_enable = !_task->isBluetoothEnabled();
+
+          bool bluetooth_enable =
+            !_task->isBluetoothEnabled();
 
           if (bluetooth_enable) {
             _task->enableBluetooth();
@@ -3816,8 +4164,11 @@ public:
           }
 
           _task->notify(UIEventType::ack);
+
           _task->showAlert(
-            bluetooth_enable ? "Bluetooth ON" : "Bluetooth OFF",
+            bluetooth_enable
+              ? "Bluetooth ON"
+              : "Bluetooth OFF",
             1000
           );
 
@@ -3826,21 +4177,53 @@ public:
 
         // ANUNCIAR NÓ
         if (_settings_menu == 1) {
+
           _settings_advert_submenu = true;
           _settings_advert_menu = 0;
+
+          return true;
+        }
+
+        // CANAL APPS
+        if (_settings_menu == 2) {
+
+          int channel_count = getAppsChannelCount();
+
+          if (channel_count == 0) {
+
+            _settings_channel_submenu = true;
+            _settings_channel_menu = 0;
+
+          } else {
+
+            int selected = getAppsChannelMenuIndex();
+
+            if (selected >= channel_count)
+              selected = 0;
+
+            _settings_channel_menu = selected;
+            _settings_channel_submenu = true;
+          }
+
           return true;
         }
 
         // DESLIGAR
-        if (_settings_menu == 2) {
+        if (_settings_menu == 3) {
+
           _shutdown_init = true;
+
           return true;
         }
 
         // SAIR
-        if (_settings_menu == 3) {
+        if (_settings_menu == 4) {
+
           _settings_submenu = false;
           _settings_menu = 0;
+          _settings_channel_submenu = false;
+          _settings_channel_menu = 0;
+
           return true;
         }
       }
@@ -3855,7 +4238,7 @@ public:
     if (_page == HomePage::APPS && _apps_submenu) {
 
       // Número real de opções do menu APLICAÇÕES.
-      int apps_count = 5;
+      int apps_count = 6;
 
 #if ENV_INCLUDE_GPS == 1
       apps_count++;
@@ -3980,6 +4363,20 @@ public:
           return true;
         }
 
+        // SOS
+        if (_apps_menu == app_index++) {
+
+          _apps_submenu = false;
+          _apps_view = 7;
+          _apps_return = true;
+
+          _sos_submenu = true;
+          _sos_confirm_submenu = true;
+          _sos_menu = 0;
+
+          return true;
+        }
+
         // SAIR
         if (_apps_menu == app_index++) {
 
@@ -3990,6 +4387,148 @@ public:
 
           return true;
         }
+      }
+
+      return true;
+    }
+
+    // --------------------------------------------------------
+    // APLICAÇÕES -> SOS
+    // --------------------------------------------------------
+
+    if (_page == HomePage::APPS &&
+        !_apps_submenu &&
+        _apps_view == 7 &&
+        _sos_submenu) {
+
+      // ------------------------------------------------------
+      // CONFIRMAÇÃO SOS
+      // ------------------------------------------------------
+
+      if (_sos_confirm_submenu) {
+
+        if (c == KEY_NEXT ||
+            c == KEY_RIGHT ||
+            c == KEY_PREV ||
+            c == KEY_LEFT) {
+
+          _sos_menu =
+            (_sos_menu + 1) % 2;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _sos_confirm_submenu = false;
+          _sos_menu = 0;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // SIM
+          if (_sos_menu == 0) {
+
+            ChannelDetails channel;
+
+            if (!getAppsChannel(channel)) {
+
+              _task->showAlert(
+                "Canal APPS não definido",
+                1500
+              );
+
+              return true;
+            }
+
+            char command[64];
+
+#if ENV_INCLUDE_GPS == 1
+            LocationProvider* nmea = sensors.getLocationProvider();
+
+            if (nmea != NULL && nmea->isValid()) {
+
+              snprintf(
+                command,
+                sizeof(command),
+                "!SOS %.4f %.4f",
+                nmea->getLatitude() / 1000000.0,
+                nmea->getLongitude() / 1000000.0
+              );
+
+            } else {
+              snprintf(
+                command,
+                sizeof(command),
+                "!SOS SEM GPS"
+              );
+            }
+#else
+            snprintf(
+              command,
+              sizeof(command),
+              "!SOS SEM GPS"
+            );
+#endif
+
+            bool success =
+              the_mesh.sendGroupMessage(
+                _rtc->getCurrentTime(),
+                channel.channel,
+                _node_prefs->node_name,
+                command,
+                strlen(command)
+              );
+
+            _task->notify(UIEventType::ack);
+
+            _task->showAlert(
+              success
+                ? "SOS Enviado"
+                : "Falha ao enviar",
+              1200
+            );
+          }
+
+          // NÃO ou depois do envio
+          _sos_confirm_submenu = false;
+          _sos_menu = 0;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ------------------------------------------------------
+      // ECRÃ SOS
+      // ------------------------------------------------------
+
+      if (c == KEY_ENTER) {
+
+        _sos_menu = 0;
+        _sos_confirm_submenu = true;
+
+        return true;
+      }
+
+      if (c == KEY_CANCEL ||
+          c == KEY_SELECT ||
+          c == KEY_LEFT ||
+          c == KEY_PREV) {
+
+        _sos_submenu = false;
+        _sos_confirm_submenu = false;
+        _sos_menu = 0;
+
+        _apps_view = 0;
+        _apps_menu = 0;
+        _apps_return = false;
+
+        return true;
       }
 
       return true;
@@ -5318,7 +5857,7 @@ public:
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
           _repeater_stats_page =
-            (_repeater_stats_page + 1) % 12;
+            (_repeater_stats_page + 1) % 13;
 
           return true;
         }
@@ -5326,7 +5865,33 @@ public:
         if (c == KEY_PREV || c == KEY_LEFT) {
 
           _repeater_stats_page =
-            (_repeater_stats_page + 11) % 12;
+            (_repeater_stats_page + 12) % 13;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER && _repeater_stats_page == 12) {
+
+          bool share_location =
+            the_mesh.getNodePrefs()->advert_loc_policy == ADVERT_LOC_SHARE;
+
+          share_location = !share_location;
+
+          the_mesh.getNodePrefs()->advert_loc_policy =
+            share_location
+              ? ADVERT_LOC_SHARE
+              : ADVERT_LOC_NONE;
+
+          the_mesh.savePrefs();
+
+          _task->notify(UIEventType::ack);
+
+          _task->showAlert(
+            share_location
+              ? "Localizacao ativa"
+              : "Localizacao oculta",
+            1200
+          );
 
           return true;
         }
