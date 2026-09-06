@@ -56,18 +56,15 @@
 // MP-03 — RÁDIO
 //   ├── Página RÁDIO
 //   │   └── ENTER → MENU RÁDIO
-//   ├── MENU RÁDIO
-//   │   ├── INFO RÁDIO
-//   │   │   ├── FQ
-//   │   │   ├── SF
-//   │   │   ├── BW
-//   │   │   ├── CR
-//   │   │   ├── TX
-//   │   │   └── Noise floor
-//   │   ├── CONFIG RÁDIO
-//   │   │   └── Reservado para futura configuração
-//   │   └── [ SAIR ]
-//   └── [ SAIR ] → MENSAGENS
+//   └── MENU RÁDIO
+//       ├── FREQUÊNCIA
+//       ├── BANDWIDTH
+//       ├── SPREADING FACTOR
+//       ├── CODING RATE
+//       ├── TX POWER
+//       ├── PATH
+//       ├── RX GAIN
+//       └── [ SAIR ] → MENSAGENS
 //
 // MP-04 — REPETIDOR
 //   ├── Página REPETIDOR
@@ -366,25 +363,22 @@ class HomeScreen : public UIScreen {
   //
   // _radio_submenu:
   //   false = página principal do Rádio
-  //   true  = menu Rádio
-  //
-  // _radio_info_submenu:
-  //   true = INFO RÁDIO
-  //
-  // _radio_config_submenu:
-  //   true = CONFIG RÁDIO
+  //   true  = MENU RÁDIO
   //
   // _radio_menu:
-  //   0 = INFO RÁDIO
-  //   1 = CONFIG RÁDIO
-  //   2 = [ SAIR ]
+  //   0 = FREQUÊNCIA
+  //   1 = BANDWIDTH
+  //   2 = SPREADING FACTOR
+  //   3 = CODING RATE
+  //   4 = TX POWER
+  //   5 = PATH
+  //   6 = RX GAIN
+  //   7 = [ SAIR ]
+  //
+  // O MENU RÁDIO contém directamente a configuração.
   // ========================================================================
   bool _radio_submenu;
-  bool _radio_info_submenu;
-  bool _radio_config_submenu;
   uint8_t _radio_menu;
-
-  uint8_t _radio_config_menu;
 
   bool _radio_freq_edit;
   uint8_t _radio_freq_digit;
@@ -551,10 +545,7 @@ public:
        _repeater_info_submenu(false),
        _repeater_menu(0),
        _radio_submenu(false),
-       _radio_info_submenu(false),
-       _radio_config_submenu(false),
        _radio_menu(0),
-       _radio_config_menu(0),
        _radio_freq_edit(false),
        _radio_freq_digit(0),
        _radio_freq_digits{0, 0, 0, 0, 0, 0},
@@ -1451,10 +1442,10 @@ public:
       // MP-03.1 — PÁGINA RÁDIO
       //
       // Página principal: logo 64x32 + título.
-      // INFO RÁDIO usa exclusivamente os dados técnicos.
+      // MENU RÁDIO apresenta e permite alterar os parâmetros do Rádio.
       // ------------------------------------------------------
 
-      if (!_radio_submenu && !_radio_info_submenu) {
+      if (!_radio_submenu) {
 
         renderSectionHome(
           display,
@@ -1463,107 +1454,17 @@ public:
           "RÁDIO"
         );
 
-      } else if (_radio_info_submenu) {
-
-        // INFO RÁDIO — layout original HiveFW.
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        // FQ / SF
-        display.setCursor(0, 20);
-        sprintf(
-          tmp,
-          "FQ: %06.3f   SF: %d",
-          _node_prefs->freq,
-          _node_prefs->sf
-        );
-        display.print(tmp);
-
-        // BW / CR
-        display.setCursor(0, 31);
-        sprintf(
-          tmp,
-          "BW: %03.2f     CR: %d",
-          _node_prefs->bw,
-          _node_prefs->cr
-        );
-        display.print(tmp);
-
-        // TX
-        display.setCursor(0, 42);
-        sprintf(
-          tmp,
-          "TX: %ddBm",
-          _node_prefs->tx_power_dbm
-        );
-        display.print(tmp);
-
-        // Noise floor
-        display.setCursor(0, 53);
-        sprintf(
-          tmp,
-          "Noise floor: %d",
-          radio_driver.getNoiseFloor()
-        );
-        display.print(tmp);
       }
 
       // ------------------------------------------------------
       // MP-03.2 — MENU RÁDIO
       //
-      // Selector oficial HiveFW:
-      // texto centrado, tamanho 2 e duas linhas quando necessário.
+      // Menu direto de configuração do Rádio.
       // ------------------------------------------------------
 
-      else if (_radio_submenu &&
-               !_radio_info_submenu &&
-               !_radio_config_submenu) {
+      else if (_radio_submenu) {
 
         const char* radio_items[] = {
-          "INFO RÁDIO",
-          "CONFIG RÁDIO",
-          "[ SAIR ]"
-        };
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
-
-        const char* text = radio_items[_radio_menu];
-        const char* space = strchr(text, ' ');
-
-        if (space && display.getTextWidth(text) > display.width() - 32) {
-          char line1[32];
-          char line2[32];
-          size_t n = space - text;
-
-          if (n >= sizeof(line1))
-            n = sizeof(line1) - 1;
-
-          memcpy(line1, text, n);
-          line1[n] = '\0';
-
-          strncpy(line2, space + 1, sizeof(line2) - 1);
-          line2[sizeof(line2) - 1] = '\0';
-
-          drawSelectedMenuText(display, display.width() / 2, 29, line1);
-          drawSelectedMenuText(display, display.width() / 2, 47, line2);
-        } else {
-          drawSelectedMenuText(
-            display,
-            display.width() / 2,
-            38,
-            text
-          );
-        }
-
-      }
-      // ------------------------------------------------------
-      // MP-03.3 — CONFIG RÁDIO
-      // ------------------------------------------------------
-
-      else if (_radio_config_submenu) {
-
-        const char* config_items[] = {
           "FREQUÊNCIA",
           "BANDWIDTH",
           "SPREADING FACTOR",
@@ -1666,7 +1567,7 @@ public:
         } else {
 
           const char* title =
-            config_items[_radio_config_menu];
+            radio_items[_radio_menu];
 
           char value[32];
           value[0] = '\0';
@@ -1680,7 +1581,7 @@ public:
 
           if (_radio_value_edit) {
 
-            if (_radio_config_menu == 1) {
+            if (_radio_menu == 1) {
 
               const float bw_values[] = {
                 7.8f,
@@ -1702,7 +1603,7 @@ public:
                 bw_values[_radio_value_index]
               );
 
-            } else if (_radio_config_menu == 2) {
+            } else if (_radio_menu == 2) {
 
               snprintf(
                 value,
@@ -1711,7 +1612,7 @@ public:
                 5 + _radio_value_index
               );
 
-            } else if (_radio_config_menu == 3) {
+            } else if (_radio_menu == 3) {
 
               snprintf(
                 value,
@@ -1720,7 +1621,7 @@ public:
                 5 + _radio_value_index
               );
 
-            } else if (_radio_config_menu == 5) {
+            } else if (_radio_menu == 5) {
 
               snprintf(
                 value,
@@ -1729,7 +1630,7 @@ public:
                 _radio_value_index
               );
 
-            } else if (_radio_config_menu == 6) {
+            } else if (_radio_menu == 6) {
 
               snprintf(
                 value,
@@ -1744,7 +1645,7 @@ public:
 
           } else {
 
-            switch (_radio_config_menu) {
+            switch (_radio_menu) {
 
               case 0:
                 snprintf(
@@ -1827,7 +1728,7 @@ public:
             title
           );
 
-          if (_radio_config_menu != 7) {
+          if (_radio_menu != 7) {
 
             display.setTextSize(1);
 
@@ -1843,15 +1744,15 @@ public:
 
               int total = 1;
 
-              if (_radio_config_menu == 1)
+              if (_radio_menu == 1)
                 total = 10;
-              else if (_radio_config_menu == 2)
+              else if (_radio_menu == 2)
                 total = 8;
-              else if (_radio_config_menu == 3)
+              else if (_radio_menu == 3)
                 total = 4;
-              else if (_radio_config_menu == 5)
+              else if (_radio_menu == 5)
                 total = 3;
-              else if (_radio_config_menu == 6)
+              else if (_radio_menu == 6)
                 total = 2;
 
               snprintf(
@@ -4309,36 +4210,34 @@ public:
     //   CANCEL/SELECT -> MENSAGENS
     //
     // MP-03.2 — MENU RÁDIO
-    //   0 -> INFO RÁDIO
-    //   1 -> CONFIG RÁDIO
-    //   2 -> [ SAIR ] -> MENSAGENS
+    //   0 -> FREQUÊNCIA
+    //   1 -> BANDWIDTH
+    //   2 -> SPREADING FACTOR
+    //   3 -> CODING RATE
+    //   4 -> TX POWER
+    //   5 -> PATH
+    //   6 -> RX GAIN
+    //   7 -> [ SAIR ] -> MENSAGENS
     //
-    // MP-03.3 — INFO RÁDIO
-    //   PREV/CANCEL/SELECT -> MENU RÁDIO
-    //
-    // MP-03.4 — CONFIG RÁDIO
-    //   PREV/CANCEL/SELECT -> MENU RÁDIO
-    //
-    // Não alteramos a lógica original dos botões.
+    // O MENU RÁDIO contém directamente a configuração.
+    // Não existe INFO RÁDIO nem CONFIG RÁDIO intermédio.
     // ========================================================
 
     if (_page == HomePage::RADIO) {
 
       // ======================================================
-      // MP-03.1 — PÁGINA PRINCIPAL
+      // MP-03.1 — PÁGINA RÁDIO
       //
-      // Página inicial do Rádio: logo 64x32 + título.
-      // INFO RÁDIO apresenta os dados técnicos originais.
+      // Página inicial do Rádio.
+      // ENTER -> MENU RÁDIO
+      // CANCEL/SELECT -> MENSAGENS
       // ======================================================
 
-      if (!_radio_submenu ||
-          _radio_info_submenu) {
+      if (!_radio_submenu) {
 
-        if (c == KEY_ENTER && !_radio_info_submenu) {
+        if (c == KEY_ENTER) {
 
           _radio_submenu = true;
-          _radio_info_submenu = false;
-          _radio_config_submenu = false;
           _radio_menu = 0;
 
           return true;
@@ -4346,18 +4245,8 @@ public:
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
 
-          if (_radio_info_submenu) {
-            _radio_info_submenu = false;
-            _radio_config_submenu = false;
-            _radio_submenu = true;
-            _radio_menu = 0;
-            return true;
-          }
-
           _radio_menu = 0;
           _radio_submenu = false;
-          _radio_info_submenu = false;
-          _radio_config_submenu = false;
 
           _page = HomePage::MESSAGES;
 
@@ -4365,13 +4254,6 @@ public:
         }
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
-
-          if (_radio_info_submenu) {
-            _radio_info_submenu = false;
-            _radio_submenu = true;
-            _radio_menu = 0;
-            return true;
-          }
 
           _page = (_page + 1) % HomePage::Count;
 
@@ -4384,13 +4266,6 @@ public:
 
         if (c == KEY_PREV || c == KEY_LEFT) {
 
-          if (_radio_info_submenu) {
-            _radio_info_submenu = false;
-            _radio_submenu = true;
-            _radio_menu = 0;
-            return true;
-          }
-
           _page = (_page + HomePage::Count - 1) % HomePage::Count;
 
           return true;
@@ -4401,22 +4276,25 @@ public:
 
       // ======================================================
       // MP-03.2 — MENU RÁDIO
+      //
+      // Menu directo de configuração.
+      //
+      // CANCEL/SELECT -> página RÁDIO
+      // [ SAIR ] -> MENSAGENS
       // ======================================================
 
-      if (_radio_submenu &&
-          !_radio_info_submenu &&
-          !_radio_config_submenu) {
+      if (_radio_submenu) {
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
-          _radio_menu = (_radio_menu + 1) % 3;
+          _radio_menu = (_radio_menu + 1) % 8;
 
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
 
-          _radio_menu = (_radio_menu + 2) % 3;
+          _radio_menu = (_radio_menu + 7) % 8;
 
           return true;
         }
@@ -4429,45 +4307,6 @@ public:
           return true;
         }
 
-        if (c == KEY_ENTER) {
-
-          if (_radio_menu == 0) {
-
-            _radio_info_submenu = true;
-            _radio_config_submenu = false;
-
-            return true;
-          }
-
-          if (_radio_menu == 1) {
-
-            _radio_config_submenu = true;
-            _radio_info_submenu = false;
-
-            return true;
-          }
-
-          if (_radio_menu == 2) {
-
-            _radio_menu = 0;
-            _radio_submenu = false;
-            _radio_info_submenu = false;
-            _radio_config_submenu = false;
-
-            _page = HomePage::MESSAGES;
-
-            return true;
-          }
-        }
-
-        return true;
-      }
-
-      // ======================================================
-      // MP-03.3 — CONFIG RÁDIO
-      // ======================================================
-
-      if (_radio_config_submenu) {
 
         // ======================================================
         // EDITOR DE FREQUÊNCIA
@@ -4750,15 +4589,15 @@ public:
 
           int total = 1;
 
-          if (_radio_config_menu == 1)
+          if (_radio_menu == 1)
             total = 10;
-          else if (_radio_config_menu == 2)
+          else if (_radio_menu == 2)
             total = 8;
-          else if (_radio_config_menu == 3)
+          else if (_radio_menu == 3)
             total = 4;
-          else if (_radio_config_menu == 5)
+          else if (_radio_menu == 5)
             total = 3;
-          else if (_radio_config_menu == 6)
+          else if (_radio_menu == 6)
             total = 2;
 
           if (
@@ -4785,7 +4624,7 @@ public:
 
           if (c == KEY_ENTER) {
 
-            if (_radio_config_menu == 1) {
+            if (_radio_menu == 1) {
 
               const float bw_values[] = {
                 7.8f,
@@ -4810,7 +4649,7 @@ public:
                 _node_prefs->cr
               );
 
-            } else if (_radio_config_menu == 2) {
+            } else if (_radio_menu == 2) {
 
               _node_prefs->sf =
                 5 + _radio_value_index;
@@ -4822,7 +4661,7 @@ public:
                 _node_prefs->cr
               );
 
-            } else if (_radio_config_menu == 3) {
+            } else if (_radio_menu == 3) {
 
               _node_prefs->cr =
                 5 + _radio_value_index;
@@ -4834,12 +4673,12 @@ public:
                 _node_prefs->cr
               );
 
-            } else if (_radio_config_menu == 5) {
+            } else if (_radio_menu == 5) {
 
               _node_prefs->path_hash_mode =
                 _radio_value_index;
 
-            } else if (_radio_config_menu == 6) {
+            } else if (_radio_menu == 6) {
 
               _node_prefs->rx_boosted_gain =
                 _radio_value_index != 0;
@@ -4873,7 +4712,7 @@ public:
         }
 
         // ======================================================
-        // NAVEGAÇÃO DO MENU CONFIG RÁDIO
+        // NAVEGAÇÃO DO MENU RÁDIO
         // ======================================================
 
         if (
@@ -4881,8 +4720,8 @@ public:
           c == KEY_RIGHT
         ) {
 
-          _radio_config_menu =
-            (_radio_config_menu + 1) % 8;
+          _radio_menu =
+            (_radio_menu + 1) % 8;
 
           return true;
         }
@@ -4892,8 +4731,8 @@ public:
           c == KEY_LEFT
         ) {
 
-          _radio_config_menu =
-            (_radio_config_menu + 7) % 8;
+          _radio_menu =
+            (_radio_menu + 7) % 8;
 
           return true;
         }
@@ -4903,11 +4742,8 @@ public:
           c == KEY_SELECT
         ) {
 
-          _radio_config_submenu = false;
-          _radio_info_submenu = false;
-          _radio_submenu = true;
-          _radio_menu = 1;
-          _radio_config_menu = 0;
+          _radio_submenu = false;
+          _radio_menu = 0;
 
           return true;
         }
@@ -4918,7 +4754,7 @@ public:
           // FREQUÊNCIA
           // ----------------------------------------------------
 
-          if (_radio_config_menu == 0) {
+          if (_radio_menu == 0) {
 
             int freq =
               (int)_node_prefs->freq;
@@ -4965,12 +4801,12 @@ public:
           // ----------------------------------------------------
 
           if (
-            _radio_config_menu == 1 ||
-            _radio_config_menu == 2 ||
-            _radio_config_menu == 3
+            _radio_menu == 1 ||
+            _radio_menu == 2 ||
+            _radio_menu == 3
           ) {
 
-            if (_radio_config_menu == 1) {
+            if (_radio_menu == 1) {
 
               const float bw_values[] = {
                 7.8f,
@@ -4998,7 +4834,7 @@ public:
                 }
               }
 
-            } else if (_radio_config_menu == 2) {
+            } else if (_radio_menu == 2) {
 
               int sf = _node_prefs->sf;
 
@@ -5034,7 +4870,7 @@ public:
           // TX POWER
           // ----------------------------------------------------
 
-          if (_radio_config_menu == 4) {
+          if (_radio_menu == 4) {
 
             int tx =
               _node_prefs->tx_power_dbm;
@@ -5063,7 +4899,7 @@ public:
           // PATH
           // ----------------------------------------------------
 
-          if (_radio_config_menu == 5) {
+          if (_radio_menu == 5) {
 
             _radio_value_index =
               _node_prefs->path_hash_mode % 3;
@@ -5077,7 +4913,7 @@ public:
           // RX GAIN
           // ----------------------------------------------------
 
-          if (_radio_config_menu == 6) {
+          if (_radio_menu == 6) {
 
             _radio_value_index =
               _node_prefs->rx_boosted_gain ? 1 : 0;
@@ -5091,13 +4927,12 @@ public:
           // SAIR
           // ----------------------------------------------------
 
-          if (_radio_config_menu == 7) {
+          if (_radio_menu == 7) {
 
-            _radio_config_submenu = false;
-            _radio_info_submenu = false;
-            _radio_submenu = true;
-            _radio_menu = 1;
-            _radio_config_menu = 0;
+            _radio_submenu = false;
+            _radio_menu = 0;
+
+            _page = HomePage::MESSAGES;
 
             return true;
           }
