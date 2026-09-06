@@ -394,9 +394,6 @@ class HomeScreen : public UIScreen {
   uint8_t _radio_tx_digit;
   uint8_t _radio_tx_digits[2];
 
-  bool _radio_value_edit;
-  uint8_t _radio_value_index;
-
   bool _apps_submenu;
   bool _apps_return;
 
@@ -561,8 +558,6 @@ public:
        _radio_tx_edit(false),
        _radio_tx_digit(0),
        _radio_tx_digits{0, 0},
-       _radio_value_edit(false),
-       _radio_value_index(0),
       _settings_advert_menu(0), _settings_advert_submenu(false),
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
@@ -1565,9 +1560,9 @@ public:
 
         const char* config_items[] = {
           "FREQUÊNCIA",
-          "BANDWIDTH",
-          "SPREADING FACTOR",
-          "CODING RATE",
+          "BW",
+          "SF",
+          "CR",
           "TX POWER",
           "PATH",
           "RX GAIN",
@@ -1605,18 +1600,18 @@ public:
 
           display.setTextSize(1);
 
-          char pos[8];
+          char pos[16];
 
           snprintf(
             pos,
             sizeof(pos),
-            "%d/6",
+            "DIGITO %d/6",
             _radio_freq_digit + 1
           );
 
-          display.drawTextRightAlign(
-            display.width() - 2,
-            10,
+          display.drawTextCentered(
+            display.width() / 2,
+            53,
             pos
           );
 
@@ -1644,18 +1639,18 @@ public:
 
           display.setTextSize(1);
 
-          char pos[8];
+          char pos[16];
 
           snprintf(
             pos,
             sizeof(pos),
-            "%d/2",
+            "DIGITO %d/2",
             _radio_tx_digit + 1
           );
 
-          display.drawTextRightAlign(
-            display.width() - 2,
-            10,
+          display.drawTextCentered(
+            display.width() / 2,
+            53,
             pos
           );
 
@@ -1665,209 +1660,59 @@ public:
 
         } else {
 
-          const char* title =
+          const char* text =
             config_items[_radio_config_menu];
 
-          char value[32];
-          value[0] = '\0';
+          const char* space =
+            strchr(text, ' ');
 
-          // ------------------------------------------------------
-          // VALORES
-          //
-          // Durante a edição mostramos o valor candidato
-          // (_radio_value_index), e não o valor ainda gravado.
-          // ------------------------------------------------------
+          if (
+            space &&
+            display.getTextWidth(text) >
+              display.width() - 32
+          ) {
 
-          if (_radio_value_edit) {
+            char line1[32];
+            char line2[32];
 
-            if (_radio_config_menu == 1) {
+            size_t n = space - text;
 
-              const float bw_values[] = {
-                7.8f,
-                10.4f,
-                15.6f,
-                20.8f,
-                31.25f,
-                41.7f,
-                62.5f,
-                125.0f,
-                250.0f,
-                500.0f
-              };
+            if (n >= sizeof(line1))
+              n = sizeof(line1) - 1;
 
-              snprintf(
-                value,
-                sizeof(value),
-                "%g Khz",
-                bw_values[_radio_value_index]
-              );
+            memcpy(line1, text, n);
+            line1[n] = '\0';
 
-            } else if (_radio_config_menu == 2) {
+            strncpy(
+              line2,
+              space + 1,
+              sizeof(line2) - 1
+            );
 
-              snprintf(
-                value,
-                sizeof(value),
-                "%d",
-                5 + _radio_value_index
-              );
+            line2[sizeof(line2) - 1] = '\0';
 
-            } else if (_radio_config_menu == 3) {
+            drawSelectedMenuText(
+              display,
+              display.width() / 2,
+              29,
+              line1
+            );
 
-              snprintf(
-                value,
-                sizeof(value),
-                "%d",
-                5 + _radio_value_index
-              );
-
-            } else if (_radio_config_menu == 5) {
-
-              snprintf(
-                value,
-                sizeof(value),
-                "%d",
-                _radio_value_index
-              );
-
-            } else if (_radio_config_menu == 6) {
-
-              snprintf(
-                value,
-                sizeof(value),
-                "%s",
-                _radio_value_index
-                  ? "BOOSTED"
-                  : "POWER SAVE"
-              );
-
-            }
+            drawSelectedMenuText(
+              display,
+              display.width() / 2,
+              47,
+              line2
+            );
 
           } else {
 
-            switch (_radio_config_menu) {
-
-              case 0:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%.3f Mhz",
-                  _node_prefs->freq
-                );
-                break;
-
-              case 1:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%g Khz",
-                  _node_prefs->bw
-                );
-                break;
-
-              case 2:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->sf
-                );
-                break;
-
-              case 3:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->cr
-                );
-                break;
-
-              case 4:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->tx_power_dbm
-                );
-                break;
-
-              case 5:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->path_hash_mode
-                );
-                break;
-
-              case 6:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%s",
-                  _node_prefs->rx_boosted_gain
-                    ? "BOOSTED"
-                    : "POWER SAVE"
-                );
-                break;
-
-              case 7:
-                value[0] = '\0';
-                break;
-            }
-          }
-
-          display.setColor(UIColor::primary_txt);
-          display.setTextSize(2);
-
-          drawSelectedMenuText(
-            display,
-            display.width() / 2,
-            27,
-            title
-          );
-
-          if (_radio_config_menu != 7) {
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
+            drawSelectedMenuText(
+              display,
               display.width() / 2,
-              48,
-              value
+              38,
+              text
             );
-
-            if (_radio_value_edit) {
-
-              char pos[8];
-
-              int total = 1;
-
-              if (_radio_config_menu == 1)
-                total = 10;
-              else if (_radio_config_menu == 2)
-                total = 8;
-              else if (_radio_config_menu == 3)
-                total = 4;
-              else if (_radio_config_menu == 5)
-                total = 3;
-              else if (_radio_config_menu == 6)
-                total = 2;
-
-              snprintf(
-                pos,
-                sizeof(pos),
-                "%d/%d",
-                _radio_value_index + 1,
-                total
-              );
-
-              display.drawTextRightAlign(
-                display.width() - 2,
-                10,
-                pos
-              );
-            }
           }
         }
       }
@@ -4742,137 +4587,6 @@ public:
         }
 
         // ======================================================
-        // EDITOR DAS OPÇÕES SIMPLES
-        // BW / SF / CR / PATH / RX GAIN
-        // ======================================================
-
-        if (_radio_value_edit) {
-
-          int total = 1;
-
-          if (_radio_config_menu == 1)
-            total = 10;
-          else if (_radio_config_menu == 2)
-            total = 8;
-          else if (_radio_config_menu == 3)
-            total = 4;
-          else if (_radio_config_menu == 5)
-            total = 3;
-          else if (_radio_config_menu == 6)
-            total = 2;
-
-          if (
-            c == KEY_NEXT ||
-            c == KEY_RIGHT
-          ) {
-
-            _radio_value_index =
-              (_radio_value_index + 1) % total;
-
-            return true;
-          }
-
-          if (
-            c == KEY_PREV ||
-            c == KEY_LEFT
-          ) {
-
-            _radio_value_index =
-              (_radio_value_index + total - 1) % total;
-
-            return true;
-          }
-
-          if (c == KEY_ENTER) {
-
-            if (_radio_config_menu == 1) {
-
-              const float bw_values[] = {
-                7.8f,
-                10.4f,
-                15.6f,
-                20.8f,
-                31.25f,
-                41.7f,
-                62.5f,
-                125.0f,
-                250.0f,
-                500.0f
-              };
-
-              _node_prefs->bw =
-                bw_values[_radio_value_index];
-
-              radio_driver.setParams(
-                _node_prefs->freq,
-                _node_prefs->bw,
-                _node_prefs->sf,
-                _node_prefs->cr
-              );
-
-            } else if (_radio_config_menu == 2) {
-
-              _node_prefs->sf =
-                5 + _radio_value_index;
-
-              radio_driver.setParams(
-                _node_prefs->freq,
-                _node_prefs->bw,
-                _node_prefs->sf,
-                _node_prefs->cr
-              );
-
-            } else if (_radio_config_menu == 3) {
-
-              _node_prefs->cr =
-                5 + _radio_value_index;
-
-              radio_driver.setParams(
-                _node_prefs->freq,
-                _node_prefs->bw,
-                _node_prefs->sf,
-                _node_prefs->cr
-              );
-
-            } else if (_radio_config_menu == 5) {
-
-              _node_prefs->path_hash_mode =
-                _radio_value_index;
-
-            } else if (_radio_config_menu == 6) {
-
-              _node_prefs->rx_boosted_gain =
-                _radio_value_index != 0;
-
-              radio_driver.setRxBoostedGainMode(
-                _node_prefs->rx_boosted_gain
-              );
-            }
-
-            the_mesh.savePrefs();
-
-            _radio_value_edit = false;
-            _radio_value_index = 0;
-
-            _task->notify(
-              UIEventType::ack
-            );
-
-            return true;
-          }
-
-          if (c == KEY_CANCEL) {
-
-            _radio_value_edit = false;
-            _radio_value_index = 0;
-
-            return true;
-          }
-
-          return true;
-        }
-
-        // ======================================================
         // NAVEGAÇÃO DO MENU CONFIG RÁDIO
         // ======================================================
 
@@ -4961,71 +4675,118 @@ public:
           }
 
           // ----------------------------------------------------
-          // BW / SF / CR
+          // BW
           // ----------------------------------------------------
 
-          if (
-            _radio_config_menu == 1 ||
-            _radio_config_menu == 2 ||
-            _radio_config_menu == 3
-          ) {
+          if (_radio_config_menu == 1) {
 
-            if (_radio_config_menu == 1) {
+            const float bw_values[] = {
+              7.8f,
+              10.4f,
+              15.6f,
+              20.8f,
+              31.25f,
+              41.7f,
+              62.5f,
+              125.0f,
+              250.0f,
+              500.0f
+            };
 
-              const float bw_values[] = {
-                7.8f,
-                10.4f,
-                15.6f,
-                20.8f,
-                31.25f,
-                41.7f,
-                62.5f,
-                125.0f,
-                250.0f,
-                500.0f
-              };
+            const int bw_count = 10;
 
-              _radio_value_index = 0;
+            int current = 0;
 
-              for (int i = 0; i < 10; i++) {
+            for (
+              int i = 0;
+              i < bw_count;
+              i++
+            ) {
 
-                if (
-                  _node_prefs->bw ==
-                  bw_values[i]
-                ) {
-                  _radio_value_index = i;
-                  break;
-                }
+              if (
+                _node_prefs->bw <=
+                bw_values[i]
+              ) {
+
+                current = i;
+                break;
               }
 
-            } else if (_radio_config_menu == 2) {
-
-              int sf = _node_prefs->sf;
-
-              if (sf < 5)
-                sf = 5;
-
-              if (sf > 12)
-                sf = 12;
-
-              _radio_value_index =
-                sf - 5;
-
-            } else {
-
-              int cr = _node_prefs->cr;
-
-              if (cr < 5)
-                cr = 5;
-
-              if (cr > 8)
-                cr = 8;
-
-              _radio_value_index =
-                cr - 5;
+              current = i;
             }
 
-            _radio_value_edit = true;
+            current =
+              (current + 1) % bw_count;
+
+            _node_prefs->bw =
+              bw_values[current];
+
+            the_mesh.savePrefs();
+
+            radio_driver.setParams(
+              _node_prefs->freq,
+              _node_prefs->bw,
+              _node_prefs->sf,
+              _node_prefs->cr
+            );
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            return true;
+          }
+
+          // ----------------------------------------------------
+          // SF
+          // ----------------------------------------------------
+
+          if (_radio_config_menu == 2) {
+
+            _node_prefs->sf++;
+
+            if (_node_prefs->sf > 12)
+              _node_prefs->sf = 5;
+
+            the_mesh.savePrefs();
+
+            radio_driver.setParams(
+              _node_prefs->freq,
+              _node_prefs->bw,
+              _node_prefs->sf,
+              _node_prefs->cr
+            );
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            return true;
+          }
+
+          // ----------------------------------------------------
+          // CR
+          // ----------------------------------------------------
+
+          if (_radio_config_menu == 3) {
+
+            _node_prefs->cr++;
+
+            if (_node_prefs->cr > 8)
+              _node_prefs->cr = 5;
+
+            the_mesh.savePrefs();
+
+            radio_driver.setParams(
+              _node_prefs->freq,
+              _node_prefs->bw,
+              _node_prefs->sf,
+              _node_prefs->cr
+            );
+
+            _task->notify(
+              UIEventType::ack
+            );
 
             return true;
           }
@@ -5065,10 +4826,20 @@ public:
 
           if (_radio_config_menu == 5) {
 
-            _radio_value_index =
-              _node_prefs->path_hash_mode % 3;
+            _node_prefs->path_hash_mode++;
 
-            _radio_value_edit = true;
+            if (
+              _node_prefs->path_hash_mode > 2
+            ) {
+
+              _node_prefs->path_hash_mode = 0;
+            }
+
+            the_mesh.savePrefs();
+
+            _task->notify(
+              UIEventType::ack
+            );
 
             return true;
           }
@@ -5079,10 +4850,18 @@ public:
 
           if (_radio_config_menu == 6) {
 
-            _radio_value_index =
-              _node_prefs->rx_boosted_gain ? 1 : 0;
+            _node_prefs->rx_boosted_gain =
+              !_node_prefs->rx_boosted_gain;
 
-            _radio_value_edit = true;
+            the_mesh.savePrefs();
+
+            radio_driver.setRxBoostedGainMode(
+              _node_prefs->rx_boosted_gain
+            );
+
+            _task->notify(
+              UIEventType::ack
+            );
 
             return true;
           }

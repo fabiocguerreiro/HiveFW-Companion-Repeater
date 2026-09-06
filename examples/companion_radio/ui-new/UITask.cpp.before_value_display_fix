@@ -1671,150 +1671,76 @@ public:
           char value[32];
           value[0] = '\0';
 
-          // ------------------------------------------------------
-          // VALORES
-          //
-          // Durante a edição mostramos o valor candidato
-          // (_radio_value_index), e não o valor ainda gravado.
-          // ------------------------------------------------------
+          switch (_radio_config_menu) {
 
-          if (_radio_value_edit) {
-
-            if (_radio_config_menu == 1) {
-
-              const float bw_values[] = {
-                7.8f,
-                10.4f,
-                15.6f,
-                20.8f,
-                31.25f,
-                41.7f,
-                62.5f,
-                125.0f,
-                250.0f,
-                500.0f
-              };
-
+            case 0:
               snprintf(
                 value,
                 sizeof(value),
-                "%g Khz",
-                bw_values[_radio_value_index]
+                "%.3f",
+                _node_prefs->freq
               );
+              break;
 
-            } else if (_radio_config_menu == 2) {
+            case 1:
+              snprintf(
+                value,
+                sizeof(value),
+                "%g",
+                _node_prefs->bw
+              );
+              break;
 
+            case 2:
               snprintf(
                 value,
                 sizeof(value),
                 "%d",
-                5 + _radio_value_index
+                _node_prefs->sf
               );
+              break;
 
-            } else if (_radio_config_menu == 3) {
-
+            case 3:
               snprintf(
                 value,
                 sizeof(value),
                 "%d",
-                5 + _radio_value_index
+                _node_prefs->cr
               );
+              break;
 
-            } else if (_radio_config_menu == 5) {
-
+            case 4:
               snprintf(
                 value,
                 sizeof(value),
                 "%d",
-                _radio_value_index
+                _node_prefs->tx_power_dbm
               );
+              break;
 
-            } else if (_radio_config_menu == 6) {
+            case 5:
+              snprintf(
+                value,
+                sizeof(value),
+                "%d",
+                _node_prefs->path_hash_mode
+              );
+              break;
 
+            case 6:
               snprintf(
                 value,
                 sizeof(value),
                 "%s",
-                _radio_value_index
+                _node_prefs->rx_boosted_gain
                   ? "BOOSTED"
                   : "POWER SAVE"
               );
+              break;
 
-            }
-
-          } else {
-
-            switch (_radio_config_menu) {
-
-              case 0:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%.3f Mhz",
-                  _node_prefs->freq
-                );
-                break;
-
-              case 1:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%g Khz",
-                  _node_prefs->bw
-                );
-                break;
-
-              case 2:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->sf
-                );
-                break;
-
-              case 3:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->cr
-                );
-                break;
-
-              case 4:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->tx_power_dbm
-                );
-                break;
-
-              case 5:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%d",
-                  _node_prefs->path_hash_mode
-                );
-                break;
-
-              case 6:
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%s",
-                  _node_prefs->rx_boosted_gain
-                    ? "BOOSTED"
-                    : "POWER SAVE"
-                );
-                break;
-
-              case 7:
-                value[0] = '\0';
-                break;
-            }
+            case 7:
+              value[0] = '\0';
+              break;
           }
 
           display.setColor(UIColor::primary_txt);
