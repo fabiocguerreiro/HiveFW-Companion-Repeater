@@ -245,6 +245,66 @@ public:
   }
 };
 
+
+// ========================================================================
+// PRESETS MESHCORE — tabela única
+//
+// Esta tabela é usada pelo menu PRESETS para:
+//   - apresentar o nome
+//   - identificar o preset actualmente activo
+//   - aplicar frequência / BW / SF / CR
+//
+// TX POWER, PATH e RX GAIN não fazem parte do preset.
+// ========================================================================
+struct RadioPreset {
+  const char* name;
+  float freq;
+  float bw;
+  uint8_t sf;
+  uint8_t cr;
+};
+
+static const RadioPreset radio_presets[] = {
+  { "AUSTRALIA",             915.800f, 250.0f, 10, 5 },
+  { "AUSTRALIA NARROW",      916.575f,  62.5f,  7, 5 },
+  { "AUSTRALIA SA/WA/QLD",   923.125f,  62.5f,  8, 5 },
+  { "EU/UK NARROW",          869.618f,  62.5f,  8, 8 },
+  { "EU/UK LONG RANGE",      869.525f, 250.0f, 11, 5 },
+  { "EU/UK MEDIUM RANGE",    869.525f, 250.0f, 10, 5 },
+  { "CZECH REPUBLIC",        869.432f,  62.5f,  7, 5 },
+  { "EU 433MHZ",             433.650f, 250.0f, 11, 5 },
+  { "NEW ZEALAND",            917.375f, 250.0f, 11, 5 },
+  { "NEW ZEALAND NARROW",     917.375f,  62.5f,  7, 5 },
+  { "PORTUGAL 433",           433.375f,  62.5f,  9, 5 },
+  { "PORTUGAL 868",           869.618f,  62.5f,  7, 5 },
+  { "SWITZERLAND",            869.618f,  62.5f,  8, 8 },
+  { "USA/CANADA",             910.525f,  62.5f,  7, 5 },
+  { "VIETNAM",                920.250f, 250.0f, 11, 5 }
+};
+
+static const int RADIO_PRESET_COUNT =
+  sizeof(radio_presets) / sizeof(radio_presets[0]);
+
+static int findRadioPreset(
+  float freq,
+  float bw,
+  uint8_t sf,
+  uint8_t cr
+) {
+  for (int i = 0; i < RADIO_PRESET_COUNT; i++) {
+    if (
+      fabs(freq - radio_presets[i].freq) < 0.001f &&
+      fabs(bw - radio_presets[i].bw) < 0.01f &&
+      sf == radio_presets[i].sf &&
+      cr == radio_presets[i].cr
+    ) {
+      return i;
+    }
+  }
+
+  return -1;
+}
+
 class HomeScreen : public UIScreen {
   enum HomePage {
     FIRST,
@@ -373,7 +433,8 @@ class HomeScreen : public UIScreen {
   //   4 = TX POWER
   //   5 = PATH
   //   6 = RX GAIN
-  //   7 = [ SAIR ]
+  //   7 = PRESETS
+  //   8 = [ SAIR ]
   //
   // O MENU RÁDIO contém directamente a configuração.
   // ========================================================================
@@ -1472,6 +1533,7 @@ public:
           "TX POWER",
           "PATH",
           "RX GAIN",
+          "PRESETS",
           "[ SAIR ]"
         };
 
@@ -1479,93 +1541,13 @@ public:
         display.setTextSize(2);
 
         // ------------------------------------------------------
-        // EDITOR DE FREQUÊNCIA
-        // ------------------------------------------------------
-
-        if (_radio_freq_edit) {
-
-          char freq_text[16];
-
-          snprintf(
-            freq_text,
-            sizeof(freq_text),
-            "%d%d%d.%d%d%d",
-            _radio_freq_digits[0],
-            _radio_freq_digits[1],
-            _radio_freq_digits[2],
-            _radio_freq_digits[3],
-            _radio_freq_digits[4],
-            _radio_freq_digits[5]
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            38,
-            freq_text
-          );
-
-          display.setTextSize(1);
-
-          char pos[8];
-
-          snprintf(
-            pos,
-            sizeof(pos),
-            "%d/6",
-            _radio_freq_digit + 1
-          );
-
-          display.drawTextRightAlign(
-            display.width() - 2,
-            10,
-            pos
-          );
-
-        // ------------------------------------------------------
-        // EDITOR TX POWER
-        // ------------------------------------------------------
-
-        } else if (_radio_tx_edit) {
-
-          char tx_text[8];
-
-          snprintf(
-            tx_text,
-            sizeof(tx_text),
-            "%d%d",
-            _radio_tx_digits[0],
-            _radio_tx_digits[1]
-          );
-
-          display.drawTextCentered(
-            display.width() / 2,
-            38,
-            tx_text
-          );
-
-          display.setTextSize(1);
-
-          char pos[8];
-
-          snprintf(
-            pos,
-            sizeof(pos),
-            "%d/2",
-            _radio_tx_digit + 1
-          );
-
-          display.drawTextRightAlign(
-            display.width() - 2,
-            10,
-            pos
-          );
-
-        // ------------------------------------------------------
         // MENU
+        //
+        // FREQUÊNCIA e TX POWER também são editados directamente
+        // neste mesmo menu, tal como BW / SF / CR / PATH / RX GAIN.
         // ------------------------------------------------------
 
-        } else {
-
+        {
           const char* title =
             radio_items[_radio_menu];
 
@@ -1573,13 +1555,42 @@ public:
           value[0] = '\0';
 
           // ------------------------------------------------------
-          // VALORES
-          //
-          // Durante a edição mostramos o valor candidato
-          // (_radio_value_index), e não o valor ainda gravado.
+          // FREQUÊNCIA — valor candidato durante edição
           // ------------------------------------------------------
 
-          if (_radio_value_edit) {
+          if (_radio_freq_edit) {
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%d%d%d.%d%d%d Mhz",
+              _radio_freq_digits[0],
+              _radio_freq_digits[1],
+              _radio_freq_digits[2],
+              _radio_freq_digits[3],
+              _radio_freq_digits[4],
+              _radio_freq_digits[5]
+            );
+
+          // ------------------------------------------------------
+          // TX POWER — valor candidato durante edição
+          // ------------------------------------------------------
+
+          } else if (_radio_tx_edit) {
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%d%d",
+              _radio_tx_digits[0],
+              _radio_tx_digits[1]
+            );
+
+          // ------------------------------------------------------
+          // OUTROS VALORES — valor candidato durante edição
+          // ------------------------------------------------------
+
+          } else if (_radio_value_edit) {
 
             if (_radio_menu == 1) {
 
@@ -1623,11 +1634,16 @@ public:
 
             } else if (_radio_menu == 5) {
 
+              // PATH:
+              // 0 = 1 byte
+              // 1 = 2 bytes
+              // 2 = 3 bytes
               snprintf(
                 value,
                 sizeof(value),
-                "%d",
-                _radio_value_index
+                "%d byte%s",
+                _radio_value_index + 1,
+                (_radio_value_index + 1) == 1 ? "" : "s"
               );
 
             } else if (_radio_menu == 6) {
@@ -1639,6 +1655,33 @@ public:
                 _radio_value_index
                   ? "BOOSTED"
                   : "POWER SAVE"
+              );
+
+            } else if (_radio_menu == 7) {
+
+              static const char* preset_names[] = {
+                "AUSTRALIA",
+                "AUSTRALIA NARROW",
+                "AUSTRALIA SA/WA/QLD",
+                "EU/UK NARROW",
+                "EU/UK LONG RANGE",
+                "EU/UK MEDIUM RANGE",
+                "CZECH REPUBLIC",
+                "EU 433MHZ",
+                "NEW ZEALAND",
+                "NEW ZEALAND NARROW",
+                "PORTUGAL 433",
+                "PORTUGAL 868",
+                "SWITZERLAND",
+                "USA/CANADA",
+                "VIETNAM"
+              };
+
+              snprintf(
+                value,
+                sizeof(value),
+                "%s",
+                preset_names[_radio_value_index]
               );
 
             }
@@ -1696,8 +1739,9 @@ public:
                 snprintf(
                   value,
                   sizeof(value),
-                  "%d",
-                  _node_prefs->path_hash_mode
+                  "%d byte%s",
+                  _node_prefs->path_hash_mode + 1,
+                  (_node_prefs->path_hash_mode + 1) == 1 ? "" : "s"
                 );
                 break;
 
@@ -1712,7 +1756,33 @@ public:
                 );
                 break;
 
-              case 7:
+              case 7: {
+                int preset_index = findRadioPreset(
+                  _node_prefs->freq,
+                  _node_prefs->bw,
+                  _node_prefs->sf,
+                  _node_prefs->cr
+                );
+
+                if (preset_index >= 0) {
+                  snprintf(
+                    value,
+                    sizeof(value),
+                    "%s",
+                    radio_presets[preset_index].name
+                  );
+                } else {
+                  snprintf(
+                    value,
+                    sizeof(value),
+                    "PERSONALIZADO"
+                  );
+                }
+
+                break;
+              }
+
+              case 8:
                 value[0] = '\0';
                 break;
             }
@@ -1721,6 +1791,7 @@ public:
           display.setColor(UIColor::primary_txt);
           display.setTextSize(2);
 
+          // Título do item — centrado horizontalmente
           drawSelectedMenuText(
             display,
             display.width() / 2,
@@ -1728,7 +1799,7 @@ public:
             title
           );
 
-          if (_radio_menu != 7) {
+          if (_radio_menu != 8) {
 
             display.setTextSize(1);
 
@@ -1738,30 +1809,57 @@ public:
               value
             );
 
-            if (_radio_value_edit) {
+            if (
+              _radio_freq_edit ||
+              _radio_tx_edit ||
+              _radio_value_edit
+            ) {
 
               char pos[8];
 
-              int total = 1;
+              if (_radio_freq_edit) {
 
-              if (_radio_menu == 1)
-                total = 10;
-              else if (_radio_menu == 2)
-                total = 8;
-              else if (_radio_menu == 3)
-                total = 4;
-              else if (_radio_menu == 5)
-                total = 3;
-              else if (_radio_menu == 6)
-                total = 2;
+                snprintf(
+                  pos,
+                  sizeof(pos),
+                  "%d/6",
+                  _radio_freq_digit + 1
+                );
 
-              snprintf(
-                pos,
-                sizeof(pos),
-                "%d/%d",
-                _radio_value_index + 1,
-                total
-              );
+              } else if (_radio_tx_edit) {
+
+                snprintf(
+                  pos,
+                  sizeof(pos),
+                  "%d/2",
+                  _radio_tx_digit + 1
+                );
+
+              } else {
+
+                int total = 1;
+
+                if (_radio_menu == 1)
+                  total = 10;
+                else if (_radio_menu == 2)
+                  total = 8;
+                else if (_radio_menu == 3)
+                  total = 4;
+                else if (_radio_menu == 5)
+                  total = 3;
+                else if (_radio_menu == 6)
+                  total = 2;
+                else if (_radio_menu == 7)
+                  total = 15;
+
+                snprintf(
+                  pos,
+                  sizeof(pos),
+                  "%d/%d",
+                  _radio_value_index + 1,
+                  total
+                );
+              }
 
               display.drawTextRightAlign(
                 display.width() - 2,
@@ -1872,16 +1970,26 @@ public:
       // ======================================================
       // MP-04.3 — INFO REPETIDOR
       //
-      // Selector das 5 estatísticas.
+      // Estatísticas do repetidor.
+      //
+      //  1/12  RSSI
+      //  2/12  SNR
+      //  3/12  TX AIRTIME
+      //  4/12  RX AIRTIME
+      //  5/12  UPTIME
+      //  6/12  BATERIA
+      //  7/12  NOISE FLOOR
+      //  8/12  PACOTES RX
+      //  9/12  PACOTES TX
+      // 10/12  RX ERRORS
+      // 11/12  FLOOD RX/TX
+      // 12/12  DIRECT RX/TX
+      //
+      // Uma única designação por página.
       // ======================================================
 
       else if (_repeater_info_submenu) {
 
-
-
-        // ----------------------------------------------------
-        // Estatísticas do REPETIDOR
-        // ----------------------------------------------------
         display.setColor(UIColor::secondary_txt);
         display.setTextSize(1);
 
@@ -1890,7 +1998,7 @@ public:
         snprintf(
           repeater_counter,
           sizeof(repeater_counter),
-          "%d/5",
+          "%d/12",
           (int)(_repeater_stats_page + 1)
         );
 
@@ -1903,16 +2011,16 @@ public:
         display.setColor(UIColor::primary_txt);
         display.setTextSize(1);
 
+        char title[24];
         char value[40];
+
+        title[0] = '\0';
+        value[0] = '\0';
 
         switch (_repeater_stats_page) {
 
-          case 0: {
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "RSSI"
-            );
+          case 0:
+            snprintf(title, sizeof(title), "RSSI");
 
             snprintf(
               value,
@@ -1920,33 +2028,24 @@ public:
               "%d dBm",
               (int)the_mesh.getRepeaterRSSI()
             );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "LAST RSSI"
-            );
-
             break;
-          }
 
-          case 1: {
-            uint32_t ms = the_mesh.getRepeaterTXAirtime();
-            uint32_t seconds = ms / 1000;
+          case 1:
+            snprintf(title, sizeof(title), "SNR");
 
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "ATIVIDADE TX"
+            snprintf(
+              value,
+              sizeof(value),
+              "%.2f dB",
+              (float)radio_driver.getLastSNR()
             );
+            break;
+
+          case 2: {
+            uint32_t seconds =
+              the_mesh.getRepeaterTXAirtime() / 1000;
+
+            snprintf(title, sizeof(title), "TX AIRTIME");
 
             snprintf(
               value,
@@ -1954,61 +2053,92 @@ public:
               "%lus",
               (unsigned long)seconds
             );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "TX AIRTIME"
-            );
-
-            break;
-          }
-
-          case 2: {
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "MENSAGENS OUT"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%lu",
-              (unsigned long)the_mesh.getRepeaterMessagesOut()
-            );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "TRANSMITIDAS"
-            );
-
             break;
           }
 
           case 3: {
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "MENSAGENS IN"
+            uint32_t seconds =
+              the_mesh.getReceiveAirTime() / 1000;
+
+            snprintf(title, sizeof(title), "RX AIRTIME");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lus",
+              (unsigned long)seconds
             );
+            break;
+          }
+
+          case 4: {
+            uint32_t seconds =
+              millis() / 1000;
+
+            uint32_t days = seconds / 86400;
+            seconds %= 86400;
+
+            uint32_t hours = seconds / 3600;
+            seconds %= 3600;
+
+            uint32_t minutes = seconds / 60;
+            seconds %= 60;
+
+            snprintf(title, sizeof(title), "UPTIME");
+
+            if (days > 0) {
+              snprintf(
+                value,
+                sizeof(value),
+                "%lud %luh",
+                (unsigned long)days,
+                (unsigned long)hours
+              );
+            } else if (hours > 0) {
+              snprintf(
+                value,
+                sizeof(value),
+                "%luh %lum",
+                (unsigned long)hours,
+                (unsigned long)minutes
+              );
+            } else {
+              snprintf(
+                value,
+                sizeof(value),
+                "%lum %lus",
+                (unsigned long)minutes,
+                (unsigned long)seconds
+              );
+            }
+
+            break;
+          }
+
+          case 5:
+            snprintf(title, sizeof(title), "BATERIA");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%.2f V",
+              (float)board.getBattMilliVolts() / 1000.0f
+            );
+            break;
+
+          case 6:
+            snprintf(title, sizeof(title), "NOISE FLOOR");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%d dBm",
+              (int)radio_driver.getNoiseFloor()
+            );
+            break;
+
+          case 7:
+            snprintf(title, sizeof(title), "PACOTES RX");
 
             snprintf(
               value,
@@ -2016,48 +2146,68 @@ public:
               "%lu",
               (unsigned long)the_mesh.getRepeaterMessagesIn()
             );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              value
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "RECEBIDAS"
-            );
-
             break;
-          }
 
-          case 4: {
-            display.drawTextCentered(
-              display.width() / 2,
-              18,
-              "LOCALIZAÇÃO"
+          case 8:
+            snprintf(title, sizeof(title), "PACOTES TX");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu",
+              (unsigned long)the_mesh.getRepeaterMessagesOut()
             );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              39,
-              "GPS"
-            );
-
-            display.drawTextCentered(
-              display.width() / 2,
-              60,
-              "LOCALIZAÇÃO"
-            );
-
             break;
-          }
+
+          case 9:
+            snprintf(title, sizeof(title), "RX ERRORS");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu",
+              (unsigned long)radio_driver.getPacketsRecvErrors()
+            );
+            break;
+
+          case 10:
+            snprintf(title, sizeof(title), "FLOOD RX/TX");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu/%lu",
+              (unsigned long)the_mesh.getNumRecvFlood(),
+              (unsigned long)the_mesh.getNumSentFlood()
+            );
+            break;
+
+          case 11:
+            snprintf(title, sizeof(title), "DIRECT RX/TX");
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%lu/%lu",
+              (unsigned long)the_mesh.getNumRecvDirect(),
+              (unsigned long)the_mesh.getNumSentDirect()
+            );
+            break;
         }
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          28,
+          title
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          49,
+          value
+        );
 
         display.setTextSize(1);
       }
@@ -4285,29 +4435,6 @@ public:
 
       if (_radio_submenu) {
 
-        if (c == KEY_NEXT || c == KEY_RIGHT) {
-
-          _radio_menu = (_radio_menu + 1) % 8;
-
-          return true;
-        }
-
-        if (c == KEY_PREV || c == KEY_LEFT) {
-
-          _radio_menu = (_radio_menu + 7) % 8;
-
-          return true;
-        }
-
-        if (c == KEY_CANCEL || c == KEY_SELECT) {
-
-          _radio_menu = 0;
-          _radio_submenu = false;
-
-          return true;
-        }
-
-
         // ======================================================
         // EDITOR DE FREQUÊNCIA
         // ======================================================
@@ -4599,6 +4726,8 @@ public:
             total = 3;
           else if (_radio_menu == 6)
             total = 2;
+          else if (_radio_menu == 7)
+            total = 15;
 
           if (
             c == KEY_NEXT ||
@@ -4686,9 +4815,59 @@ public:
               radio_driver.setRxBoostedGainMode(
                 _node_prefs->rx_boosted_gain
               );
+
+            } else if (_radio_menu == 7) {
+
+              // ==================================================
+              // PRESETS MESHCORE
+              //
+              // 0  AUSTRALIA
+              // 1  AUSTRALIA NARROW
+              // 2  AUSTRALIA SA/WA/QLD
+              // 3  EU/UK NARROW
+              // 4  EU/UK LONG RANGE
+              // 5  EU/UK MEDIUM RANGE
+              // 6  CZECH REPUBLIC
+              // 7  EU 433MHZ
+              // 8  NEW ZEALAND
+              // 9  NEW ZEALAND NARROW
+              // 10 PORTUGAL 433
+              // 11 PORTUGAL 868
+              // 12 SWITZERLAND
+              // 13 USA/CANADA
+              // 14 VIETNAM
+              //
+              // TX POWER / PATH / RX GAIN não são alterados.
+              // ==================================================
+
+              _node_prefs->freq =
+                radio_presets[_radio_value_index].freq;
+
+              _node_prefs->bw =
+                radio_presets[_radio_value_index].bw;
+
+              _node_prefs->sf =
+                radio_presets[_radio_value_index].sf;
+
+              _node_prefs->cr =
+                radio_presets[_radio_value_index].cr;
+
+              radio_driver.setParams(
+                _node_prefs->freq,
+                _node_prefs->bw,
+                _node_prefs->sf,
+                _node_prefs->cr
+              );
             }
 
             the_mesh.savePrefs();
+
+            if (_radio_menu == 7) {
+              _task->showAlert(
+                "Preset Selecionado",
+                1000
+              );
+            }
 
             _radio_value_edit = false;
             _radio_value_index = 0;
@@ -4721,7 +4900,7 @@ public:
         ) {
 
           _radio_menu =
-            (_radio_menu + 1) % 8;
+            (_radio_menu + 1) % 9;
 
           return true;
         }
@@ -4732,7 +4911,7 @@ public:
         ) {
 
           _radio_menu =
-            (_radio_menu + 7) % 8;
+            (_radio_menu + 8) % 9;
 
           return true;
         }
@@ -4924,10 +5103,35 @@ public:
           }
 
           // ----------------------------------------------------
-          // SAIR
+          // PRESETS
           // ----------------------------------------------------
 
           if (_radio_menu == 7) {
+
+            _radio_value_index = 0;
+
+            // Começa pelo preset que corresponde à configuração actual.
+            int current_preset = findRadioPreset(
+              _node_prefs->freq,
+              _node_prefs->bw,
+              _node_prefs->sf,
+              _node_prefs->cr
+            );
+
+            if (current_preset >= 0) {
+              _radio_value_index = current_preset;
+            }
+
+            _radio_value_edit = true;
+
+            return true;
+          }
+
+          // ----------------------------------------------------
+          // SAIR
+          // ----------------------------------------------------
+
+          if (_radio_menu == 8) {
 
             _radio_submenu = false;
             _radio_menu = 0;
@@ -5114,7 +5318,7 @@ public:
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
           _repeater_stats_page =
-            (_repeater_stats_page + 1) % 5;
+            (_repeater_stats_page + 1) % 12;
 
           return true;
         }
@@ -5122,7 +5326,7 @@ public:
         if (c == KEY_PREV || c == KEY_LEFT) {
 
           _repeater_stats_page =
-            (_repeater_stats_page + 4) % 5;
+            (_repeater_stats_page + 11) % 12;
 
           return true;
         }
