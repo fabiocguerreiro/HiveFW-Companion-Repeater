@@ -130,7 +130,7 @@ build_firmware() {
   COMMIT_HASH=$(git rev-parse --short HEAD)
 
   # set firmware build date
-  FIRMWARE_BUILD_DATE=$(date '+%d-%b-%Y')
+  FIRMWARE_BUILD_DATE=$(LC_ALL=C date '+%b %d %Y')
 
   # get firmware version from VERSION as the single source of truth.
   # An explicit FIRMWARE_VERSION environment variable still overrides it.
