@@ -1,4 +1,8 @@
 #include "UITask.h"
+
+#if defined(NRF52) || defined(NRF52_SERIES)
+#include <bluefruit.h>
+#endif
 #include <helpers/TxtDataHelpers.h>
 #include "../MyMesh.h"
 #include "target.h"
@@ -1414,13 +1418,16 @@ public:
       // ======================================================
       // MP-03.3 — INFORMAÇÃO
       //
-      // 1/4  NOME BLE
-      // 2/4  CLIENTE BLE
-      // 3/4  FIRMWARE
-      // 4/4  VERSÃO
+      // 1/6  NOME BLE
+      // 2/6  SMARTPHONE
+      // 3/6  NOME DO NO
+      // 4/6  MODO
+      // 5/6  FIRMWARE
+      // 6/6  VERSÃO
       //
-      // O nome do smartphone não é disponibilizado pela
-      // interface atual; mostramos apenas a ligação real.
+      // No T114/nRF52 tentamos ler o Device Name BLE
+      // anunciado pelo smartphone através de getPeerName().
+      // Se o peer não disponibilizar nome, mostramos SEM NOME.
       // ======================================================
 
       if (_companion_info_submenu) {
@@ -1432,7 +1439,7 @@ public:
         snprintf(
           counter,
           sizeof(counter),
-          "%d/4",
+          "%d/6",
           (int)(_companion_info_page + 1)
         );
 
@@ -1452,6 +1459,10 @@ public:
 
         switch (_companion_info_page) {
 
+          // ==================================================
+          // 1/6 — NOME BLE DO COMPANION
+          // ==================================================
+
           case 0:
             snprintf(
               title,
@@ -1468,24 +1479,135 @@ public:
             );
             break;
 
-          case 1:
+          // ==================================================
+          // 2/6 — SMARTPHONE / CENTRAL BLE
+          // ==================================================
+
+          case 1: {
             snprintf(
               title,
               sizeof(title),
-              "CLIENTE BLE"
+              "SMARTPHONE"
+            );
+
+            if (!_task->hasConnection()) {
+              snprintf(
+                value,
+                sizeof(value),
+                "NAO LIGADO"
+              );
+              break;
+            }
+
+#if defined(NRF52) || defined(NRF52_SERIES)
+
+            char peer_name[32] = { 0 };
+
+            uint16_t conn_handle =
+              Bluefruit.connHandle();
+
+            BLEConnection* connection =
+              Bluefruit.Connection(conn_handle);
+
+            if (connection != nullptr &&
+                connection->connected()) {
+
+              uint16_t peer_len =
+                connection->getPeerName(
+                  peer_name,
+                  sizeof(peer_name)
+                );
+
+              peer_name[
+                sizeof(peer_name) - 1
+              ] = '\0';
+
+              if (peer_len > 0 &&
+                  peer_name[0] != '\0') {
+
+                snprintf(
+                  value,
+                  sizeof(value),
+                  "%s",
+                  peer_name
+                );
+
+              } else {
+
+                snprintf(
+                  value,
+                  sizeof(value),
+                  "SEM NOME"
+                );
+              }
+
+            } else {
+
+              snprintf(
+                value,
+                sizeof(value),
+                "N/D"
+              );
+            }
+
+#else
+
+            snprintf(
+              value,
+              sizeof(value),
+              "N/D"
+            );
+
+#endif
+
+            break;
+          }
+
+          // ==================================================
+          // 3/6 — NOME DO NÓ
+          // ==================================================
+
+          case 2:
+            snprintf(
+              title,
+              sizeof(title),
+              "NOME DO NO"
             );
 
             snprintf(
               value,
               sizeof(value),
               "%s",
-              _task->hasConnection()
-                ? "LIGADO"
-                : "NAO LIGADO"
+              the_mesh.getNodePrefs()->node_name
             );
             break;
 
-          case 2:
+          // ==================================================
+          // 4/6 — MODO ATUAL
+          // ==================================================
+
+          case 3:
+            snprintf(
+              title,
+              sizeof(title),
+              "MODO"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%s",
+              the_mesh.getNodePrefs()->isRepeatEn()
+                ? "REPETIDOR"
+                : "COMPANION"
+            );
+            break;
+
+          // ==================================================
+          // 5/6 — FIRMWARE
+          // ==================================================
+
+          case 4:
             snprintf(
               title,
               sizeof(title),
@@ -1499,7 +1621,11 @@ public:
             );
             break;
 
-          case 3:
+          // ==================================================
+          // 6/6 — VERSÃO
+          // ==================================================
+
+          case 5:
           default:
             snprintf(
               title,
@@ -5478,13 +5604,13 @@ public:
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
           _companion_info_page =
-            (_companion_info_page + 1) % 4;
+            (_companion_info_page + 1) % 6;
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
           _companion_info_page =
-            (_companion_info_page + 3) % 4;
+            (_companion_info_page + 5) % 6;
           return true;
         }
 
