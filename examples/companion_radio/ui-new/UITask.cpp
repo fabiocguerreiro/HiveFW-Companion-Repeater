@@ -67,14 +67,16 @@
 //   ├── INFO REPETIDOR
 //   └── [ SAIR ]
 //
-// MP-06 — APLICAÇÕES
+// MP-06 — SOS
+//   └── ENTER -> confirmação e envio SOS
+//
+// MP-07 — APLICAÇÕES
 //   ├── HOME ASSISTANT
 //   ├── GPS / SENSORES (quando disponíveis)
 //   ├── RELÓGIO
-//   ├── SOS
 //   └── [ SAIR ]
 //
-// MP-07 — DEFINIÇÕES
+// MP-08 — DEFINIÇÕES
 //   ├── BLUETOOTH
 //   ├── ANUNCIAR NÓ
 //   ├── CANAL APPS
@@ -84,7 +86,7 @@
 //
 // NAVEGAÇÃO:
 // FIRST → RECENTES → MENSAGENS → COMPANION → RÁDIO
-//       → REPETIDOR → APLICAÇÕES → DEFINIÇÕES → FIRST
+//       → REPETIDOR → SOS → APLICAÇÕES → DEFINIÇÕES → FIRST
 //
 // ============================================================================
 // FIM DO MAPA OFICIAL DA ESTRUTURA DO MENU
@@ -339,6 +341,7 @@ class HomeScreen : public UIScreen {
     COMPANION,
     RADIO,
     REPETIDOR,
+    SOS,
     APPS,
     SETTINGS,
     Count,    // keep as last
@@ -462,7 +465,6 @@ class HomeScreen : public UIScreen {
     APPS_SENSORS,
 #endif
     APPS_CLOCK,
-    APPS_SOS,
     APPS_EXIT,
     APPS_MENU_COUNT
   };
@@ -1458,6 +1460,76 @@ public:
     );
   }
 
+  void renderSOSHome(
+    DisplayDriver& display
+  ) {
+    const int centerX =
+      display.width() / 2;
+
+    const int frameX =
+      centerX - 38;
+
+    const int frameY = 20;
+    const int frameW = 76;
+    const int frameH = 29;
+
+    // Moldura do logótipo SOS.
+    display.setColor(
+      UIColor::corp_blue
+    );
+
+    display.fillRect(
+      frameX,
+      frameY,
+      frameW,
+      2
+    );
+
+    display.fillRect(
+      frameX,
+      frameY + frameH - 2,
+      frameW,
+      2
+    );
+
+    display.fillRect(
+      frameX,
+      frameY,
+      2,
+      frameH
+    );
+
+    display.fillRect(
+      frameX + frameW - 2,
+      frameY,
+      2,
+      frameH
+    );
+
+    // SOS grande integrado no logótipo.
+    display.setTextSize(3);
+
+    display.drawTextCentered(
+      centerX,
+      23,
+      "SOS"
+    );
+
+    // Título normal da página.
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    display.setTextSize(1);
+
+    display.drawTextCentered(
+      centerX,
+      55,
+      "SOS"
+    );
+  }
+
+
   int render(DisplayDriver& display) override {
     display.setColor(UIColor::title_bkg);
     display.fillRect(0, 0, display.width(), 12);
@@ -1485,7 +1557,7 @@ public:
     // INDICADOR DO MENU PRINCIPAL
     //
     // FIRST / RECENTES / MENSAGENS / COMPANION
-    // RÁDIO / REPETIDOR / APLICAÇÕES / DEFINIÇÕES
+    // RÁDIO / REPETIDOR / SOS / APLICAÇÕES / DEFINIÇÕES
     //
     // HomePage::Count é a fonte única do número de páginas visíveis.
     // ====================================================================
@@ -3151,6 +3223,46 @@ public:
       else sensors_scroll_offset = 0;
 #endif
 
+    } else if (_page == HomePage::SOS) {
+
+      // ======================================================
+      // MP-06 — SOS
+      // ======================================================
+
+      if (
+        _apps_view == APPS_VIEW_SOS &&
+        _sos_submenu &&
+        _sos_confirm_submenu
+      ) {
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          18,
+          "QUER ENVIAR?"
+        );
+
+        const char* sos_confirm_items[] = {
+          "SIM",
+          "NÃO"
+        };
+
+        drawMenuSelection(
+          display,
+          sos_confirm_items[_sos_menu],
+          40
+        );
+
+      } else {
+
+        renderSOSHome(display);
+      }
+
     } else if (_page == HomePage::APPS) {
 
       // ======================================================
@@ -3415,35 +3527,6 @@ public:
       }
 
       // ------------------------------------------------------
-      // APLICAÇÕES -> SOS
-      // ------------------------------------------------------
-
-      else if (!_apps_submenu &&
-               _apps_view == APPS_VIEW_SOS &&
-               _sos_confirm_submenu) {
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          18,
-          "QUER ENVIAR?"
-        );
-
-        const char* sos_confirm_items[] = {
-          "SIM",
-          "NÃO"
-        };
-
-        drawMenuSelection(
-          display,
-          sos_confirm_items[_sos_menu],
-          40
-        );
-      }
-
-      // ------------------------------------------------------
       // APLICAÇÕES -> PÁGINA PRINCIPAL
       // ------------------------------------------------------
 
@@ -3474,7 +3557,6 @@ public:
           "SENSORES",
 #endif
           "RELÓGIO",
-          "SOS",
           "[ SAIR ]"
         };
 
@@ -4770,16 +4852,6 @@ public:
             _page = HomePage::INTERNAL_CLOCK;
             return true;
 
-          case APPS_SOS:
-            _apps_submenu = false;
-            _apps_view = APPS_VIEW_SOS;
-            _apps_return = true;
-
-            _sos_submenu = true;
-            _sos_confirm_submenu = true;
-            _sos_menu = 0;
-            return true;
-
           case APPS_EXIT:
             _apps_submenu = false;
             _apps_menu = 0;
@@ -4796,11 +4868,10 @@ public:
     }
 
     // --------------------------------------------------------
-    // APLICAÇÕES -> SOS
+    // SOS — lógica interna APPS_VIEW_SOS
     // --------------------------------------------------------
 
-    if (_page == HomePage::APPS &&
-        !_apps_submenu &&
+    if (_page == HomePage::SOS &&
         _apps_view == APPS_VIEW_SOS &&
         _sos_submenu) {
 
@@ -6730,6 +6801,25 @@ public:
     }
 
     // ========================================================
+    // ========================================================
+    // ENTER SOS
+    // ========================================================
+
+    if (c == KEY_ENTER && _page == HomePage::SOS) {
+
+      // Mantemos a infraestrutura SOS existente.
+      _apps_submenu = false;
+      _apps_menu = 0;
+      _apps_view = APPS_VIEW_SOS;
+      _apps_return = true;
+
+      _sos_submenu = true;
+      _sos_confirm_submenu = true;
+      _sos_menu = 0;
+
+      return true;
+    }
+
     // ========================================================
     // ENTER APLICAÇÕES
     // ========================================================
