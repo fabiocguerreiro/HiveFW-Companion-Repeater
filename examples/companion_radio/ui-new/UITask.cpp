@@ -995,6 +995,34 @@ public:
     display.drawTextCentered(centerX, y, text);
   }
 
+  inline void drawMenuItemText(
+    DisplayDriver& display,
+    const char* text,
+    int margin
+  ) {
+    const char* space = strchr(text, ' ');
+
+    if (space && display.getTextWidth(text) > display.width() - margin) {
+      char line1[32];
+      char line2[32];
+      size_t n = space - text;
+
+      if (n >= sizeof(line1))
+        n = sizeof(line1) - 1;
+
+      memcpy(line1, text, n);
+      line1[n] = '\0';
+
+      strncpy(line2, space + 1, sizeof(line2) - 1);
+      line2[sizeof(line2) - 1] = '\0';
+
+      display.drawTextCentered(display.width() / 2, 29, line1);
+      display.drawTextCentered(display.width() / 2, 47, line2);
+    } else {
+      display.drawTextCentered(display.width() / 2, 38, text);
+    }
+  }
+
   void renderSectionHome(
     DisplayDriver& display,
     const uint8_t* icon,
@@ -2104,32 +2132,7 @@ public:
         display.setTextSize(2);
 
         const char* text = repeater_items[_repeater_menu];
-        const char* space = strchr(text, ' ');
-
-        if (space && display.getTextWidth(text) > display.width() - 32) {
-          char line1[32];
-          char line2[32];
-          size_t n = space - text;
-
-          if (n >= sizeof(line1))
-            n = sizeof(line1) - 1;
-
-          memcpy(line1, text, n);
-          line1[n] = '\0';
-
-          strncpy(line2, space + 1, sizeof(line2) - 1);
-          line2[sizeof(line2) - 1] = '\0';
-
-          drawSelectedMenuText(display, display.width() / 2, 29, line1);
-          drawSelectedMenuText(display, display.width() / 2, 47, line2);
-        } else {
-          drawSelectedMenuText(
-            display,
-            display.width() / 2,
-            38,
-            text
-          );
-        }
+        drawMenuItemText(display, text, 32);
 
       }
 
@@ -2687,32 +2690,7 @@ public:
         display.setTextSize(2);
 
         const char* text = settings_items[_settings_menu];
-        const char* space = strchr(text, ' ');
-
-        if (space && display.getTextWidth(text) > display.width() - 10) {
-          char line1[32];
-          char line2[32];
-          size_t n = space - text;
-
-          if (n >= sizeof(line1))
-            n = sizeof(line1) - 1;
-
-          memcpy(line1, text, n);
-          line1[n] = '\0';
-
-          strncpy(line2, space + 1, sizeof(line2) - 1);
-          line2[sizeof(line2) - 1] = '\0';
-
-          drawSelectedMenuText(display, display.width() / 2, 29, line1);
-          drawSelectedMenuText(display, display.width() / 2, 47, line2);
-        } else {
-          drawSelectedMenuText(
-            display,
-            display.width() / 2,
-            38,
-            text
-          );
-        }
+        drawMenuItemText(display, text, 10);
       }
 
 #if ENV_INCLUDE_GPS == 1
@@ -3186,32 +3164,7 @@ public:
         display.setTextSize(2);
 
         const char* text = apps_items[_apps_menu];
-      const char* space = strchr(text, ' ');
-
-      if (space && display.getTextWidth(text) > display.width() - 32) {
-        char line1[32];
-        char line2[32];
-        size_t n = space - text;
-
-        if (n >= sizeof(line1))
-          n = sizeof(line1) - 1;
-
-        memcpy(line1, text, n);
-        line1[n] = '\0';
-
-        strncpy(line2, space + 1, sizeof(line2) - 1);
-        line2[sizeof(line2) - 1] = '\0';
-
-        drawSelectedMenuText(display, display.width() / 2, 29, line1);
-        drawSelectedMenuText(display, display.width() / 2, 47, line2);
-      } else {
-        drawSelectedMenuText(
-          display,
-          display.width() / 2,
-          38,
-          text
-        );
-      }
+        drawMenuItemText(display, text, 32);
       }
 
     } else if (_page == HomePage::INTERNAL_HOME_ASSISTANT) {
