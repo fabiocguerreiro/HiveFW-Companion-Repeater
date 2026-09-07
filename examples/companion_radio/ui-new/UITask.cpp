@@ -1005,7 +1005,8 @@ public:
   inline void drawMenuSelection(
     DisplayDriver& display,
     const char* text,
-    int y = 38
+    int y = 38,
+    int text_offset_x = 8
   ) {
     const int centerX = display.width() / 2;
 
@@ -1017,7 +1018,7 @@ public:
 
     drawSelectedMenuText(
       display,
-      centerX + 8,
+      centerX + text_offset_x,
       y,
       text
     );
@@ -1222,17 +1223,11 @@ public:
         "[ SAIR ]"
       };
 
-      display.drawTextCentered(
-        display.width() / 2 - 42,
-        40,
-        ">"
-      );
-
-      drawSelectedMenuText(
+      drawMenuSelection(
         display,
-        display.width() / 2,
+        items[_sms_new_menu],
         40,
-        items[_sms_new_menu]
+        0
       );
 
     // ========================================================
@@ -1253,17 +1248,11 @@ public:
         "[ SAIR ]"
       };
 
-      display.drawTextCentered(
-        display.width() / 2 - 42,
-        40,
-        ">"
-      );
-
-      drawSelectedMenuText(
+      drawMenuSelection(
         display,
-        display.width() / 2,
+        items[_sms_target_menu],
         40,
-        items[_sms_target_menu]
+        0
       );
 
     // ========================================================
@@ -1404,17 +1393,10 @@ public:
         "SAIR"
       };
 
-      display.drawTextCentered(
-        display.width() / 2 - 42,
-        40,
-        ">"
-      );
-
-      drawSelectedMenuText(
+      drawMenuSelection(
         display,
-        display.width() / 2 + 8,
-        40,
-        actions[_sms_action_menu]
+        actions[_sms_action_menu],
+        40
       );
 
     } else if (_sms_new_stage == 5) {
@@ -1460,17 +1442,10 @@ public:
         "NÃO"
       };
 
-      display.drawTextCentered(
-        display.width() / 2 - 42,
-        54,
-        ">"
-      );
-
-      drawSelectedMenuText(
+      drawMenuSelection(
         display,
-        display.width() / 2 + 8,
-        54,
-        confirms[_sms_confirm]
+        confirms[_sms_confirm],
+        54
       );
 
     // ========================================================
