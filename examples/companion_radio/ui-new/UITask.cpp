@@ -41,81 +41,51 @@
 // ============================================================================
 //
 // MP-00 — FIRST
-//   └── Página inicial
-//
 // MP-01 — RECENTES
-//   └── Anúncios recentes
-//
 // MP-02 — MENSAGENS
-//   ├── Página principal
-//   ├── Nova mensagem
-//   │   ├── Contactos
-//   │   ├── Canais
-//   │   ├── Presets
-//   │   └── [ SAIR ]
-//   ├── Caixa de entrada
-//   │   └── Histórico de mensagens
-//   └── [ SAIR ]
 //
-// MP-03 — RÁDIO
-//   ├── Página RÁDIO
-//   │   └── ENTER → MENU RÁDIO
-//   └── MENU RÁDIO
-//       ├── FREQUÊNCIA
-//       ├── BANDWIDTH
-//       ├── SPREADING FACTOR
-//       ├── CODING RATE
-//       ├── TX POWER
-//       ├── PATH
-//       ├── RX GAIN
-//       └── [ SAIR ] → MENSAGENS
-//
-// MP-04 — REPETIDOR
-//   ├── Página REPETIDOR
-//   │   └── Logo standard 64x32
-//   │       └── ENTER → MENU REPETIDOR
-//   ├── MENU REPETIDOR
-//   │   ├── REPETIDOR
-//   │   │   └── ON/OFF
-//   │   ├── AUTOADVERT
-//   │   │   └── ON/OFF
-//   │   ├── INFO REPETIDOR
-//   │   │   └── Selector de estatísticas
-//   │   │       ├── RSSI
-//   │   │       ├── TX Airtime
-//   │   │       ├── Messages OUT
-//   │   │       ├── Messages IN
-//   │   │       └── Location
-//   │   └── [ SAIR ] → RÁDIO
-//
-// MP-05 — APLICAÇÕES
-//   ├── HOME ASSISTANT
-//   ├── GPS              (quando disponível)
-//   ├── SENSORES         (quando disponível)
-//   ├── RELÓGIO
+// MP-03 — COMPANION
+//   ├── INFO COMPANION
+//   │   ├── BLE / BATERIA / VOLTAGEM / UPTIME
+//   │   ├── ADVERT TX / ADVERT RX
+//   │   ├── NOME BLE / SMARTPHONE / NOME DO NO
+//   │   └── MODO / FIRMWARE / VERSAO
 //   ├── DESCOBRIR REPETIDORES
-//   │   └── Descoberta activa
-//   │       ├── Resultado X/Y
-//   │       ├── Nome
-//   │       ├── Chave
-//   │       ├── Tipo
-//   │       └── SNR
 //   ├── REPETIDORES DESCOBERTOS
-//   │   └── Lista de descobertos
 //   └── [ SAIR ]
 //
-// MP-06 — DEFINIÇÕES
+// MP-04 — RÁDIO
+//   ├── FREQUÊNCIA / BANDWIDTH / SPREADING FACTOR
+//   ├── CODING RATE / TX POWER / PATH / RX GAIN
+//   ├── PRESETS
+//   └── [ SAIR ]
+//
+// MP-05 — REPETIDOR
+//   ├── REPETIDOR
+//   ├── AUTOADVERT
+//   ├── VIZINHOS
+//   ├── INFO REPETIDOR
+//   └── [ SAIR ]
+//
+// MP-06 — APLICAÇÕES
+//   ├── HOME ASSISTANT
+//   ├── GPS / SENSORES (quando disponíveis)
+//   ├── RELÓGIO
+//   ├── SOS
+//   └── [ SAIR ]
+//
+// MP-07 — DEFINIÇÕES
 //   ├── BLUETOOTH
 //   ├── ANUNCIAR NÓ
+//   ├── CANAL APPS
+//   ├── GPS (quando disponível)
 //   ├── DESLIGAR
-//   └── [ SAIR ] → FIRST
+//   └── [ SAIR ]
 //
-// NAVEGAÇÃO PRINCIPAL
-//   FIRST → RECENTES → MENSAGENS → RÁDIO → REPETIDOR
-//         → APLICAÇÕES → DEFINIÇÕES → FIRST
+// NAVEGAÇÃO:
+// FIRST → RECENTES → MENSAGENS → COMPANION → RÁDIO
+//       → REPETIDOR → APLICAÇÕES → DEFINIÇÕES → FIRST
 //
-// NOTA:
-// A lógica original dos botões não deve ser alterada sem necessidade.
 // ============================================================================
 // FIM DO MAPA OFICIAL DA ESTRUTURA DO MENU
 // ============================================================================
@@ -328,6 +298,45 @@ class HomeScreen : public UIScreen {
     INTERNAL_SENSORS
   };
 
+  // ========================================================
+  // COMPANION — estados nomeados
+  // ========================================================
+
+  enum CompanionMenu : uint8_t {
+    COMP_MENU_INFO = 0,
+    COMP_MENU_DISCOVERY,
+    COMP_MENU_DISCOVERED,
+    COMP_MENU_EXIT,
+    COMP_MENU_COUNT
+  };
+
+  enum CompanionInfoPage : uint8_t {
+    COMP_INFO_BLE = 0,
+    COMP_INFO_BATTERY,
+    COMP_INFO_VOLTAGE,
+    COMP_INFO_UPTIME,
+    COMP_INFO_ADVERT_TX,
+    COMP_INFO_ADVERT_RX,
+    COMP_INFO_BLE_NAME,
+    COMP_INFO_SMARTPHONE,
+    COMP_INFO_NODE_NAME,
+    COMP_INFO_MODE,
+    COMP_INFO_FIRMWARE,
+    COMP_INFO_VERSION,
+    COMP_INFO_COUNT
+  };
+
+  enum RepeaterMenu : uint8_t {
+    REPEATER_MENU_TOGGLE = 0,
+    REPEATER_MENU_AUTOADVERT,
+    REPEATER_MENU_NEIGHBOURS,
+    REPEATER_MENU_INFO,
+    REPEATER_MENU_EXIT,
+    REPEATER_MENU_COUNT
+  };
+
+  static const uint8_t REPEATER_INFO_PAGE_COUNT = 13;
+
   UITask* _task;
   mesh::RTCClock* _rtc;
   SensorManager* _sensors;
@@ -335,11 +344,7 @@ class HomeScreen : public UIScreen {
   uint8_t _page;
   uint8_t _companion_menu;
   bool _companion_submenu;
-
-  bool _companion_status_submenu;
   bool _companion_info_submenu;
-
-  uint8_t _companion_status_page;
   uint8_t _companion_info_page;
 
   uint8_t _sms_menu;
@@ -447,15 +452,15 @@ class HomeScreen : public UIScreen {
   uint8_t _repeater_stats_page;
 
   // ========================================================================
-  // MP-04 — REPETIDOR
+  // MP-05 — REPETIDOR
   //
   // _repeater_submenu:
-  //   false = MP-04.1 página/logo do REPETIDOR
-  //   true  = MP-04.2 menu principal do REPETIDOR
+  //   false = MP-05.1 página/logo do REPETIDOR
+  //   true  = MP-05.2 menu principal do REPETIDOR
   //
   // _repeater_info_submenu:
   //   false = página/logo ou menu principal
-  //   true  = MP-04.3 selector de estatísticas
+  //   true  = MP-05.3 selector de estatísticas
   //
   // _repeater_menu:
   //   0 = REPETIDOR
@@ -470,7 +475,7 @@ class HomeScreen : public UIScreen {
   uint8_t _repeater_neighbour_menu;
 
   // ========================================================================
-  // MP-03 — RÁDIO
+  // MP-04 — RÁDIO
   //
   // _radio_submenu:
   //   false = página principal do Rádio
@@ -692,7 +697,9 @@ class HomeScreen : public UIScreen {
   AdvertPath recent[UI_RECENT_LIST_SIZE];
 
 
-  void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
+  static int batteryPercentageFromMilliVolts(
+    uint16_t batteryMilliVolts
+  ) {
 #ifndef BATT_MIN_MILLIVOLTS
 #define BATT_MIN_MILLIVOLTS 3000
 #endif
@@ -703,12 +710,301 @@ class HomeScreen : public UIScreen {
     const int minMilliVolts = BATT_MIN_MILLIVOLTS;
     const int maxMilliVolts = BATT_MAX_MILLIVOLTS;
 
-    int batteryPercentage =
-      ((batteryMilliVolts - minMilliVolts) * 100) /
+    int percentage =
+      (((int)batteryMilliVolts - minMilliVolts) * 100) /
       (maxMilliVolts - minMilliVolts);
 
-    if (batteryPercentage < 0) batteryPercentage = 0;
-    if (batteryPercentage > 100) batteryPercentage = 100;
+    if (percentage < 0) percentage = 0;
+    if (percentage > 100) percentage = 100;
+
+    return percentage;
+  }
+
+  static void formatUptime(
+    char* dest,
+    size_t dest_len
+  ) {
+    uint32_t seconds = millis() / 1000;
+    uint32_t days = seconds / 86400;
+    seconds %= 86400;
+
+    uint32_t hours = seconds / 3600;
+    seconds %= 3600;
+
+    uint32_t minutes = seconds / 60;
+    seconds %= 60;
+
+    if (days > 0) {
+      snprintf(dest, dest_len, "%lud %luh",
+        (unsigned long)days,
+        (unsigned long)hours);
+    } else if (hours > 0) {
+      snprintf(dest, dest_len, "%luh %lum",
+        (unsigned long)hours,
+        (unsigned long)minutes);
+    } else {
+      snprintf(dest, dest_len, "%lum %lus",
+        (unsigned long)minutes,
+        (unsigned long)seconds);
+    }
+  }
+
+  void getCompanionPeerName(
+    char* dest,
+    size_t dest_len
+  ) {
+    if (dest == NULL || dest_len == 0) {
+      return;
+    }
+
+    dest[0] = '\0';
+
+    if (!_task->hasConnection()) {
+      snprintf(
+        dest,
+        dest_len,
+        "NAO LIGADO"
+      );
+      return;
+    }
+
+#if defined(NRF52) || defined(NRF52_SERIES)
+
+    char peer_name[32] = { 0 };
+
+    uint16_t conn_handle =
+      Bluefruit.connHandle();
+
+    BLEConnection* connection =
+      Bluefruit.Connection(conn_handle);
+
+    if (connection != nullptr &&
+        connection->connected()) {
+
+      uint16_t peer_len =
+        connection->getPeerName(
+          peer_name,
+          sizeof(peer_name)
+        );
+
+      peer_name[
+        sizeof(peer_name) - 1
+      ] = '\0';
+
+      if (peer_len > 0 &&
+          peer_name[0] != '\0') {
+
+        snprintf(
+          dest,
+          dest_len,
+          "%s",
+          peer_name
+        );
+
+      } else {
+
+        snprintf(
+          dest,
+          dest_len,
+          "SEM NOME"
+        );
+      }
+
+    } else {
+
+      snprintf(
+        dest,
+        dest_len,
+        "N/D"
+      );
+    }
+
+#else
+
+    snprintf(
+      dest,
+      dest_len,
+      "N/D"
+    );
+
+#endif
+  }
+
+  void renderCompanionInfo(DisplayDriver& display) {
+    char counter[8];
+    char title[24];
+    char value[48];
+
+    title[0] = '\0';
+    value[0] = '\0';
+
+    snprintf(
+      counter,
+      sizeof(counter),
+      "%d/%d",
+      (int)(_companion_info_page + 1),
+      (int)COMP_INFO_COUNT
+    );
+
+    display.setTextSize(1);
+    display.setColor(UIColor::secondary_txt);
+
+    display.drawTextRightAlign(
+      display.width() - 1,
+      8,
+      counter
+    );
+
+    switch (_companion_info_page) {
+
+      case COMP_INFO_BLE:
+        snprintf(title, sizeof(title), "BLE");
+        snprintf(
+          value,
+          sizeof(value),
+          "%s",
+          _task->hasConnection()
+            ? "LIGADO"
+            : "DESLIGADO"
+        );
+        break;
+
+      case COMP_INFO_BATTERY: {
+        uint16_t mv = _task->getBattMilliVolts();
+
+        snprintf(title, sizeof(title), "BATERIA");
+
+        if (mv > 0) {
+          snprintf(
+            value,
+            sizeof(value),
+            "%d%%",
+            batteryPercentageFromMilliVolts(mv)
+          );
+        } else {
+          snprintf(value, sizeof(value), "N/D");
+        }
+
+        break;
+      }
+
+      case COMP_INFO_VOLTAGE: {
+        uint16_t mv = _task->getBattMilliVolts();
+
+        snprintf(title, sizeof(title), "VOLTAGEM");
+
+        if (mv > 0) {
+          snprintf(
+            value,
+            sizeof(value),
+            "%.2f V",
+            mv / 1000.0f
+          );
+        } else {
+          snprintf(value, sizeof(value), "N/D");
+        }
+
+        break;
+      }
+
+      case COMP_INFO_UPTIME:
+        snprintf(title, sizeof(title), "UPTIME");
+        formatUptime(value, sizeof(value));
+        break;
+
+      case COMP_INFO_ADVERT_TX:
+        snprintf(title, sizeof(title), "ADVERT TX");
+        snprintf(
+          value,
+          sizeof(value),
+          "%lu",
+          (unsigned long)the_mesh.getCompanionAdvertTX()
+        );
+        break;
+
+      case COMP_INFO_ADVERT_RX:
+        snprintf(title, sizeof(title), "ADVERT RX");
+        snprintf(
+          value,
+          sizeof(value),
+          "%lu",
+          (unsigned long)the_mesh.getCompanionAdvertRX()
+        );
+        break;
+
+      case COMP_INFO_BLE_NAME:
+        snprintf(title, sizeof(title), "NOME BLE");
+        snprintf(
+          value,
+          sizeof(value),
+          "%s%s",
+          BLE_NAME_PREFIX,
+          the_mesh.getNodePrefs()->node_name
+        );
+        break;
+
+      case COMP_INFO_SMARTPHONE:
+        snprintf(title, sizeof(title), "SMARTPHONE");
+        getCompanionPeerName(value, sizeof(value));
+        break;
+
+      case COMP_INFO_NODE_NAME:
+        snprintf(title, sizeof(title), "NOME DO NO");
+        snprintf(
+          value,
+          sizeof(value),
+          "%s",
+          the_mesh.getNodePrefs()->node_name
+        );
+        break;
+
+      case COMP_INFO_MODE:
+        snprintf(title, sizeof(title), "MODO");
+        snprintf(
+          value,
+          sizeof(value),
+          "%s",
+          the_mesh.getNodePrefs()->isRepeatEn()
+            ? "REPETIDOR"
+            : "COMPANION"
+        );
+        break;
+
+      case COMP_INFO_FIRMWARE:
+        snprintf(title, sizeof(title), "FIRMWARE");
+        snprintf(value, sizeof(value), "HiveFW");
+        break;
+
+      case COMP_INFO_VERSION:
+      default:
+        snprintf(title, sizeof(title), "VERSAO");
+        snprintf(
+          value,
+          sizeof(value),
+          "%s",
+          FIRMWARE_VERSION
+        );
+        break;
+    }
+
+    display.setColor(UIColor::primary_txt);
+
+    display.drawTextCentered(
+      display.width() / 2,
+      24,
+      title
+    );
+
+    display.drawTextCentered(
+      display.width() / 2,
+      44,
+      value
+    );
+  }
+
+  void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
+    int batteryPercentage =
+      batteryPercentageFromMilliVolts(batteryMilliVolts);
 
     char batteryText[24];
     snprintf(
@@ -755,9 +1051,7 @@ public:
   HomeScreen(UITask* task, mesh::RTCClock* rtc, SensorManager* sensors, NodePrefs* node_prefs)
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
        _companion_menu(0), _companion_submenu(false),
-       _companion_status_submenu(false),
        _companion_info_submenu(false),
-       _companion_status_page(0),
        _companion_info_page(0),
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
@@ -1136,19 +1430,12 @@ public:
     int y = 14;
 
     // ====================================================================
-    // MAPA OFICIAL — INDICADOR DO MENU PRINCIPAL
+    // INDICADOR DO MENU PRINCIPAL
     //
-    // MP-00 FIRST
-    // MP-01 RECENTES
-    // MP-02 MENSAGENS
-    // MP-03 RADIO
-    // MP-04 REPETIDOR
-    // MP-05 APLICAÇÕES
-    // MP-06 DEFINIÇÕES
+    // FIRST / RECENTES / MENSAGENS / COMPANION
+    // RÁDIO / REPETIDOR / APLICAÇÕES / DEFINIÇÕES
     //
-    // O REPETIDOR é uma PÁGINA PRINCIPAL permanente.
-    // O estado ON/OFF do repetidor pertence ao MP-04.2 e NÃO
-    // determina se a página MP-04 existe ou não.
+    // HomePage::Count é a fonte única do número de páginas visíveis.
     // ====================================================================
 
     const int visible_pages = HomePage::Count;
@@ -1188,476 +1475,14 @@ public:
       }
 
       // ======================================================
-      // MP-03.2 — INFO COMPANION — 1/12 a 6/12
-      //
-      // 1/12  BLE
-      // 2/12  BATERIA
-      // 3/12  VOLTAGEM
-      // 4/12  UPTIME
-      // 5/12  ADVERT TX
-      // 6/12  ADVERT RX
+      // MP-03.2 — INFO COMPANION
       // ======================================================
 
-      if (_companion_info_submenu && _companion_info_page < 6) {
-
-        display.setTextSize(1);
-
-        char counter[8];
-
-        snprintf(
-          counter,
-          sizeof(counter),
-          "%d/12",
-          (int)(_companion_info_page + 1)
-        );
-
-        display.setColor(UIColor::secondary_txt);
-
-        display.drawTextRightAlign(
-          display.width() - 1,
-          8,
-          counter
-        );
-
-        char title[24];
-        char value[48];
-
-        title[0] = '\0';
-        value[0] = '\0';
-
-        switch (_companion_info_page) {
-
-          case 0:
-            snprintf(
-              title,
-              sizeof(title),
-              "BLE"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%s",
-              _task->hasConnection()
-                ? "LIGADO"
-                : "DESLIGADO"
-            );
-            break;
-
-          case 1: {
-            uint16_t mv =
-              _task->getBattMilliVolts();
-
-            int percent =
-              ((int)mv - 3000) * 100 / 1200;
-
-            if (percent < 0) percent = 0;
-            if (percent > 100) percent = 100;
-
-            snprintf(
-              title,
-              sizeof(title),
-              "BATERIA"
-            );
-
-            if (mv > 0) {
-              snprintf(
-                value,
-                sizeof(value),
-                "%d%%",
-                percent
-              );
-            } else {
-              snprintf(
-                value,
-                sizeof(value),
-                "N/D"
-              );
-            }
-
-            break;
-          }
-
-          case 2: {
-            uint16_t mv =
-              _task->getBattMilliVolts();
-
-            snprintf(
-              title,
-              sizeof(title),
-              "VOLTAGEM"
-            );
-
-            if (mv > 0) {
-              snprintf(
-                value,
-                sizeof(value),
-                "%.2f V",
-                mv / 1000.0f
-              );
-            } else {
-              snprintf(
-                value,
-                sizeof(value),
-                "N/D"
-              );
-            }
-
-            break;
-          }
-
-          case 3: {
-            uint32_t seconds =
-              millis() / 1000;
-
-            uint32_t days =
-              seconds / 86400;
-
-            seconds %= 86400;
-
-            uint32_t hours =
-              seconds / 3600;
-
-            seconds %= 3600;
-
-            uint32_t minutes =
-              seconds / 60;
-
-            seconds %= 60;
-
-            snprintf(
-              title,
-              sizeof(title),
-              "UPTIME"
-            );
-
-            if (days > 0) {
-              snprintf(
-                value,
-                sizeof(value),
-                "%lud %luh",
-                (unsigned long)days,
-                (unsigned long)hours
-              );
-            }
-            else if (hours > 0) {
-              snprintf(
-                value,
-                sizeof(value),
-                "%luh %lum",
-                (unsigned long)hours,
-                (unsigned long)minutes
-              );
-            }
-            else {
-              snprintf(
-                value,
-                sizeof(value),
-                "%lum %lus",
-                (unsigned long)minutes,
-                (unsigned long)seconds
-              );
-            }
-
-            break;
-          }
-
-          case 4:
-            snprintf(
-              title,
-              sizeof(title),
-              "ADVERT TX"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%lu",
-              (unsigned long)
-                the_mesh.getCompanionAdvertTX()
-            );
-            break;
-
-          case 5:
-          default:
-            snprintf(
-              title,
-              sizeof(title),
-              "ADVERT RX"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%lu",
-              (unsigned long)
-                the_mesh.getCompanionAdvertRX()
-            );
-            break;
-        }
-
-        display.setColor(UIColor::primary_txt);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          24,
-          title
-        );
-
-        display.drawTextCentered(
-          display.width() / 2,
-          44,
-          value
-        );
-
+      if (_companion_info_submenu) {
+        renderCompanionInfo(display);
         return 20000;
       }
 
-      // ======================================================
-      // MP-03.3 — INFO COMPANION — 7/12 a 12/12
-      //
-      // 7/12  NOME BLE
-      // 8/12  SMARTPHONE
-      // 9/12  NOME DO NO
-      // 10/12  MODO
-      // 11/12  FIRMWARE
-      // 12/12  VERSÃO
-      //
-      // No T114/nRF52 tentamos ler o Device Name BLE
-      // anunciado pelo smartphone através de getPeerName().
-      // Se o peer não disponibilizar nome, mostramos SEM NOME.
-      // ======================================================
-
-      if (_companion_info_submenu && _companion_info_page >= 6) {
-
-        display.setTextSize(1);
-
-        char counter[8];
-
-        snprintf(
-          counter,
-          sizeof(counter),
-          "%d/12",
-          (int)(_companion_info_page + 1)
-        );
-
-        display.setColor(UIColor::secondary_txt);
-
-        display.drawTextRightAlign(
-          display.width() - 1,
-          8,
-          counter
-        );
-
-        char title[24];
-        char value[48];
-
-        title[0] = '\0';
-        value[0] = '\0';
-
-        switch (_companion_info_page - 6) {
-
-          // ==================================================
-          // 7/12 — NOME BLE DO COMPANION
-          // ==================================================
-
-          case 0:
-            snprintf(
-              title,
-              sizeof(title),
-              "NOME BLE"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%s%s",
-              BLE_NAME_PREFIX,
-              the_mesh.getNodePrefs()->node_name
-            );
-            break;
-
-          // ==================================================
-          // 8/12 — SMARTPHONE / CENTRAL BLE
-          // ==================================================
-
-          case 1: {
-            snprintf(
-              title,
-              sizeof(title),
-              "SMARTPHONE"
-            );
-
-            if (!_task->hasConnection()) {
-              snprintf(
-                value,
-                sizeof(value),
-                "NAO LIGADO"
-              );
-              break;
-            }
-
-#if defined(NRF52) || defined(NRF52_SERIES)
-
-            char peer_name[32] = { 0 };
-
-            uint16_t conn_handle =
-              Bluefruit.connHandle();
-
-            BLEConnection* connection =
-              Bluefruit.Connection(conn_handle);
-
-            if (connection != nullptr &&
-                connection->connected()) {
-
-              uint16_t peer_len =
-                connection->getPeerName(
-                  peer_name,
-                  sizeof(peer_name)
-                );
-
-              peer_name[
-                sizeof(peer_name) - 1
-              ] = '\0';
-
-              if (peer_len > 0 &&
-                  peer_name[0] != '\0') {
-
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "%s",
-                  peer_name
-                );
-
-              } else {
-
-                snprintf(
-                  value,
-                  sizeof(value),
-                  "SEM NOME"
-                );
-              }
-
-            } else {
-
-              snprintf(
-                value,
-                sizeof(value),
-                "N/D"
-              );
-            }
-
-#else
-
-            snprintf(
-              value,
-              sizeof(value),
-              "N/D"
-            );
-
-#endif
-
-            break;
-          }
-
-          // ==================================================
-          // 9/12 — NOME DO NÓ
-          // ==================================================
-
-          case 2:
-            snprintf(
-              title,
-              sizeof(title),
-              "NOME DO NO"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%s",
-              the_mesh.getNodePrefs()->node_name
-            );
-            break;
-
-          // ==================================================
-          // 10/12 — MODO ATUAL
-          // ==================================================
-
-          case 3:
-            snprintf(
-              title,
-              sizeof(title),
-              "MODO"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%s",
-              the_mesh.getNodePrefs()->isRepeatEn()
-                ? "REPETIDOR"
-                : "COMPANION"
-            );
-            break;
-
-          // ==================================================
-          // 11/12 — FIRMWARE
-          // ==================================================
-
-          case 4:
-            snprintf(
-              title,
-              sizeof(title),
-              "FIRMWARE"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "HiveFW"
-            );
-            break;
-
-          // ==================================================
-          // 12/12 — VERSÃO
-          // ==================================================
-
-          case 5:
-          default:
-            snprintf(
-              title,
-              sizeof(title),
-              "VERSAO"
-            );
-
-            snprintf(
-              value,
-              sizeof(value),
-              "%s",
-              FIRMWARE_VERSION
-            );
-            break;
-        }
-
-        display.setColor(UIColor::primary_txt);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          24,
-          title
-        );
-
-        display.drawTextCentered(
-          display.width() / 2,
-          44,
-          value
-        );
-
-        return 20000;
-      }
-
-      // ======================================================
       // MP-03 — MENU
       // ======================================================
 
@@ -2169,14 +1994,14 @@ public:
   } else if (_page == HomePage::RADIO) {
 
       // ======================================================
-      // MP-03 — RÁDIO
+      // MP-04 — RÁDIO
       //
       // MP-03.1 — Página Rádio original
       // MP-03.2 — Menu Rádio
       // ======================================================
 
       // ------------------------------------------------------
-      // MP-03.1 — PÁGINA RÁDIO
+      // MP-04.1 — PÁGINA RÁDIO
       //
       // Página principal: logo 64x32 + título.
       // MENU RÁDIO apresenta e permite alterar os parâmetros do Rádio.
@@ -2194,7 +2019,7 @@ public:
       }
 
       // ------------------------------------------------------
-      // MP-03.2 — MENU RÁDIO
+      // MP-04.2 — MENU RÁDIO
       //
       // Menu direto de configuração do Rádio.
       // ------------------------------------------------------
@@ -2549,7 +2374,7 @@ public:
 
     } else if (_page == HomePage::REPETIDOR) {
       // ======================================================
-      // MP-04 — REPETIDOR
+      // MP-05 — REPETIDOR
       //
       // MP-04.1 — Página/logo
       // MP-04.2 — Menu REPETIDOR
@@ -2557,7 +2382,7 @@ public:
       // ======================================================
 
       // ======================================================
-      // MP-04.1 — PÁGINA REPETIDOR
+      // MP-05.1 — PÁGINA REPETIDOR
       //
       // Apenas logo + título.
       // ENTER -> MP-04.2 MENU REPETIDOR
@@ -2575,7 +2400,7 @@ public:
       }
 
       // ======================================================
-      // MP-04.2 — MENU REPETIDOR
+      // MP-05.2 — MENU REPETIDOR
       //
       // 1. REPETIDOR
       // 2. AUTOADVERT
@@ -2623,7 +2448,7 @@ public:
       }
 
       // ======================================================
-      // MP-04.2.1 — VIZINHOS
+      // MP-05.2.1 — VIZINHOS
       //
       // Mostra os repetidores vizinhos ouvidos directamente.
       //
@@ -2783,7 +2608,7 @@ public:
 
       }
       // ======================================================
-      // MP-04.3 — INFO REPETIDOR
+      // MP-05.3 — INFO REPETIDOR
       //
       // Estatísticas do repetidor.
       //
@@ -2814,8 +2639,9 @@ public:
         snprintf(
           repeater_counter,
           sizeof(repeater_counter),
-          "%d/13",
-          (int)(_repeater_stats_page + 1)
+          "%d/%d",
+          (int)(_repeater_stats_page + 1),
+          (int)REPEATER_INFO_PAGE_COUNT
         );
 
         display.drawTextRightAlign(
@@ -2887,49 +2713,19 @@ public:
             break;
           }
 
-          case 4: {
-            uint32_t seconds =
-              millis() / 1000;
+          case 4:
+            snprintf(
+              title,
+              sizeof(title),
+              "UPTIME"
+            );
 
-            uint32_t days = seconds / 86400;
-            seconds %= 86400;
-
-            uint32_t hours = seconds / 3600;
-            seconds %= 3600;
-
-            uint32_t minutes = seconds / 60;
-            seconds %= 60;
-
-            snprintf(title, sizeof(title), "UPTIME");
-
-            if (days > 0) {
-              snprintf(
-                value,
-                sizeof(value),
-                "%lud %luh",
-                (unsigned long)days,
-                (unsigned long)hours
-              );
-            } else if (hours > 0) {
-              snprintf(
-                value,
-                sizeof(value),
-                "%luh %lum",
-                (unsigned long)hours,
-                (unsigned long)minutes
-              );
-            } else {
-              snprintf(
-                value,
-                sizeof(value),
-                "%lum %lus",
-                (unsigned long)minutes,
-                (unsigned long)seconds
-              );
-            }
+            formatUptime(
+              value,
+              sizeof(value)
+            );
 
             break;
-          }
 
           case 5:
             snprintf(title, sizeof(title), "BATERIA");
@@ -3420,8 +3216,6 @@ public:
 
           display.setColor(UIColor::secondary_txt);
 
-          display.setColor(UIColor::secondary_txt);
-
           display.drawTextCentered(
             display.width() / 2,
             42,
@@ -3429,13 +3223,6 @@ public:
           );
 
           char infoText[32];
-
-          const char* typeText =
-            (result.node_type == ADV_TYPE_REPEATER)
-              ? "REPEATER"
-              : (result.node_type == ADV_TYPE_ROOM)
-                ? "ROOM"
-                : "NODE";
 
           snprintf(
             infoText,
@@ -5534,13 +5321,13 @@ public:
     }
 
     // ========================================================
-    // MP-03 — RÁDIO
+    // MP-04 — RÁDIO
     //
     // MP-03.1 — Página RÁDIO
     //   ENTER -> MENU RÁDIO
     //   CANCEL/SELECT -> MENSAGENS
     //
-    // MP-03.2 — MENU RÁDIO
+    // MP-04.2 — MENU RÁDIO
     //   0 -> FREQUÊNCIA
     //   1 -> BANDWIDTH
     //   2 -> SPREADING FACTOR
@@ -5565,7 +5352,7 @@ public:
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
           _companion_info_page =
-            (_companion_info_page + 1) % 12;
+            (_companion_info_page + 1) % COMP_INFO_COUNT;
 
           return true;
         }
@@ -5573,7 +5360,7 @@ public:
         if (c == KEY_PREV || c == KEY_LEFT) {
 
           _companion_info_page =
-            (_companion_info_page + 11) % 12;
+            (_companion_info_page + COMP_INFO_COUNT - 1) % COMP_INFO_COUNT;
 
           return true;
         }
@@ -5639,7 +5426,7 @@ public:
       // MENU COMPANION
       // ======================================================
 
-      const uint8_t companion_count = 4;
+      const uint8_t companion_count = COMP_MENU_COUNT;
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 
@@ -5653,8 +5440,7 @@ public:
       if (c == KEY_PREV || c == KEY_LEFT) {
 
         _companion_menu =
-          (_companion_menu + 3)
-          % companion_count;
+          (_companion_menu + companion_count - 1) % companion_count;
 
         return true;
       }
@@ -5673,7 +5459,7 @@ public:
       if (c == KEY_ENTER) {
 
         // INFO COMPANION
-        if (_companion_menu == 0) {
+        if (_companion_menu == COMP_MENU_INFO) {
 
           _companion_info_page = 0;
           _companion_info_submenu = true;
@@ -5682,7 +5468,7 @@ public:
         }
 
         // DESCOBRIR REPETIDORES
-        if (_companion_menu == 1) {
+        if (_companion_menu == COMP_MENU_DISCOVERY) {
 
           _apps_submenu = false;
           _apps_view = APPS_VIEW_DISCOVERY;
@@ -5698,7 +5484,7 @@ public:
         }
 
         // REPETIDORES DESCOBERTOS
-        if (_companion_menu == 2) {
+        if (_companion_menu == COMP_MENU_DISCOVERED) {
 
           _apps_submenu = false;
           _apps_view = APPS_VIEW_DISCOVERED;
@@ -5714,7 +5500,7 @@ public:
         }
 
         // SAIR
-        if (_companion_menu == 3) {
+        if (_companion_menu == COMP_MENU_EXIT) {
 
           _companion_menu = 0;
           _companion_submenu = false;
@@ -5732,7 +5518,7 @@ public:
     if (_page == HomePage::RADIO) {
 
       // ======================================================
-      // MP-03.1 — PÁGINA RÁDIO
+      // MP-04.1 — PÁGINA RÁDIO
       //
       // Página inicial do Rádio.
       // ENTER -> MENU RÁDIO
@@ -5781,7 +5567,7 @@ public:
       }
 
       // ======================================================
-      // MP-03.2 — MENU RÁDIO
+      // MP-04.2 — MENU RÁDIO
       //
       // Menu directo de configuração.
       //
@@ -6505,7 +6291,7 @@ public:
     if (_page == HomePage::REPETIDOR) {
 
       // ======================================================
-      // MP-04.1 — PÁGINA REPETIDOR
+      // MP-05.1 — PÁGINA REPETIDOR
       // ======================================================
 
       if (!_repeater_submenu && !_repeater_info_submenu) {
@@ -6555,11 +6341,11 @@ public:
       }
 
       // ======================================================
-      // MP-04.2 — MENU REPETIDOR
+      // MP-05.2 — MENU REPETIDOR
       // ======================================================
 
       // ======================================================
-      // MP-04.2.1 — HANDLER VIZINHOS
+      // MP-05.2.1 — HANDLER VIZINHOS
       //
       // NEXT / RIGHT -> vizinho seguinte
       // PREV / LEFT  -> vizinho anterior
@@ -6605,7 +6391,7 @@ public:
       }
 
       // ======================================================
-      // MP-04.2 — MENU REPETIDOR
+      // MP-05.2 — MENU REPETIDOR
       // ======================================================
 
       if (_repeater_submenu &&
@@ -6614,13 +6400,13 @@ public:
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
           _repeater_menu =
-            (_repeater_menu + 1) % 5;
+            (_repeater_menu + 1) % REPEATER_MENU_COUNT;
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
           _repeater_menu =
-            (_repeater_menu + 4) % 5;
+            (_repeater_menu + REPEATER_MENU_COUNT - 1) % REPEATER_MENU_COUNT;
           return true;
         }
 
@@ -6638,7 +6424,7 @@ public:
           // 1. REPETIDOR
           // ------------------------------------------------
 
-          if (_repeater_menu == 0) {
+          if (_repeater_menu == REPEATER_MENU_TOGGLE) {
 
             bool repeater_enable =
               !the_mesh.getNodePrefs()->isRepeatEn();
@@ -6665,7 +6451,7 @@ public:
           // 2. AUTOADVERT
           // ------------------------------------------------
 
-          if (_repeater_menu == 1) {
+          if (_repeater_menu == REPEATER_MENU_AUTOADVERT) {
 
             bool auto_advert =
               !the_mesh.getNodePrefs()->isAutoAdvertEn();
@@ -6692,7 +6478,7 @@ public:
           // 3. VIZINHOS
           // ------------------------------------------------
 
-          if (_repeater_menu == 2) {
+          if (_repeater_menu == REPEATER_MENU_NEIGHBOURS) {
 
             _repeater_neighbour_menu = 0;
             _repeater_neighbours_submenu = true;
@@ -6704,7 +6490,7 @@ public:
           // 4. INFO REPETIDOR
           // ------------------------------------------------
 
-          if (_repeater_menu == 3) {
+          if (_repeater_menu == REPEATER_MENU_INFO) {
 
             _repeater_info_submenu = true;
             _repeater_stats_page = 0;
@@ -6716,7 +6502,7 @@ public:
           // 5. SAIR
           // ------------------------------------------------
 
-          if (_repeater_menu == 4) {
+          if (_repeater_menu == REPEATER_MENU_EXIT) {
 
             _repeater_menu = 0;
             _repeater_info_submenu = false;
@@ -6731,7 +6517,7 @@ public:
       }
 
       // ======================================================
-      // MP-04.3 — SELECTOR DE ESTATÍSTICAS
+      // MP-05.3 — SELECTOR DE ESTATÍSTICAS
       // ======================================================
 
       if (_repeater_info_submenu) {
@@ -6739,7 +6525,7 @@ public:
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
           _repeater_stats_page =
-            (_repeater_stats_page + 1) % 13;
+            (_repeater_stats_page + 1) % REPEATER_INFO_PAGE_COUNT;
 
           return true;
         }
@@ -6747,12 +6533,12 @@ public:
         if (c == KEY_PREV || c == KEY_LEFT) {
 
           _repeater_stats_page =
-            (_repeater_stats_page + 12) % 13;
+            (_repeater_stats_page + REPEATER_INFO_PAGE_COUNT - 1) % REPEATER_INFO_PAGE_COUNT;
 
           return true;
         }
 
-        if (c == KEY_ENTER && _repeater_stats_page == 12) {
+        if (c == KEY_ENTER && _repeater_stats_page == REPEATER_INFO_PAGE_COUNT - 1) {
 
           bool share_location =
             the_mesh.getNodePrefs()->advert_loc_policy == ADVERT_LOC_SHARE;

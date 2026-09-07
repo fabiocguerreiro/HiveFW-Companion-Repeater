@@ -347,7 +347,7 @@ uint8_t MyMesh::getAutoAddMaxHops() const {
 }
 
 void MyMesh::onContactOverwrite(const uint8_t* pub_key) {
-    _store->deleteBlobByKey(pub_key, PUB_KEY_SIZE); // delete from storage
+  _store->deleteBlobByKey(pub_key, PUB_KEY_SIZE); // delete from storage
   if (_serial->isConnected()) {
     out_frame[0] = PUSH_CODE_CONTACT_DELETED;
     memcpy(&out_frame[1], pub_key, PUB_KEY_SIZE);
@@ -378,7 +378,7 @@ void MyMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id,
   );
 
   // A tabela de vizinhos só é relevante quando estamos em modo Repetidor.
-  if (!getNodePrefs()->isRepeatEn()) {
+  if (!_prefs.isRepeatEn()) {
     return;
   }
 
