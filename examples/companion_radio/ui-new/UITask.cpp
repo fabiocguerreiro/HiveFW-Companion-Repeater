@@ -332,6 +332,12 @@ class HomeScreen : public UIScreen {
   uint8_t _companion_menu;
   bool _companion_submenu;
 
+  bool _companion_status_submenu;
+  bool _companion_info_submenu;
+
+  uint8_t _companion_status_page;
+  uint8_t _companion_info_page;
+
   uint8_t _sms_menu;
   bool _sms_submenu;
   uint8_t _sms_messages_menu;
@@ -747,6 +753,10 @@ public:
   HomeScreen(UITask* task, mesh::RTCClock* rtc, SensorManager* sensors, NodePrefs* node_prefs)
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
        _companion_menu(0), _companion_submenu(false),
+       _companion_status_submenu(false),
+       _companion_info_submenu(false),
+       _companion_status_page(0),
+       _companion_info_page(0),
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
        _sms_new_menu(0), _sms_new_submenu(false),
@@ -1157,7 +1167,13 @@ public:
     // MP-03 — COMPANION
     // ======================================================
     if (_page == HomePage::COMPANION) {
+
+      // ======================================================
+      // MP-03.1 — HOME COMPANION
+      // ======================================================
+
       if (!_companion_submenu) {
+
         renderSectionHome(
           display,
           companion_icon,
@@ -1165,21 +1181,371 @@ public:
           32,
           "COMPANION"
         );
-      } else {
-        display.setColor(UIColor::primary_txt);
+
+        return 20000;
+      }
+
+      // ======================================================
+      // MP-03.2 — ESTADO
+      //
+      // 1/6  BLE
+      // 2/6  BATERIA
+      // 3/6  VOLTAGEM
+      // 4/6  UPTIME
+      // 5/6  ADVERT TX
+      // 6/6  ADVERT RX
+      // ======================================================
+
+      if (_companion_status_submenu) {
+
         display.setTextSize(1);
 
-        const char* companion_items[] = {
-          "ESTADO",
-          "INFORMAÇÃO",
-          "[ SAIR ]"
-        };
+        char counter[8];
 
-        drawMenuListItem(
-          display,
-          companion_items[_companion_menu]
+        snprintf(
+          counter,
+          sizeof(counter),
+          "%d/6",
+          (int)(_companion_status_page + 1)
         );
+
+        display.setColor(UIColor::secondary_txt);
+
+        display.drawTextRightAlign(
+          display.width() - 1,
+          8,
+          counter
+        );
+
+        char title[24];
+        char value[48];
+
+        title[0] = '\0';
+        value[0] = '\0';
+
+        switch (_companion_status_page) {
+
+          case 0:
+            snprintf(
+              title,
+              sizeof(title),
+              "BLE"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%s",
+              _task->hasConnection()
+                ? "LIGADO"
+                : "DESLIGADO"
+            );
+            break;
+
+          case 1: {
+            uint16_t mv =
+              _task->getBattMilliVolts();
+
+            int percent =
+              ((int)mv - 3000) * 100 / 1200;
+
+            if (percent < 0) percent = 0;
+            if (percent > 100) percent = 100;
+
+            snprintf(
+              title,
+              sizeof(title),
+              "BATERIA"
+            );
+
+            if (mv > 0) {
+              snprintf(
+                value,
+                sizeof(value),
+                "%d%%",
+                percent
+              );
+            } else {
+              snprintf(
+                value,
+                sizeof(value),
+                "N/D"
+              );
+            }
+
+            break;
+          }
+
+          case 2: {
+            uint16_t mv =
+              _task->getBattMilliVolts();
+
+            snprintf(
+              title,
+              sizeof(title),
+              "VOLTAGEM"
+            );
+
+            if (mv > 0) {
+              snprintf(
+                value,
+                sizeof(value),
+                "%.2f V",
+                mv / 1000.0f
+              );
+            } else {
+              snprintf(
+                value,
+                sizeof(value),
+                "N/D"
+              );
+            }
+
+            break;
+          }
+
+          case 3: {
+            uint32_t seconds =
+              millis() / 1000;
+
+            uint32_t days =
+              seconds / 86400;
+
+            seconds %= 86400;
+
+            uint32_t hours =
+              seconds / 3600;
+
+            seconds %= 3600;
+
+            uint32_t minutes =
+              seconds / 60;
+
+            seconds %= 60;
+
+            snprintf(
+              title,
+              sizeof(title),
+              "UPTIME"
+            );
+
+            if (days > 0) {
+              snprintf(
+                value,
+                sizeof(value),
+                "%lud %luh",
+                (unsigned long)days,
+                (unsigned long)hours
+              );
+            }
+            else if (hours > 0) {
+              snprintf(
+                value,
+                sizeof(value),
+                "%luh %lum",
+                (unsigned long)hours,
+                (unsigned long)minutes
+              );
+            }
+            else {
+              snprintf(
+                value,
+                sizeof(value),
+                "%lum %lus",
+                (unsigned long)minutes,
+                (unsigned long)seconds
+              );
+            }
+
+            break;
+          }
+
+          case 4:
+            snprintf(
+              title,
+              sizeof(title),
+              "ADVERT TX"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "N/D"
+            );
+            break;
+
+          case 5:
+          default:
+            snprintf(
+              title,
+              sizeof(title),
+              "ADVERT RX"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "N/D"
+            );
+            break;
+        }
+
+        display.setColor(UIColor::primary_txt);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          24,
+          title
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          44,
+          value
+        );
+
+        return 20000;
       }
+
+      // ======================================================
+      // MP-03.3 — INFORMAÇÃO
+      //
+      // 1/4  NOME BLE
+      // 2/4  CLIENTE BLE
+      // 3/4  FIRMWARE
+      // 4/4  VERSÃO
+      //
+      // O nome do smartphone não é disponibilizado pela
+      // interface atual; mostramos apenas a ligação real.
+      // ======================================================
+
+      if (_companion_info_submenu) {
+
+        display.setTextSize(1);
+
+        char counter[8];
+
+        snprintf(
+          counter,
+          sizeof(counter),
+          "%d/4",
+          (int)(_companion_info_page + 1)
+        );
+
+        display.setColor(UIColor::secondary_txt);
+
+        display.drawTextRightAlign(
+          display.width() - 1,
+          8,
+          counter
+        );
+
+        char title[24];
+        char value[48];
+
+        title[0] = '\0';
+        value[0] = '\0';
+
+        switch (_companion_info_page) {
+
+          case 0:
+            snprintf(
+              title,
+              sizeof(title),
+              "NOME BLE"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%s%s",
+              BLE_NAME_PREFIX,
+              the_mesh.getNodePrefs()->node_name
+            );
+            break;
+
+          case 1:
+            snprintf(
+              title,
+              sizeof(title),
+              "CLIENTE BLE"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%s",
+              _task->hasConnection()
+                ? "LIGADO"
+                : "NAO LIGADO"
+            );
+            break;
+
+          case 2:
+            snprintf(
+              title,
+              sizeof(title),
+              "FIRMWARE"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "HiveFW"
+            );
+            break;
+
+          case 3:
+          default:
+            snprintf(
+              title,
+              sizeof(title),
+              "VERSAO"
+            );
+
+            snprintf(
+              value,
+              sizeof(value),
+              "%s",
+              FIRMWARE_VERSION
+            );
+            break;
+        }
+
+        display.setColor(UIColor::primary_txt);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          24,
+          title
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          44,
+          value
+        );
+
+        return 20000;
+      }
+
+      // ======================================================
+      // MP-03 — MENU
+      // ======================================================
+
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(1);
+
+      const char* companion_items[] = {
+        "ESTADO",
+        "INFORMAÇÃO",
+        "[ SAIR ]"
+      };
+
+      drawMenuListItem(
+        display,
+        companion_items[_companion_menu]
+      );
 
       return 20000;
     }
@@ -5070,7 +5436,66 @@ public:
 
     if (_page == HomePage::COMPANION) {
 
+      // ======================================================
+      // ESTADO
+      // ======================================================
+
+      if (_companion_status_submenu) {
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+          _companion_status_page =
+            (_companion_status_page + 1) % 6;
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+          _companion_status_page =
+            (_companion_status_page + 5) % 6;
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _companion_status_submenu = false;
+          _companion_status_page = 0;
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // INFORMAÇÃO
+      // ======================================================
+
+      if (_companion_info_submenu) {
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+          _companion_info_page =
+            (_companion_info_page + 1) % 4;
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+          _companion_info_page =
+            (_companion_info_page + 3) % 4;
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _companion_info_submenu = false;
+          _companion_info_page = 0;
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // HOME COMPANION
+      // ======================================================
+
       if (!_companion_submenu) {
+
         if (c == KEY_ENTER) {
           _companion_submenu = true;
           _companion_menu = 0;
@@ -5080,12 +5505,15 @@ public:
         if (c == KEY_CANCEL || c == KEY_SELECT) {
           _companion_menu = 0;
           _companion_submenu = false;
+          _companion_status_submenu = false;
+          _companion_info_submenu = false;
           _page = HomePage::MESSAGES;
           return true;
         }
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
-          _page = (_page + 1) % HomePage::Count;
+          _page =
+            (_page + 1) % HomePage::Count;
           return true;
         }
 
@@ -5098,6 +5526,10 @@ public:
 
         return true;
       }
+
+      // ======================================================
+      // MENU COMPANION
+      // ======================================================
 
       const uint8_t companion_count = 3;
 
@@ -5118,20 +5550,37 @@ public:
       if (c == KEY_CANCEL || c == KEY_SELECT) {
         _companion_menu = 0;
         _companion_submenu = false;
+        _companion_status_submenu = false;
+        _companion_info_submenu = false;
         _page = HomePage::MESSAGES;
         return true;
       }
 
       if (c == KEY_ENTER) {
-        if (_companion_menu == 2) {
-          _companion_menu = 0;
-          _companion_submenu = false;
-          _page = HomePage::MESSAGES;
+
+        // ESTADO
+        if (_companion_menu == 0) {
+          _companion_status_page = 0;
+          _companion_status_submenu = true;
           return true;
         }
 
-        // ESTADO / INFORMAÇÃO reservados.
-        return true;
+        // INFORMAÇÃO
+        if (_companion_menu == 1) {
+          _companion_info_page = 0;
+          _companion_info_submenu = true;
+          return true;
+        }
+
+        // SAIR
+        if (_companion_menu == 2) {
+          _companion_menu = 0;
+          _companion_submenu = false;
+          _companion_status_submenu = false;
+          _companion_info_submenu = false;
+          _page = HomePage::MESSAGES;
+          return true;
+        }
       }
 
       return true;
