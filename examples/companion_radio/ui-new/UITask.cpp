@@ -1546,13 +1546,13 @@ public:
         "[ SAIR ]"
       };
 
-      // Selector oficial HiveFW.
-      drawMenuSelection(
-        display,
-        companion_items[_companion_menu],
-        38,
-        8
-      );
+      // Selector oficial HiveFW:
+      // texto centrado, tamanho 2 e duas linhas quando necessário.
+      display.setColor(UIColor::primary_txt);
+      display.setTextSize(2);
+
+      const char* text = companion_items[_companion_menu];
+      drawMenuItemText(display, text, 32);
 
       return 20000;
     }
