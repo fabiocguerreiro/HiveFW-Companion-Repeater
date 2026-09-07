@@ -365,6 +365,9 @@ void MyMesh::onContactsFull() {
 void MyMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id,
                            uint32_t timestamp, const uint8_t* app_data,
                            size_t app_data_len) {
+  // HiveFW Companion: contar todos os adverts recebidos.
+  companion_advert_rx_count++;
+
   // Primeiro preservamos integralmente o comportamento normal do Companion.
   BaseChatMesh::onAdvertRecv(
     packet,
@@ -3169,6 +3172,10 @@ bool MyMesh::advert(bool flood) {
   } else {
     sendZeroHop(pkt);
   }
+
+  // HiveFW Companion:
+  // o advert foi criado e entregue ao mecanismo de transmissão.
+  companion_advert_tx_count++;
 
   return true;
 }

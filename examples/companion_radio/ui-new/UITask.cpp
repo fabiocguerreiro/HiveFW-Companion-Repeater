@@ -1370,7 +1370,9 @@ public:
             snprintf(
               value,
               sizeof(value),
-              "N/D"
+              "%lu",
+              (unsigned long)
+                the_mesh.getCompanionAdvertTX()
             );
             break;
 
@@ -1385,7 +1387,9 @@ public:
             snprintf(
               value,
               sizeof(value),
-              "N/D"
+              "%lu",
+              (unsigned long)
+                the_mesh.getCompanionAdvertRX()
             );
             break;
         }

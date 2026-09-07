@@ -127,6 +127,18 @@ public:
   bool requestNodeDiscoveryName(int index);
 
   // ========================================================
+  // HiveFW Companion advert statistics
+  // ========================================================
+
+  uint32_t getCompanionAdvertTX() const {
+    return companion_advert_tx_count;
+  }
+
+  uint32_t getCompanionAdvertRX() const {
+    return companion_advert_rx_count;
+  }
+
+  // ========================================================
   // HiveFW Repeater UI statistics
   // ========================================================
 
@@ -306,6 +318,11 @@ private:
 
   #define ADVERT_PATH_TABLE_SIZE   16
   AdvertPath advert_paths[ADVERT_PATH_TABLE_SIZE]; // circular table
+
+  // HiveFW Companion advert counters.
+  // Reiniciados a cada boot.
+  uint32_t companion_advert_tx_count = 0;
+  uint32_t companion_advert_rx_count = 0;
 
   struct RepeaterNeighbour {
     mesh::Identity id;
