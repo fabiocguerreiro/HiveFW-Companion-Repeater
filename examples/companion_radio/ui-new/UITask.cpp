@@ -1463,68 +1463,11 @@ public:
   void renderSOSHome(
     DisplayDriver& display
   ) {
-    const int centerX =
-      display.width() / 2;
-
-    const int frameX =
-      centerX - 38;
-
-    const int frameY = 20;
-    const int frameW = 76;
-    const int frameH = 29;
-
-    // Moldura do logótipo SOS.
-    display.setColor(
-      UIColor::corp_blue
-    );
-
-    display.fillRect(
-      frameX,
-      frameY,
-      frameW,
-      2
-    );
-
-    display.fillRect(
-      frameX,
-      frameY + frameH - 2,
-      frameW,
-      2
-    );
-
-    display.fillRect(
-      frameX,
-      frameY,
-      2,
-      frameH
-    );
-
-    display.fillRect(
-      frameX + frameW - 2,
-      frameY,
-      2,
-      frameH
-    );
-
-    // SOS grande integrado no logótipo.
-    display.setTextSize(3);
-
-    display.drawTextCentered(
-      centerX,
-      23,
-      "SOS"
-    );
-
-    // Título normal da página.
-    display.setColor(
-      UIColor::primary_txt
-    );
-
-    display.setTextSize(1);
-
-    display.drawTextCentered(
-      centerX,
-      55,
+    renderSectionHome(
+      display,
+      sos_icon,
+      64,
+      32,
       "SOS"
     );
   }
