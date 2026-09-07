@@ -405,8 +405,6 @@ class HomeScreen : public UIScreen {
     APPS_SENSORS,
 #endif
     APPS_CLOCK,
-    APPS_DISCOVERY,
-    APPS_DISCOVERED,
     APPS_SOS,
     APPS_EXIT,
     APPS_MENU_COUNT
@@ -1190,17 +1188,17 @@ public:
       }
 
       // ======================================================
-      // MP-03.2 — ESTADO
+      // MP-03.2 — INFO COMPANION — 1/12 a 6/12
       //
-      // 1/6  BLE
-      // 2/6  BATERIA
-      // 3/6  VOLTAGEM
-      // 4/6  UPTIME
-      // 5/6  ADVERT TX
-      // 6/6  ADVERT RX
+      // 1/12  BLE
+      // 2/12  BATERIA
+      // 3/12  VOLTAGEM
+      // 4/12  UPTIME
+      // 5/12  ADVERT TX
+      // 6/12  ADVERT RX
       // ======================================================
 
-      if (_companion_status_submenu) {
+      if (_companion_info_submenu && _companion_info_page < 6) {
 
         display.setTextSize(1);
 
@@ -1209,8 +1207,8 @@ public:
         snprintf(
           counter,
           sizeof(counter),
-          "%d/6",
-          (int)(_companion_status_page + 1)
+          "%d/12",
+          (int)(_companion_info_page + 1)
         );
 
         display.setColor(UIColor::secondary_txt);
@@ -1227,7 +1225,7 @@ public:
         title[0] = '\0';
         value[0] = '\0';
 
-        switch (_companion_status_page) {
+        switch (_companion_info_page) {
 
           case 0:
             snprintf(
@@ -1416,21 +1414,21 @@ public:
       }
 
       // ======================================================
-      // MP-03.3 — INFORMAÇÃO
+      // MP-03.3 — INFO COMPANION — 7/12 a 12/12
       //
-      // 1/6  NOME BLE
-      // 2/6  SMARTPHONE
-      // 3/6  NOME DO NO
-      // 4/6  MODO
-      // 5/6  FIRMWARE
-      // 6/6  VERSÃO
+      // 7/12  NOME BLE
+      // 8/12  SMARTPHONE
+      // 9/12  NOME DO NO
+      // 10/12  MODO
+      // 11/12  FIRMWARE
+      // 12/12  VERSÃO
       //
       // No T114/nRF52 tentamos ler o Device Name BLE
       // anunciado pelo smartphone através de getPeerName().
       // Se o peer não disponibilizar nome, mostramos SEM NOME.
       // ======================================================
 
-      if (_companion_info_submenu) {
+      if (_companion_info_submenu && _companion_info_page >= 6) {
 
         display.setTextSize(1);
 
@@ -1439,7 +1437,7 @@ public:
         snprintf(
           counter,
           sizeof(counter),
-          "%d/6",
+          "%d/12",
           (int)(_companion_info_page + 1)
         );
 
@@ -1457,10 +1455,10 @@ public:
         title[0] = '\0';
         value[0] = '\0';
 
-        switch (_companion_info_page) {
+        switch (_companion_info_page - 6) {
 
           // ==================================================
-          // 1/6 — NOME BLE DO COMPANION
+          // 7/12 — NOME BLE DO COMPANION
           // ==================================================
 
           case 0:
@@ -1480,7 +1478,7 @@ public:
             break;
 
           // ==================================================
-          // 2/6 — SMARTPHONE / CENTRAL BLE
+          // 8/12 — SMARTPHONE / CENTRAL BLE
           // ==================================================
 
           case 1: {
@@ -1564,7 +1562,7 @@ public:
           }
 
           // ==================================================
-          // 3/6 — NOME DO NÓ
+          // 9/12 — NOME DO NÓ
           // ==================================================
 
           case 2:
@@ -1583,7 +1581,7 @@ public:
             break;
 
           // ==================================================
-          // 4/6 — MODO ATUAL
+          // 10/12 — MODO ATUAL
           // ==================================================
 
           case 3:
@@ -1604,7 +1602,7 @@ public:
             break;
 
           // ==================================================
-          // 5/6 — FIRMWARE
+          // 11/12 — FIRMWARE
           // ==================================================
 
           case 4:
@@ -1622,7 +1620,7 @@ public:
             break;
 
           // ==================================================
-          // 6/6 — VERSÃO
+          // 12/12 — VERSÃO
           // ==================================================
 
           case 5:
@@ -1667,8 +1665,9 @@ public:
       display.setTextSize(1);
 
       const char* companion_items[] = {
-        "ESTADO",
-        "INFORMAÇÃO",
+        "INFO COMPANION",
+        "DESCOBRIR REPETIDORES",
+        "REPETIDORES DESCOBERTOS",
         "[ SAIR ]"
       };
 
@@ -3636,8 +3635,6 @@ public:
           "SENSORES",
 #endif
           "RELÓGIO",
-          "DESCOBRIR REPETIDORES",
-          "REPETIDORES DESCOBERTOS",
           "SOS",
           "[ SAIR ]"
         };
@@ -4934,24 +4931,6 @@ public:
             _page = HomePage::INTERNAL_CLOCK;
             return true;
 
-          case APPS_DISCOVERY:
-            _apps_submenu = false;
-            _apps_view = APPS_VIEW_DISCOVERY;
-            _apps_return = true;
-
-            _active_discovery_menu = 0;
-            refreshActiveDiscoveryNodes();
-            return true;
-
-          case APPS_DISCOVERED:
-            _apps_submenu = false;
-            _apps_view = APPS_VIEW_DISCOVERED;
-            _apps_return = true;
-
-            _discover_menu = 0;
-            refreshDiscoveredNodes();
-            return true;
-
           case APPS_SOS:
             _apps_submenu = false;
             _apps_view = APPS_VIEW_SOS;
@@ -5151,7 +5130,9 @@ public:
       if (c == KEY_PREV ||
           c == KEY_LEFT) {
 
-        _page = HomePage::APPS;
+        _page = HomePage::COMPANION;
+        _companion_submenu = true;
+        _companion_menu = 1;
 
         _apps_submenu = false;
         _apps_menu = 0;
@@ -5224,7 +5205,9 @@ public:
       if (c == KEY_SELECT ||
           c == KEY_CANCEL) {
 
-        _page = HomePage::APPS;
+        _page = HomePage::COMPANION;
+        _companion_submenu = true;
+        _companion_menu = 1;
 
         _apps_submenu = false;
         _apps_menu = 0;
@@ -5270,7 +5253,9 @@ public:
       if (c == KEY_PREV ||
           c == KEY_LEFT) {
 
-        _page = HomePage::APPS;
+        _page = HomePage::COMPANION;
+        _companion_submenu = true;
+        _companion_menu = 2;
 
         _apps_submenu = false;
         _apps_menu = 0;
@@ -5284,7 +5269,9 @@ public:
       if (c == KEY_SELECT ||
           c == KEY_CANCEL) {
 
-        _page = HomePage::APPS;
+        _page = HomePage::COMPANION;
+        _companion_submenu = true;
+        _companion_menu = 2;
 
         _apps_submenu = false;
         _apps_menu = 0;
@@ -5570,53 +5557,32 @@ public:
     if (_page == HomePage::COMPANION) {
 
       // ======================================================
-      // ESTADO
-      // ======================================================
-
-      if (_companion_status_submenu) {
-
-        if (c == KEY_NEXT || c == KEY_RIGHT) {
-          _companion_status_page =
-            (_companion_status_page + 1) % 6;
-          return true;
-        }
-
-        if (c == KEY_PREV || c == KEY_LEFT) {
-          _companion_status_page =
-            (_companion_status_page + 5) % 6;
-          return true;
-        }
-
-        if (c == KEY_CANCEL || c == KEY_SELECT) {
-          _companion_status_submenu = false;
-          _companion_status_page = 0;
-          return true;
-        }
-
-        return true;
-      }
-
-      // ======================================================
-      // INFORMAÇÃO
+      // INFO COMPANION — 12 páginas
       // ======================================================
 
       if (_companion_info_submenu) {
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
+
           _companion_info_page =
-            (_companion_info_page + 1) % 6;
+            (_companion_info_page + 1) % 12;
+
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
+
           _companion_info_page =
-            (_companion_info_page + 5) % 6;
+            (_companion_info_page + 11) % 12;
+
           return true;
         }
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
+
           _companion_info_submenu = false;
           _companion_info_page = 0;
+
           return true;
         }
 
@@ -5630,30 +5596,39 @@ public:
       if (!_companion_submenu) {
 
         if (c == KEY_ENTER) {
+
           _companion_submenu = true;
           _companion_menu = 0;
+
           return true;
         }
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
+
           _companion_menu = 0;
           _companion_submenu = false;
-          _companion_status_submenu = false;
           _companion_info_submenu = false;
+
           _page = HomePage::MESSAGES;
+
           return true;
         }
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
+
           _page =
-            (_page + 1) % HomePage::Count;
+            (_page + 1)
+            % HomePage::Count;
+
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
+
           _page =
             (_page + HomePage::Count - 1)
             % HomePage::Count;
+
           return true;
         }
 
@@ -5664,54 +5639,89 @@ public:
       // MENU COMPANION
       // ======================================================
 
-      const uint8_t companion_count = 3;
+      const uint8_t companion_count = 4;
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
+
         _companion_menu =
           (_companion_menu + 1)
           % companion_count;
+
         return true;
       }
 
       if (c == KEY_PREV || c == KEY_LEFT) {
+
         _companion_menu =
-          (_companion_menu + companion_count - 1)
+          (_companion_menu + 3)
           % companion_count;
+
         return true;
       }
 
       if (c == KEY_CANCEL || c == KEY_SELECT) {
+
         _companion_menu = 0;
         _companion_submenu = false;
-        _companion_status_submenu = false;
         _companion_info_submenu = false;
+
         _page = HomePage::MESSAGES;
+
         return true;
       }
 
       if (c == KEY_ENTER) {
 
-        // ESTADO
+        // INFO COMPANION
         if (_companion_menu == 0) {
-          _companion_status_page = 0;
-          _companion_status_submenu = true;
+
+          _companion_info_page = 0;
+          _companion_info_submenu = true;
+
           return true;
         }
 
-        // INFORMAÇÃO
+        // DESCOBRIR REPETIDORES
         if (_companion_menu == 1) {
-          _companion_info_page = 0;
-          _companion_info_submenu = true;
+
+          _apps_submenu = false;
+          _apps_view = APPS_VIEW_DISCOVERY;
+          _apps_return = true;
+
+          _active_discovery_menu = 0;
+
+          refreshActiveDiscoveryNodes();
+
+          _page = HomePage::APPS;
+
+          return true;
+        }
+
+        // REPETIDORES DESCOBERTOS
+        if (_companion_menu == 2) {
+
+          _apps_submenu = false;
+          _apps_view = APPS_VIEW_DISCOVERED;
+          _apps_return = true;
+
+          _discover_menu = 0;
+
+          refreshDiscoveredNodes();
+
+          _page = HomePage::APPS;
+
           return true;
         }
 
         // SAIR
-        if (_companion_menu == 2) {
+        if (_companion_menu == 3) {
+
           _companion_menu = 0;
           _companion_submenu = false;
-          _companion_status_submenu = false;
           _companion_info_submenu = false;
+
           _page = HomePage::MESSAGES;
+
           return true;
         }
       }
