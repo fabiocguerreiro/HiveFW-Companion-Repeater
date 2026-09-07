@@ -381,14 +381,36 @@ class HomeScreen : public UIScreen {
   uint8_t _ha_confirm;
   bool _ha_confirm_submenu;
 
-  // APLICAÇÕES
-  // 0 = menu
-  // 1 = relógio
-  // 2 = Home Assistant
-  // 3 = GPS
-  // 4 = Sensores
-  // 5 = Descobrir Repetidores
-  // 6 = Repetidores Descobertos
+  // APLICAÇÕES — índices oficiais do menu
+  enum AppsMenu {
+    APPS_HOME_ASSISTANT = 0,
+#if ENV_INCLUDE_GPS == 1
+    APPS_GPS,
+#endif
+#if UI_SENSORS_PAGE == 1
+    APPS_SENSORS,
+#endif
+    APPS_CLOCK,
+    APPS_DISCOVERY,
+    APPS_DISCOVERED,
+    APPS_SOS,
+    APPS_EXIT,
+    APPS_MENU_COUNT
+  };
+
+  // APLICAÇÕES — vistas internas
+  // Os valores são mantidos para preservar o comportamento actual.
+  enum AppsView {
+    APPS_VIEW_NONE = 0,
+    APPS_VIEW_CLOCK = 1,
+    APPS_VIEW_HOME_ASSISTANT = 2,
+    APPS_VIEW_GPS = 3,
+    APPS_VIEW_SENSORS = 4,
+    APPS_VIEW_DISCOVERY = 5,
+    APPS_VIEW_DISCOVERED = 6,
+    APPS_VIEW_SOS = 7
+  };
+
   uint8_t _apps_menu;
   uint8_t _apps_view;
 
@@ -2830,7 +2852,7 @@ public:
 
 
 
-      if (!_apps_submenu && _apps_view == 5) {
+      if (!_apps_submenu && _apps_view == APPS_VIEW_DISCOVERY) {
 
         refreshActiveDiscoveryNodes();
 
@@ -2972,7 +2994,7 @@ public:
       // render discovered nodes final
       // ------------------------------------------------------
 
-      else if (!_apps_submenu && _apps_view == 6) {
+      else if (!_apps_submenu && _apps_view == APPS_VIEW_DISCOVERED) {
 
         refreshDiscoveredNodes();
 
@@ -3093,7 +3115,7 @@ public:
       // ------------------------------------------------------
 
       else if (!_apps_submenu &&
-               _apps_view == 7 &&
+               _apps_view == APPS_VIEW_SOS &&
                _sos_confirm_submenu) {
 
         display.setColor(UIColor::primary_txt);
@@ -4402,15 +4424,7 @@ public:
     if (_page == HomePage::APPS && _apps_submenu) {
 
       // Número real de opções do menu APLICAÇÕES.
-      int apps_count = 6;
-
-#if ENV_INCLUDE_GPS == 1
-      apps_count++;
-#endif
-
-#if UI_SENSORS_PAGE == 1
-      apps_count++;
-#endif
+      const uint8_t apps_count = APPS_MENU_COUNT;
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 
@@ -4434,7 +4448,7 @@ public:
 
         _apps_submenu = false;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         return true;
@@ -4442,114 +4456,86 @@ public:
 
       if (c == KEY_ENTER) {
 
-        int app_index = 0;
+        switch (_apps_menu) {
 
-        // HOME ASSISTANT
-        if (_apps_menu == app_index++) {
+          case APPS_HOME_ASSISTANT:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_HOME_ASSISTANT;
+            _apps_return = true;
 
-          _apps_submenu = false;
-          _apps_view = 2;
-          _apps_return = true;
+            _ha_submenu = true;
+            _ha_menu = 0;
+            _ha_confirm = 0;
+            _ha_confirm_submenu = false;
 
-          _ha_submenu = true;
-          _ha_menu = 0;
-          _ha_confirm = 0;
-          _ha_confirm_submenu = false;
-
-          _page = HomePage::INTERNAL_HOME_ASSISTANT;
-
-          return true;
-        }
+            _page = HomePage::INTERNAL_HOME_ASSISTANT;
+            return true;
 
 #if ENV_INCLUDE_GPS == 1
-        // GPS
-        if (_apps_menu == app_index++) {
+          case APPS_GPS:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_GPS;
+            _apps_return = true;
 
-          _apps_submenu = false;
-          _apps_view = 3;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_GPS;
-
-          return true;
-        }
+            _page = HomePage::INTERNAL_GPS;
+            return true;
 #endif
 
 #if UI_SENSORS_PAGE == 1
-        // SENSORES
-        if (_apps_menu == app_index++) {
+          case APPS_SENSORS:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_SENSORS;
+            _apps_return = true;
 
-          _apps_submenu = false;
-          _apps_view = 4;
-          _apps_return = true;
-
-          _page = HomePage::INTERNAL_SENSORS;
-
-          return true;
-        }
+            _page = HomePage::INTERNAL_SENSORS;
+            return true;
 #endif
 
-        // RELÓGIO
-        if (_apps_menu == app_index++) {
+          case APPS_CLOCK:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_CLOCK;
+            _apps_return = true;
 
-          _apps_submenu = false;
-          _apps_view = 1;
-          _apps_return = true;
+            _page = HomePage::INTERNAL_CLOCK;
+            return true;
 
-          _page = HomePage::INTERNAL_CLOCK;
+          case APPS_DISCOVERY:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_DISCOVERY;
+            _apps_return = true;
 
-          return true;
-        }
+            _active_discovery_menu = 0;
+            refreshActiveDiscoveryNodes();
+            return true;
 
-        // DESCOBRIR REPETIDORES
-        if (_apps_menu == app_index++) {
+          case APPS_DISCOVERED:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_DISCOVERED;
+            _apps_return = true;
 
-          _apps_submenu = false;
-          _apps_view = 5;
-          _apps_return = true;
+            _discover_menu = 0;
+            refreshDiscoveredNodes();
+            return true;
 
-          _active_discovery_menu = 0;
-          refreshActiveDiscoveryNodes();
+          case APPS_SOS:
+            _apps_submenu = false;
+            _apps_view = APPS_VIEW_SOS;
+            _apps_return = true;
 
-          return true;
-        }
+            _sos_submenu = true;
+            _sos_confirm_submenu = true;
+            _sos_menu = 0;
+            return true;
 
-        // REPETIDORES DESCOBERTOS
-        if (_apps_menu == app_index++) {
+          case APPS_EXIT:
+            _apps_submenu = false;
+            _apps_menu = 0;
+            _apps_view = APPS_VIEW_NONE;
+            _apps_return = false;
+            return true;
 
-          _apps_submenu = false;
-          _apps_view = 6;
-          _apps_return = true;
-
-          _discover_menu = 0;
-          refreshDiscoveredNodes();
-
-          return true;
-        }
-
-        // SOS
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_view = 7;
-          _apps_return = true;
-
-          _sos_submenu = true;
-          _sos_confirm_submenu = true;
-          _sos_menu = 0;
-
-          return true;
-        }
-
-        // SAIR
-        if (_apps_menu == app_index++) {
-
-          _apps_submenu = false;
-          _apps_menu = 0;
-          _apps_view = 0;
-          _apps_return = false;
-
-          return true;
+          default:
+            return true;
         }
       }
 
@@ -4562,7 +4548,7 @@ public:
 
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
-        _apps_view == 7 &&
+        _apps_view == APPS_VIEW_SOS &&
         _sos_submenu) {
 
       // ------------------------------------------------------
@@ -4688,7 +4674,7 @@ public:
         _sos_confirm_submenu = false;
         _sos_menu = 0;
 
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_menu = 0;
         _apps_return = false;
 
@@ -4708,7 +4694,7 @@ public:
 
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
-        _apps_view == 5) {
+        _apps_view == APPS_VIEW_DISCOVERY) {
 
       // 1 CLICK -> próximo resultado
       if (c == KEY_NEXT ||
@@ -4734,7 +4720,7 @@ public:
 
         _apps_submenu = false;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         _active_discovery_menu = 0;
@@ -4807,7 +4793,7 @@ public:
 
         _apps_submenu = false;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         _active_discovery_menu = 0;
@@ -4827,7 +4813,7 @@ public:
 
     if (_page == HomePage::APPS &&
         !_apps_submenu &&
-        _apps_view == 6) {
+        _apps_view == APPS_VIEW_DISCOVERED) {
 
       // 1 CLICK -> próximo
       if (c == KEY_NEXT ||
@@ -4853,7 +4839,7 @@ public:
 
         _apps_submenu = false;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         return true;
@@ -4867,7 +4853,7 @@ public:
 
         _apps_submenu = false;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         return true;
@@ -4895,7 +4881,7 @@ public:
         _page = HomePage::APPS;
 
         _apps_submenu = false;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_menu = 0;
         _apps_return = false;
 
@@ -4937,7 +4923,7 @@ public:
 
         _apps_submenu = false;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         _ha_submenu = false;
@@ -5112,7 +5098,7 @@ public:
 
           _apps_submenu = false;
           _apps_menu = 0;
-          _apps_view = 0;
+          _apps_view = APPS_VIEW_NONE;
           _apps_return = false;
 
           _ha_submenu = false;
@@ -6219,7 +6205,7 @@ public:
         _page = HomePage::APPS;
         _apps_submenu = true;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         return true;
@@ -6243,7 +6229,7 @@ public:
         _page = HomePage::APPS;
         _apps_submenu = true;
         _apps_menu = 0;
-        _apps_view = 0;
+        _apps_view = APPS_VIEW_NONE;
         _apps_return = false;
 
         return true;
@@ -6317,7 +6303,7 @@ public:
 
       _apps_submenu = true;
       _apps_menu = 0;
-      _apps_view = 0;
+      _apps_view = APPS_VIEW_NONE;
       _apps_return = true;
 
       return true;
