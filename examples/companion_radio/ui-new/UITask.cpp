@@ -1431,11 +1431,12 @@ public:
     uint8_t icon_width,
     uint8_t icon_height,
     const char* title,
-    int title_offset_x = 0
+    int title_offset_x = 0,
+    int icon_offset_y = 0
   ) {
 
     const int centerX = display.width() / 2;
-    const int iconY = 15;
+    const int iconY = 15 + icon_offset_y;
     const int titleY = 55;
 
     display.setColor(UIColor::corp_blue);
@@ -1468,7 +1469,9 @@ public:
       sos_icon,
       64,
       32,
-      "SOS"
+      "SOS",
+      0,
+      2
     );
   }
 
@@ -4908,9 +4911,28 @@ public:
                 : "Falha ao enviar",
               1200
             );
+
+            // Depois de um envio bem sucedido, regressar
+            // automaticamente à página principal SOS.
+            //
+            // Isto corresponde ao estado obtido pelo BACK,
+            // evitando o gesto manual de 3 cliques.
+            if (success) {
+
+              _sos_submenu = false;
+              _sos_confirm_submenu = false;
+              _sos_menu = 0;
+
+              _apps_view = APPS_VIEW_NONE;
+              _apps_menu = 0;
+              _apps_return = false;
+
+              return true;
+            }
           }
 
-          // NÃO ou depois do envio
+          // NÃO ou envio falhado:
+          // regressar apenas ao ecrã principal SOS.
           _sos_confirm_submenu = false;
           _sos_menu = 0;
 
