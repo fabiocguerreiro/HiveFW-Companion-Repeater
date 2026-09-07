@@ -1056,7 +1056,8 @@ public:
     const uint8_t* icon,
     uint8_t icon_width,
     uint8_t icon_height,
-    const char* title
+    const char* title,
+    int title_offset_x = 0
   ) {
 
     const int centerX = display.width() / 2;
@@ -1076,12 +1077,7 @@ public:
     display.setColor(UIColor::primary_txt);
     display.setTextSize(1);
 
-    int textCenterX = centerX;
-
-    if (strcmp(title, "DEFINIÇÕES") == 0 ||
-        strcmp(title, "APLICAÇÕES") == 0) {
-      textCenterX += 7;
-    }
+    const int textCenterX = centerX + title_offset_x;
 
     display.drawTextCentered(
       textCenterX,
@@ -2597,7 +2593,8 @@ public:
           display,
           settings_icon,
           64, 32,
-          "DEFINIÇÕES"
+          "DEFINIÇÕES",
+          7
         );
 
       } else if (_settings_advert_submenu) {
@@ -3154,7 +3151,8 @@ public:
           display,
           apps_icon,
           64, 32,
-          "APLICAÇÕES"
+          "APLICAÇÕES",
+          7
         );
 
       }
