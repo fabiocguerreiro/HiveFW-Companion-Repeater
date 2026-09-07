@@ -986,13 +986,41 @@ public:
     }
   }
 
-  void drawSelectedMenuText(
+  // ----------------------------------------------------------------
+  // RENDERERS COMUNS DE MENU
+  //
+  // Todos os menus devem passar por estes helpers sempre que o
+  // comportamento visual seja o mesmo.
+  // ----------------------------------------------------------------
+
+  inline void drawSelectedMenuText(
     DisplayDriver& display,
     int centerX,
     int y,
     const char* text
   ) {
     display.drawTextCentered(centerX, y, text);
+  }
+
+  inline void drawMenuSelection(
+    DisplayDriver& display,
+    const char* text,
+    int y = 38
+  ) {
+    const int centerX = display.width() / 2;
+
+    display.drawTextCentered(
+      centerX - 42,
+      y,
+      ">"
+    );
+
+    drawSelectedMenuText(
+      display,
+      centerX + 8,
+      y,
+      text
+    );
   }
 
   inline void drawMenuItemText(
@@ -1671,8 +1699,7 @@ public:
 
         if (i == _sms_menu) {
           display.setColor(UIColor::primary_txt);
-          display.drawTextCentered(display.width() / 2 - 42, y, ">");
-          display.drawTextCentered(display.width() / 2 + 8, y, sms_items[i]);
+          drawMenuSelection(display, sms_items[i], y);
         } else {
           display.setColor(UIColor::secondary_txt);
           display.drawTextCentered(display.width() / 2, y, sms_items[i]);
@@ -3110,17 +3137,10 @@ public:
           "NÃO"
         };
 
-        display.drawTextCentered(
-          display.width() / 2 - 42,
-          40,
-          ">"
-        );
-
-        drawSelectedMenuText(
+        drawMenuSelection(
           display,
-          display.width() / 2 + 8,
-          40,
-          sos_confirm_items[_sos_menu]
+          sos_confirm_items[_sos_menu],
+          40
         );
       }
 
