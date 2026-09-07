@@ -797,6 +797,17 @@ public:
     }
   }
 
+    // Abre directamente o menu CAIXA DE ENTRADA.
+    // Usado pelo triplo clique durante a leitura de uma mensagem.
+    void openMessagesInbox() {
+      _page = HomePage::MESSAGES;
+      _sms_menu = 1;
+      _sms_submenu = true;
+      _sms_new_submenu = false;
+      _sms_messages_submenu = true;
+      _sms_messages_menu = 0;
+    }
+
   void addUnreadChannelMessage(const uint8_t* hash) {
     if (hash == NULL) return;
 
@@ -1493,6 +1504,7 @@ public:
           40
         );
       }
+    }
 
     // ========================================================
     // PRESETS
@@ -1572,30 +1584,37 @@ public:
         #endif
 
         if (valid) {
-          display.setColor(UIColor::primary_txt);
-          int unread_count = getUnreadChannelCount(selected.channel.hash);
-          char channel_label[48];
+        int unread_count =
+          getUnreadChannelCount(selected.channel.hash);
 
-          if (unread_count > 0)
-            snprintf(channel_label, sizeof(channel_label), "%s (%d)", selected.name, unread_count);
-          else
-            snprintf(channel_label, sizeof(channel_label), "%s", selected.name);
+        char channel_label[48];
 
-          display.setColor(UIColor::primary_txt);
-          display.drawTextCentered(
-            display.width() / 2,
-            34,
-            channel_label
+        if (unread_count > 0)
+          snprintf(
+            channel_label,
+            sizeof(channel_label),
+            "%s (%d)",
+            selected.name,
+            unread_count
           );
-        }
+        else
+          snprintf(
+            channel_label,
+            sizeof(channel_label),
+            "%s",
+            selected.name
+          );
+
+        drawMenuListItem(
+          display,
+          channel_label
+        );
+      }
 
       } else {
-
-        // Última opção: avançar para a página seguinte
-        display.setColor(UIColor::primary_txt);
-        display.drawTextCentered(
-          display.width() / 2,
-          34,
+        // Última opção: sair para o menu MENSAGENS.
+        drawMenuListItem(
+          display,
           "[ SAIR ]"
         );
       }
@@ -1619,16 +1638,10 @@ public:
         "[ SAIR ]"
       };
 
-      for (int i = 0; i < 3; i++) {
-        int y = 25 + (i * 12);
-
-        if (i == _sms_menu) {
-          display.setColor(UIColor::primary_txt);
-          drawMenuSelection(display, sms_items[i], y);
-        } else {
-          display.setColor(UIColor::secondary_txt);
-          display.drawTextCentered(display.width() / 2, y, sms_items[i]);
-        }
+      drawMenuListItem(
+        display,
+        sms_items[_sms_menu]
+      );
       }
     }
 
@@ -6738,13 +6751,20 @@ public:
         return true;
       }
 
-      // Sair do histórico
+      // Sair do histórico.
+      // ENTER/CANCEL mantêm o comportamento original.
+      // SELECT é usado pelo triplo clique e regressa ao menu
+      // CAIXA DE ENTRADA.
       if (c == KEY_ENTER ||
-          c == KEY_CANCEL) {
+          c == KEY_CANCEL ||
+          c == KEY_SELECT) {
 
         _history_mode = false;
 
-        _task->gotoHomeScreen();
+        if (c == KEY_SELECT)
+          _task->gotoMessagesInbox();
+        else
+          _task->gotoHomeScreen();
 
         return true;
       }
@@ -6787,6 +6807,12 @@ public:
   }
 };
 
+
+void UITask::gotoMessagesInbox() {
+  HomeScreen* home_ptr = (HomeScreen*) home;
+  home_ptr->openMessagesInbox();
+  setCurrScreen(home);
+}
 
 void UITask::gotoChannelMessages(uint8_t channel_index) {
 

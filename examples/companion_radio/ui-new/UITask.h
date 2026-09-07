@@ -74,6 +74,8 @@ public:
   void begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs);
 
   void gotoHomeScreen() { setCurrScreen(home); }
+
+  void gotoMessagesInbox();
   void gotoChannelMessages(uint8_t channel_index);
   void showAlert(const char* text, int duration_millis);
   int  getMsgCount() const { return _msgcount; }
