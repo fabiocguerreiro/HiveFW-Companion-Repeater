@@ -310,6 +310,7 @@ class HomeScreen : public UIScreen {
     FIRST,
     RECENT,
     MESSAGES,
+    COMPANION,
     RADIO,
     REPETIDOR,
     APPS,
@@ -328,6 +329,9 @@ class HomeScreen : public UIScreen {
   SensorManager* _sensors;
   NodePrefs* _node_prefs;
   uint8_t _page;
+  uint8_t _companion_menu;
+  bool _companion_submenu;
+
   uint8_t _sms_menu;
   bool _sms_submenu;
   uint8_t _sms_messages_menu;
@@ -742,6 +746,7 @@ class HomeScreen : public UIScreen {
 public:
   HomeScreen(UITask* task, mesh::RTCClock* rtc, SensorManager* sensors, NodePrefs* node_prefs)
      : _task(task), _rtc(rtc), _sensors(sensors), _node_prefs(node_prefs), _page(0),
+       _companion_menu(0), _companion_submenu(false),
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
        _sms_new_menu(0), _sms_new_submenu(false),
@@ -796,17 +801,6 @@ public:
       memset(_channel_unread[i].hash, 0, PATH_HASH_SIZE);
     }
   }
-
-    // Abre directamente o menu CAIXA DE ENTRADA.
-    // Usado pelo triplo clique durante a leitura de uma mensagem.
-    void openMessagesInbox() {
-      _page = HomePage::MESSAGES;
-      _sms_menu = 1;
-      _sms_submenu = true;
-      _sms_new_submenu = false;
-      _sms_messages_submenu = true;
-      _sms_messages_menu = 0;
-    }
 
   void addUnreadChannelMessage(const uint8_t* hash) {
     if (hash == NULL) return;
@@ -1159,6 +1153,37 @@ public:
       x += 10;
     }
 
+    // ======================================================
+    // MP-03 — COMPANION
+    // ======================================================
+    if (_page == HomePage::COMPANION) {
+      if (!_companion_submenu) {
+        renderSectionHome(
+          display,
+          companion_icon,
+          64,
+          32,
+          "COMPANION"
+        );
+      } else {
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        const char* companion_items[] = {
+          "ESTADO",
+          "INFORMAÇÃO",
+          "[ SAIR ]"
+        };
+
+        drawMenuListItem(
+          display,
+          companion_items[_companion_menu]
+        );
+      }
+
+      return 20000;
+    }
+
     if (_page == HomePage::FIRST) {
       display.setColor(UIColor::primary_txt);
       display.setTextSize(2);
@@ -1504,7 +1529,6 @@ public:
           40
         );
       }
-    }
 
     // ========================================================
     // PRESETS
@@ -1584,37 +1608,30 @@ public:
         #endif
 
         if (valid) {
-        int unread_count =
-          getUnreadChannelCount(selected.channel.hash);
+          display.setColor(UIColor::primary_txt);
+          int unread_count = getUnreadChannelCount(selected.channel.hash);
+          char channel_label[48];
 
-        char channel_label[48];
+          if (unread_count > 0)
+            snprintf(channel_label, sizeof(channel_label), "%s (%d)", selected.name, unread_count);
+          else
+            snprintf(channel_label, sizeof(channel_label), "%s", selected.name);
 
-        if (unread_count > 0)
-          snprintf(
-            channel_label,
-            sizeof(channel_label),
-            "%s (%d)",
-            selected.name,
-            unread_count
+          display.setColor(UIColor::primary_txt);
+          display.drawTextCentered(
+            display.width() / 2,
+            34,
+            channel_label
           );
-        else
-          snprintf(
-            channel_label,
-            sizeof(channel_label),
-            "%s",
-            selected.name
-          );
-
-        drawMenuListItem(
-          display,
-          channel_label
-        );
-      }
+        }
 
       } else {
-        // Última opção: sair para o menu MENSAGENS.
-        drawMenuListItem(
-          display,
+
+        // Última opção: avançar para a página seguinte
+        display.setColor(UIColor::primary_txt);
+        display.drawTextCentered(
+          display.width() / 2,
+          34,
           "[ SAIR ]"
         );
       }
@@ -1638,10 +1655,16 @@ public:
         "[ SAIR ]"
       };
 
-      drawMenuListItem(
-        display,
-        sms_items[_sms_menu]
-      );
+      for (int i = 0; i < 3; i++) {
+        int y = 25 + (i * 12);
+
+        if (i == _sms_menu) {
+          display.setColor(UIColor::primary_txt);
+          drawMenuSelection(display, sms_items[i], y);
+        } else {
+          display.setColor(UIColor::secondary_txt);
+          display.drawTextCentered(display.width() / 2, y, sms_items[i]);
+        }
       }
     }
 
@@ -5045,6 +5068,75 @@ public:
     // Não existe INFO RÁDIO nem CONFIG RÁDIO intermédio.
     // ========================================================
 
+    if (_page == HomePage::COMPANION) {
+
+      if (!_companion_submenu) {
+        if (c == KEY_ENTER) {
+          _companion_submenu = true;
+          _companion_menu = 0;
+          return true;
+        }
+
+        if (c == KEY_CANCEL || c == KEY_SELECT) {
+          _companion_menu = 0;
+          _companion_submenu = false;
+          _page = HomePage::MESSAGES;
+          return true;
+        }
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+          _page = (_page + 1) % HomePage::Count;
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+          _page =
+            (_page + HomePage::Count - 1)
+            % HomePage::Count;
+          return true;
+        }
+
+        return true;
+      }
+
+      const uint8_t companion_count = 3;
+
+      if (c == KEY_NEXT || c == KEY_RIGHT) {
+        _companion_menu =
+          (_companion_menu + 1)
+          % companion_count;
+        return true;
+      }
+
+      if (c == KEY_PREV || c == KEY_LEFT) {
+        _companion_menu =
+          (_companion_menu + companion_count - 1)
+          % companion_count;
+        return true;
+      }
+
+      if (c == KEY_CANCEL || c == KEY_SELECT) {
+        _companion_menu = 0;
+        _companion_submenu = false;
+        _page = HomePage::MESSAGES;
+        return true;
+      }
+
+      if (c == KEY_ENTER) {
+        if (_companion_menu == 2) {
+          _companion_menu = 0;
+          _companion_submenu = false;
+          _page = HomePage::MESSAGES;
+          return true;
+        }
+
+        // ESTADO / INFORMAÇÃO reservados.
+        return true;
+      }
+
+      return true;
+    }
+
     if (_page == HomePage::RADIO) {
 
       // ======================================================
@@ -6751,20 +6843,13 @@ public:
         return true;
       }
 
-      // Sair do histórico.
-      // ENTER/CANCEL mantêm o comportamento original.
-      // SELECT é usado pelo triplo clique e regressa ao menu
-      // CAIXA DE ENTRADA.
+      // Sair do histórico
       if (c == KEY_ENTER ||
-          c == KEY_CANCEL ||
-          c == KEY_SELECT) {
+          c == KEY_CANCEL) {
 
         _history_mode = false;
 
-        if (c == KEY_SELECT)
-          _task->gotoMessagesInbox();
-        else
-          _task->gotoHomeScreen();
+        _task->gotoHomeScreen();
 
         return true;
       }
@@ -6807,12 +6892,6 @@ public:
   }
 };
 
-
-void UITask::gotoMessagesInbox() {
-  HomeScreen* home_ptr = (HomeScreen*) home;
-  home_ptr->openMessagesInbox();
-  setCurrScreen(home);
-}
 
 void UITask::gotoChannelMessages(uint8_t channel_index) {
 
