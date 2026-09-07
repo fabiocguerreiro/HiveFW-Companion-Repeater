@@ -431,7 +431,9 @@ class HomeScreen : public UIScreen {
   // ========================================================================
   bool _repeater_submenu;
   bool _repeater_info_submenu;
+  bool _repeater_neighbours_submenu;
   uint8_t _repeater_menu;
+  uint8_t _repeater_neighbour_menu;
 
   // ========================================================================
   // MP-03 — RÁDIO
@@ -738,7 +740,9 @@ public:
        _settings_channel_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
+       _repeater_neighbours_submenu(false),
        _repeater_menu(0),
+       _repeater_neighbour_menu(0),
        _radio_submenu(false),
        _radio_menu(0),
        _radio_freq_edit(false),
@@ -2043,7 +2047,9 @@ public:
       // 4. SAIR
       // ======================================================
 
-      else if (_repeater_submenu && !_repeater_info_submenu) {
+      else if (_repeater_submenu &&
+               !_repeater_info_submenu &&
+               !_repeater_neighbours_submenu) {
 
         char repeater_state[32];
         char autoadvert_state[32];
@@ -2065,6 +2071,7 @@ public:
         const char* repeater_items[] = {
           repeater_state,
           autoadvert_state,
+          "VIZINHOS",
           "INFO REPETIDOR",
           "[ SAIR ]"
         };
@@ -2100,6 +2107,167 @@ public:
             38,
             text
           );
+        }
+
+      }
+
+      // ======================================================
+      // MP-04.2.1 — VIZINHOS
+      //
+      // Mostra os repetidores vizinhos ouvidos directamente.
+      //
+      //  1/3
+      //  Nome
+      //  Chave
+      //  SNR
+      //  Tempo desde o ultimo advert
+      // ======================================================
+
+      else if (_repeater_neighbours_submenu) {
+
+        int neighbour_count =
+          the_mesh.getRepeaterNeighbourCount();
+
+        display.setColor(UIColor::primary_txt);
+        display.setTextSize(1);
+
+        if (neighbour_count == 0) {
+
+          display.drawTextCentered(
+            display.width() / 2,
+            37,
+            "NENHUM VIZINHO"
+          );
+
+        } else {
+
+          if (_repeater_neighbour_menu >= neighbour_count) {
+            _repeater_neighbour_menu = 0;
+          }
+
+          const mesh::Identity* neighbour =
+            the_mesh.getRepeaterNeighbour(
+              _repeater_neighbour_menu
+            );
+
+          if (neighbour == NULL) {
+            display.drawTextCentered(
+              display.width() / 2,
+              37,
+              "NENHUM VIZINHO"
+            );
+          } else {
+
+            char counterText[12];
+
+            snprintf(
+              counterText,
+              sizeof(counterText),
+              "%d/%d",
+              (int)(_repeater_neighbour_menu + 1),
+              neighbour_count
+            );
+
+            display.setColor(UIColor::secondary_txt);
+
+            display.drawTextCentered(
+              display.width() - 12,
+              14,
+              counterText
+            );
+
+            char name[33];
+            name[0] = '\0';
+
+            ContactInfo* contact =
+              the_mesh.lookupContactByPubKey(
+                neighbour->pub_key,
+                PUB_KEY_SIZE
+              );
+
+            if (contact != NULL && contact->name[0] != '\0') {
+              strncpy(
+                name,
+                contact->name,
+                sizeof(name) - 1
+              );
+              name[sizeof(name) - 1] = '\0';
+            }
+
+            if (name[0] == '\0') {
+              snprintf(
+                name,
+                sizeof(name),
+                "%02X%02X%02X%02X%02X%02X%02X",
+                neighbour->pub_key[0],
+                neighbour->pub_key[1],
+                neighbour->pub_key[2],
+                neighbour->pub_key[3],
+                neighbour->pub_key[4],
+                neighbour->pub_key[5],
+                neighbour->pub_key[6]
+              );
+            }
+
+            display.setColor(UIColor::primary_txt);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              28,
+              name
+            );
+
+            char keyText[32];
+
+            snprintf(
+              keyText,
+              sizeof(keyText),
+              "%02X%02X%02X%02X%02X%02X%02X",
+              neighbour->pub_key[0],
+              neighbour->pub_key[1],
+              neighbour->pub_key[2],
+              neighbour->pub_key[3],
+              neighbour->pub_key[4],
+              neighbour->pub_key[5],
+              neighbour->pub_key[6]
+            );
+
+            display.setColor(UIColor::secondary_txt);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              42,
+              keyText
+            );
+
+            int snr =
+              (int)(the_mesh.getRepeaterNeighbourSNR(
+                _repeater_neighbour_menu
+              ) / 4);
+
+            uint32_t heard_ago =
+              the_mesh.getRepeaterNeighbourHeardAgo(
+                _repeater_neighbour_menu
+              );
+
+            char infoText[32];
+
+            snprintf(
+              infoText,
+              sizeof(infoText),
+              "SNR %d  %lus",
+              snr,
+              (unsigned long)heard_ago
+            );
+
+            display.setColor(UIColor::secondary_txt);
+
+            display.drawTextCentered(
+              display.width() / 2,
+              56,
+              infoText
+            );
+          }
         }
 
       }
@@ -2486,6 +2654,9 @@ public:
           bluetooth_item,
           "ANUNCIAR NÓ",
           "CANAL APPS",
+#if ENV_INCLUDE_GPS == 1
+          _task->getGPSState() ? "GPS: ON" : "GPS: OFF",
+#endif
           "DESLIGAR",
           "[ SAIR ]"
         };
@@ -3042,57 +3213,24 @@ public:
           "Home Assistant"
         );
 
-      } else if (_ha_confirm_submenu) {
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          18,
-          "Abrir Prédio?"
-        );
-
-        const char* confirm_items[] = {
-          "SIM",
-          "NÃO"
-        };
-
-        display.drawTextCentered(
-        display.width() / 2 - 42,
-        40,
-        ">"
-      );
-
-      drawSelectedMenuText(
-        display,
-        display.width() / 2 + 8,
-        40,
-        confirm_items[_ha_confirm]
-      );
-
       } else {
 
         display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
+        display.setTextSize(2);
 
         const char* ha_items[] = {
-          "Abrir Prédio",
+          "PORTA-PREDIO",
+          "PING",
+          "GPS",
           "[ SAIR ]"
         };
 
-        display.drawTextCentered(
-        display.width() / 2 - 42,
-        34,
-        ">"
-      );
-
-      drawSelectedMenuText(
-        display,
-        display.width() / 2 + 8,
-        34,
-        ha_items[_ha_menu]
-      );
+        drawSelectedMenuText(
+          display,
+          display.width() / 2,
+          38,
+          ha_items[_ha_menu]
+        );
       }
 
     } else if (_page == HomePage::INTERNAL_CLOCK) {
@@ -4130,12 +4268,20 @@ public:
       // ======================================================
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
+#if ENV_INCLUDE_GPS == 1
+        _settings_menu = (_settings_menu + 1) % 6;
+#else
         _settings_menu = (_settings_menu + 1) % 5;
+#endif
         return true;
       }
 
       if (c == KEY_PREV || c == KEY_LEFT) {
+#if ENV_INCLUDE_GPS == 1
+        _settings_menu = (_settings_menu + 5) % 6;
+#else
         _settings_menu = (_settings_menu + 4) % 5;
+#endif
         return true;
       }
 
@@ -4208,16 +4354,34 @@ public:
           return true;
         }
 
+#if ENV_INCLUDE_GPS == 1
+        // GPS
+        if (_settings_menu == 3) {
+
+          _task->toggleGPS();
+
+          return true;
+        }
+
+        // DESLIGAR
+        if (_settings_menu == 4) {
+#else
         // DESLIGAR
         if (_settings_menu == 3) {
+#endif
 
           _shutdown_init = true;
 
           return true;
         }
 
+#if ENV_INCLUDE_GPS == 1
+        // SAIR
+        if (_settings_menu == 5) {
+#else
         // SAIR
         if (_settings_menu == 4) {
+#endif
 
           _settings_submenu = false;
           _settings_menu = 0;
@@ -4748,91 +4912,11 @@ public:
     if (_page == HomePage::INTERNAL_HOME_ASSISTANT &&
         _apps_return) {
 
-      if (_ha_confirm_submenu) {
-
-        if (c == KEY_NEXT ||
-            c == KEY_RIGHT ||
-            c == KEY_PREV ||
-            c == KEY_LEFT) {
-
-          _ha_confirm =
-            (_ha_confirm + 1) % 2;
-
-          return true;
-        }
-
-        if (c == KEY_CANCEL ||
-            c == KEY_SELECT) {
-
-          _ha_confirm_submenu = false;
-          return true;
-        }
-
-        if (c == KEY_ENTER) {
-
-          if (_ha_confirm == 0) {
-
-            ChannelDetails channel;
-            bool found = false;
-
-            for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
-
-              if (the_mesh.getChannel(i, channel) &&
-                  strcmp(channel.name, "HIVE") == 0) {
-
-                found = true;
-                break;
-              }
-            }
-
-            if (!found) {
-
-              _task->showAlert(
-                "Canal HIVE não encontrado",
-                1500
-              );
-
-              return true;
-            }
-
-            const char* command =
-              "!portapredio";
-
-            bool success =
-              the_mesh.sendGroupMessage(
-                _rtc->getCurrentTime(),
-                channel.channel,
-                _node_prefs->node_name,
-                command,
-                strlen(command)
-              );
-
-            _task->notify(
-              UIEventType::ack
-            );
-
-            _task->showAlert(
-              success
-                ? "Comando Enviado"
-                : "Falha ao enviar",
-              1200
-            );
-
-            return true;
-          }
-
-          _ha_confirm_submenu = false;
-          return true;
-        }
-
-        return true;
-      }
-
       if (c == KEY_NEXT ||
           c == KEY_RIGHT) {
 
         _ha_menu =
-          (_ha_menu + 1) % 2;
+          (_ha_menu + 1) % 4;
 
         return true;
       }
@@ -4841,7 +4925,7 @@ public:
           c == KEY_LEFT) {
 
         _ha_menu =
-          (_ha_menu + 1) % 2;
+          (_ha_menu + 3) % 4;
 
         return true;
       }
@@ -4864,15 +4948,165 @@ public:
 
       if (c == KEY_ENTER) {
 
+        // ------------------------------------------------------
+        // PORTA-PREDIO
+        // ------------------------------------------------------
+
         if (_ha_menu == 0) {
 
-          _ha_confirm = 0;
-          _ha_confirm_submenu = true;
+          ChannelDetails channel;
+
+          if (!getAppsChannel(channel)) {
+
+            _task->showAlert(
+              "Canal APPS não definido",
+              1500
+            );
+
+            return true;
+          }
+
+          const char* command =
+            "!portapredio";
+
+          bool success =
+            the_mesh.sendGroupMessage(
+              _rtc->getCurrentTime(),
+              channel.channel,
+              _node_prefs->node_name,
+              command,
+              strlen(command)
+            );
+
+          _task->notify(UIEventType::ack);
+
+          _task->showAlert(
+            success
+              ? "Comando Enviado"
+              : "Falha ao enviar",
+            1200
+          );
 
           return true;
         }
 
+        // ------------------------------------------------------
+        // PING
+        // ------------------------------------------------------
+
         if (_ha_menu == 1) {
+
+          ChannelDetails channel;
+
+          if (!getAppsChannel(channel)) {
+
+            _task->showAlert(
+              "Canal APPS não definido",
+              1500
+            );
+
+            return true;
+          }
+
+          const char* command =
+            "!ping";
+
+          bool success =
+            the_mesh.sendGroupMessage(
+              _rtc->getCurrentTime(),
+              channel.channel,
+              _node_prefs->node_name,
+              command,
+              strlen(command)
+            );
+
+          _task->notify(UIEventType::ack);
+
+          _task->showAlert(
+            success
+              ? "PING ENVIADO"
+              : "Falha ao enviar",
+            1200
+          );
+
+          return true;
+        }
+
+        // ------------------------------------------------------
+        // GPS
+        // ------------------------------------------------------
+
+        if (_ha_menu == 2) {
+
+          ChannelDetails channel;
+
+          if (!getAppsChannel(channel)) {
+
+            _task->showAlert(
+              "Canal APPS não definido",
+              1500
+            );
+
+            return true;
+          }
+
+          char command[64];
+
+#if ENV_INCLUDE_GPS == 1
+          LocationProvider* nmea =
+            sensors.getLocationProvider();
+
+          if (nmea != NULL && nmea->isValid()) {
+
+            snprintf(
+              command,
+              sizeof(command),
+              "!gps %.4f %.4f",
+              nmea->getLatitude() / 1000000.0,
+              nmea->getLongitude() / 1000000.0
+            );
+
+          } else {
+            snprintf(
+              command,
+              sizeof(command),
+              "!gps SEM GPS"
+            );
+          }
+#else
+          snprintf(
+            command,
+            sizeof(command),
+            "!gps SEM GPS"
+          );
+#endif
+
+          bool success =
+            the_mesh.sendGroupMessage(
+              _rtc->getCurrentTime(),
+              channel.channel,
+              _node_prefs->node_name,
+              command,
+              strlen(command)
+            );
+
+          _task->notify(UIEventType::ack);
+
+          _task->showAlert(
+            success
+              ? "GPS ENVIADO"
+              : "Falha ao enviar",
+            1200
+          );
+
+          return true;
+        }
+
+        // ------------------------------------------------------
+        // SAIR
+        // ------------------------------------------------------
+
+        if (_ha_menu == 3) {
 
           _page = HomePage::APPS;
 
@@ -5741,17 +5975,69 @@ public:
       // MP-04.2 — MENU REPETIDOR
       // ======================================================
 
-      if (_repeater_submenu && !_repeater_info_submenu) {
+      // ======================================================
+      // MP-04.2.1 — HANDLER VIZINHOS
+      //
+      // NEXT / RIGHT -> vizinho seguinte
+      // PREV / LEFT  -> vizinho anterior
+      // SELECT/CANCEL -> voltar ao menu REPETIDOR
+      // ======================================================
+
+      if (_repeater_neighbours_submenu) {
+
+        int neighbour_count =
+          the_mesh.getRepeaterNeighbourCount();
+
+        if (c == KEY_NEXT || c == KEY_RIGHT) {
+
+          if (neighbour_count > 0) {
+            _repeater_neighbour_menu =
+              (_repeater_neighbour_menu + 1)
+              % neighbour_count;
+          }
+
+          return true;
+        }
+
+        if (c == KEY_PREV || c == KEY_LEFT) {
+
+          if (neighbour_count > 0) {
+            _repeater_neighbour_menu =
+              (_repeater_neighbour_menu + neighbour_count - 1)
+              % neighbour_count;
+          }
+
+          return true;
+        }
+
+        if (c == KEY_SELECT || c == KEY_CANCEL) {
+
+          _repeater_neighbour_menu = 0;
+          _repeater_neighbours_submenu = false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // MP-04.2 — MENU REPETIDOR
+      // ======================================================
+
+      if (_repeater_submenu &&
+          !_repeater_info_submenu &&
+          !_repeater_neighbours_submenu) {
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
           _repeater_menu =
-            (_repeater_menu + 1) % 4;
+            (_repeater_menu + 1) % 5;
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
           _repeater_menu =
-            (_repeater_menu + 3) % 4;
+            (_repeater_menu + 4) % 5;
           return true;
         }
 
@@ -5759,6 +6045,7 @@ public:
           _repeater_menu = 0;
           _repeater_submenu = false;
           _repeater_info_submenu = false;
+          _repeater_neighbours_submenu = false;
           return true;
         }
 
@@ -5819,10 +6106,22 @@ public:
           }
 
           // ------------------------------------------------
-          // 3. INFO REPETIDOR
+          // 3. VIZINHOS
           // ------------------------------------------------
 
           if (_repeater_menu == 2) {
+
+            _repeater_neighbour_menu = 0;
+            _repeater_neighbours_submenu = true;
+
+            return true;
+          }
+
+          // ------------------------------------------------
+          // 4. INFO REPETIDOR
+          // ------------------------------------------------
+
+          if (_repeater_menu == 3) {
 
             _repeater_info_submenu = true;
             _repeater_stats_page = 0;
@@ -5831,10 +6130,10 @@ public:
           }
 
           // ------------------------------------------------
-          // 4. SAIR
+          // 5. SAIR
           // ------------------------------------------------
 
-          if (_repeater_menu == 3) {
+          if (_repeater_menu == 4) {
 
             _repeater_menu = 0;
             _repeater_info_submenu = false;

@@ -135,6 +135,12 @@ public:
   uint32_t getRepeaterMessagesOut() const;
   uint32_t getRepeaterMessagesIn() const;
 
+  // HiveFW Repeater — VIZINHOS
+  int getRepeaterNeighbourCount() const;
+  const mesh::Identity* getRepeaterNeighbour(int index) const;
+  int8_t getRepeaterNeighbourSNR(int index) const;
+  uint32_t getRepeaterNeighbourHeardAgo(int index) const;
+
 protected:
   float getAirtimeBudgetFactor() const override;
   int getInterferenceThreshold() const override;
@@ -160,6 +166,8 @@ protected:
   bool onContactPathRecv(ContactInfo& from, uint8_t* in_path, uint8_t in_path_len, uint8_t* out_path, uint8_t out_path_len, uint8_t extra_type, uint8_t* extra, uint8_t extra_len) override;
   void onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path_len, const uint8_t* path) override;
   void onContactPathUpdated(const ContactInfo &contact) override;
+  void onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id, uint32_t timestamp,
+                    const uint8_t* app_data, size_t app_data_len) override;
   ContactInfo* processAck(const uint8_t *data) override;
   void queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packet *pkt, uint32_t sender_timestamp,
                     const uint8_t *extra, int extra_len, const char *text);
@@ -298,6 +306,16 @@ private:
 
   #define ADVERT_PATH_TABLE_SIZE   16
   AdvertPath advert_paths[ADVERT_PATH_TABLE_SIZE]; // circular table
+
+  struct RepeaterNeighbour {
+    mesh::Identity id;
+    uint32_t heard_timestamp;
+    int8_t snr;
+  };
+
+  #define MAX_REPEATER_NEIGHBOURS 16
+  RepeaterNeighbour repeater_neighbours[MAX_REPEATER_NEIGHBOURS];
 };
+
 
 extern MyMesh the_mesh;

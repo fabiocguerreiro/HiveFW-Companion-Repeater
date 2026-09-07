@@ -362,6 +362,61 @@ void MyMesh::onContactsFull() {
   }
 }
 
+void MyMesh::onAdvertRecv(mesh::Packet* packet, const mesh::Identity& id,
+                           uint32_t timestamp, const uint8_t* app_data,
+                           size_t app_data_len) {
+  // Primeiro preservamos integralmente o comportamento normal do Companion.
+  BaseChatMesh::onAdvertRecv(
+    packet,
+    id,
+    timestamp,
+    app_data,
+    app_data_len
+  );
+
+  // A tabela de vizinhos só é relevante quando estamos em modo Repetidor.
+  if (!getNodePrefs()->isRepeatEn()) {
+    return;
+  }
+
+  // VIZINHO = Repeater anunciado directamente (zero-hop).
+  if (packet == NULL || packet->getPathHashCount() != 0) {
+    return;
+  }
+
+  AdvertDataParser parser(app_data, app_data_len);
+
+  if (!parser.isValid() || parser.getType() != ADV_TYPE_REPEATER) {
+    return;
+  }
+
+  uint32_t now = getRTCClock()->getCurrentTime();
+
+  // Procurar um vizinho já existente.
+  RepeaterNeighbour* neighbour = NULL;
+  RepeaterNeighbour* oldest = &repeater_neighbours[0];
+
+  for (int i = 0; i < MAX_REPEATER_NEIGHBOURS; i++) {
+    if (id.matches(repeater_neighbours[i].id)) {
+      neighbour = &repeater_neighbours[i];
+      break;
+    }
+
+    if (repeater_neighbours[i].heard_timestamp < oldest->heard_timestamp) {
+      oldest = &repeater_neighbours[i];
+    }
+  }
+
+  // Novo vizinho: usar a entrada mais antiga.
+  if (neighbour == NULL) {
+    neighbour = oldest;
+  }
+
+  neighbour->id = id;
+  neighbour->heard_timestamp = now;
+  neighbour->snr = (int8_t)(packet->getSNR() * 4);
+}
+
 void MyMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path_len, const uint8_t* path) {
   if (_serial->isConnected()) {
     if (is_new) {
@@ -1432,6 +1487,117 @@ int16_t MyMesh::getRepeaterRSSI() const
   return (int16_t)radio_driver.getLastRSSI();
 }
 
+int MyMesh::getRepeaterNeighbourCount() const
+{
+  int count = 0;
+
+  for (int i = 0; i < MAX_REPEATER_NEIGHBOURS; i++) {
+    if (repeater_neighbours[i].heard_timestamp > 0) {
+      count++;
+    }
+  }
+
+  return count;
+}
+
+const mesh::Identity* MyMesh::getRepeaterNeighbour(int index) const
+{
+  if (index < 0) {
+    return NULL;
+  }
+
+  const RepeaterNeighbour* sorted[MAX_REPEATER_NEIGHBOURS];
+  int count = 0;
+
+  for (int i = 0; i < MAX_REPEATER_NEIGHBOURS; i++) {
+    if (repeater_neighbours[i].heard_timestamp > 0) {
+      sorted[count++] = &repeater_neighbours[i];
+    }
+  }
+
+  if (index >= count) {
+    return NULL;
+  }
+
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = i + 1; j < count; j++) {
+      if (sorted[j]->heard_timestamp > sorted[i]->heard_timestamp) {
+        const RepeaterNeighbour* tmp = sorted[i];
+        sorted[i] = sorted[j];
+        sorted[j] = tmp;
+      }
+    }
+  }
+
+  return &sorted[index]->id;
+}
+
+int8_t MyMesh::getRepeaterNeighbourSNR(int index) const
+{
+  if (index < 0) {
+    return 0;
+  }
+
+  const RepeaterNeighbour* sorted[MAX_REPEATER_NEIGHBOURS];
+  int count = 0;
+
+  for (int i = 0; i < MAX_REPEATER_NEIGHBOURS; i++) {
+    if (repeater_neighbours[i].heard_timestamp > 0) {
+      sorted[count++] = &repeater_neighbours[i];
+    }
+  }
+
+  if (index >= count) {
+    return 0;
+  }
+
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = i + 1; j < count; j++) {
+      if (sorted[j]->heard_timestamp > sorted[i]->heard_timestamp) {
+        const RepeaterNeighbour* tmp = sorted[i];
+        sorted[i] = sorted[j];
+        sorted[j] = tmp;
+      }
+    }
+  }
+
+  return sorted[index]->snr;
+}
+
+uint32_t MyMesh::getRepeaterNeighbourHeardAgo(int index) const
+{
+  if (index < 0) {
+    return 0;
+  }
+
+  const RepeaterNeighbour* sorted[MAX_REPEATER_NEIGHBOURS];
+  int count = 0;
+
+  for (int i = 0; i < MAX_REPEATER_NEIGHBOURS; i++) {
+    if (repeater_neighbours[i].heard_timestamp > 0) {
+      sorted[count++] = &repeater_neighbours[i];
+    }
+  }
+
+  if (index >= count) {
+    return 0;
+  }
+
+  for (int i = 0; i < count - 1; i++) {
+    for (int j = i + 1; j < count; j++) {
+      if (sorted[j]->heard_timestamp > sorted[i]->heard_timestamp) {
+        const RepeaterNeighbour* tmp = sorted[i];
+        sorted[i] = sorted[j];
+        sorted[j] = tmp;
+      }
+    }
+  }
+
+  uint32_t now = getRTCClock()->getCurrentTime();
+
+  return now - sorted[index]->heard_timestamp;
+}
+
 uint32_t MyMesh::getRepeaterTXAirtime() const
 {
   return getTotalAirTime();
@@ -1465,6 +1631,7 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   dirty_contacts_expiry = 0;
   next_smart_advert = 0;
   memset(advert_paths, 0, sizeof(advert_paths));
+  memset(repeater_neighbours, 0, sizeof(repeater_neighbours));
   memset(send_scope.key, 0, sizeof(send_scope.key));
   send_unscoped = false;
 
