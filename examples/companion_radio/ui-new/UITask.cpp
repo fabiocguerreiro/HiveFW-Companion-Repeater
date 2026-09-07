@@ -3031,7 +3031,7 @@ public:
         const char* settings_items[] = {
           bluetooth_item,
           "ANUNCIAR NÓ",
-          "CANAL APPS",
+          "CANAL APPS/SOS",
 #if ENV_INCLUDE_GPS == 1
           _task->getGPSState() ? "GPS: ON" : "GPS: OFF",
 #endif
