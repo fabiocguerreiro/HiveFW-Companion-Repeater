@@ -1546,9 +1546,12 @@ public:
         "[ SAIR ]"
       };
 
-      drawMenuListItem(
+      // Selector oficial HiveFW.
+      drawMenuSelection(
         display,
-        companion_items[_companion_menu]
+        companion_items[_companion_menu],
+        38,
+        8
       );
 
       return 20000;
