@@ -1002,6 +1002,14 @@ public:
     display.drawTextCentered(centerX, y, text);
   }
 
+  inline void drawMenuListItem(
+    DisplayDriver& display,
+    const char* text,
+    int y = 40
+  ) {
+    drawMenuSelection(display, text, y);
+  }
+
   inline void drawMenuSelection(
     DisplayDriver& display,
     const char* text,
@@ -1278,32 +1286,19 @@ public:
               contact
             )) {
 
-          display.drawTextCentered(
-            display.width() / 2 - 42,
-            40,
-            ">"
-          );
-
-          display.drawTextEllipsized(
-            8,
-            34,
-            display.width() - 12,
+          drawMenuListItem(
+            display,
             contact.name
           );
         }
 
       } else {
 
-        display.drawTextCentered(
-          display.width() / 2 - 42,
+        drawMenuSelection(
+          display,
+          "[ SAIR ]",
           40,
-          ">"
-        );
-
-        display.drawTextCentered(
-          display.width() / 2,
-          40,
-          "[ SAIR ]"
+          0
         );
       }
 
@@ -1460,7 +1455,9 @@ public:
         "Canal"
       );
 
-      int count = 0;
+      ChannelDetails selected;
+      bool valid = false;
+      int found = 0;
 
 #ifdef MAX_GROUP_CHANNELS
       for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
@@ -1470,65 +1467,30 @@ public:
         if (the_mesh.getChannel(i, channel) &&
             channel.name[0] != '\0') {
 
-          count++;
+          if (found == _sms_channel_menu) {
+            selected = channel;
+            valid = true;
+            break;
+          }
+
+          found++;
         }
       }
 #endif
 
-      if (_sms_channel_menu < count) {
+      if (valid) {
 
-        int found = 0;
-        ChannelDetails selected;
-        bool valid = false;
-
-#ifdef MAX_GROUP_CHANNELS
-        for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
-
-          ChannelDetails channel;
-
-          if (the_mesh.getChannel(i, channel) &&
-              channel.name[0] != '\0') {
-
-            if (found == _sms_channel_menu) {
-
-              selected = channel;
-              valid = true;
-              break;
-            }
-
-            found++;
-          }
-        }
-#endif
-
-        if (valid) {
-
-          display.drawTextCentered(
-            display.width() / 2 - 42,
-            40,
-            ">"
-          );
-
-          display.drawTextEllipsized(
-            8,
-            34,
-            display.width() - 12,
-            selected.name
-          );
-        }
+        drawMenuListItem(
+          display,
+          selected.name
+        );
 
       } else {
 
-        display.drawTextCentered(
-          display.width() / 2 - 42,
-          40,
-          ">"
-        );
-
-        display.drawTextCentered(
-          display.width() / 2 + 8,
-          40,
-          "[ SAIR ]"
+        drawMenuSelection(
+          display,
+          "[ SAIR ]",
+          40
         );
       }
 
@@ -1557,16 +1519,8 @@ public:
         "Presets"
       );
 
-      display.drawTextCentered(
-        display.width() / 2 - 42,
-        40,
-        ">"
-      );
-
-      display.drawTextEllipsized(
-        8,
-        34,
-        display.width() - 12,
+      drawMenuListItem(
+        display,
         presets[_sms_preset_menu]
       );
     }
