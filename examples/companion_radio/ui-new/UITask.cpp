@@ -156,50 +156,102 @@ public:
     int build_day = 0;
     int build_year = 0;
 
-    // FIRMWARE_BUILD_DATE pode vir como:
-    // "Sep 04 2026" ou "Set 04 2026"
-    sscanf(
-      FIRMWARE_BUILD_DATE,
-      "%3s %d %d",
-      build_month,
-      &build_day,
-      &build_year
-    );
+    // FIRMWARE_BUILD_DATE aceita os dois formatos:
+    //
+    //   Sep 08 2026
+    //   08-Sep-2026
+    //
+    // O primeiro é o formato oficial atual e coincide com
+    // o formato standard de __DATE__.
 
-    // Normalizar abreviatura do mês para português.
-    if (strcmp(build_month, "Jan") == 0)
-      strcpy(build_month, "JAN");
-    else if (strcmp(build_month, "Feb") == 0)
-      strcpy(build_month, "FEV");
-    else if (strcmp(build_month, "Mar") == 0)
-      strcpy(build_month, "MAR");
-    else if (strcmp(build_month, "Apr") == 0)
-      strcpy(build_month, "ABR");
-    else if (strcmp(build_month, "May") == 0)
-      strcpy(build_month, "MAI");
-    else if (strcmp(build_month, "Jun") == 0)
-      strcpy(build_month, "JUN");
-    else if (strcmp(build_month, "Jul") == 0)
-      strcpy(build_month, "JUL");
-    else if (strcmp(build_month, "Aug") == 0)
-      strcpy(build_month, "AGO");
-    else if (strcmp(build_month, "Sep") == 0)
-      strcpy(build_month, "SET");
-    else if (strcmp(build_month, "Oct") == 0)
-      strcpy(build_month, "OUT");
-    else if (strcmp(build_month, "Nov") == 0)
-      strcpy(build_month, "NOV");
-    else if (strcmp(build_month, "Dec") == 0)
-      strcpy(build_month, "DEZ");
+    const char* raw_build_date = FIRMWARE_BUILD_DATE;
 
-    snprintf(
-      build_date,
-      sizeof(build_date),
-      "%02d %s %04d",
-      build_day,
-      build_month,
-      build_year
-    );
+    bool build_date_ok = false;
+
+    // Formato standard:
+    // Sep 08 2026
+    if (
+      sscanf(
+        raw_build_date,
+        "%3s %d %d",
+        build_month,
+        &build_day,
+        &build_year
+      ) == 3
+    ) {
+      build_date_ok = true;
+    }
+
+    // Compatibilidade com builds HiveFW antigos:
+    // 08-Sep-2026
+    if (!build_date_ok) {
+      build_month[0] = '\0';
+      build_day = 0;
+      build_year = 0;
+
+      if (
+        sscanf(
+          raw_build_date,
+          "%d-%3s-%d",
+          &build_day,
+          build_month,
+          &build_year
+        ) == 3
+      ) {
+        build_date_ok = true;
+      }
+    }
+
+    if (build_date_ok) {
+
+      const char* months_en[] = {
+        "Jan", "Feb", "Mar", "Apr",
+        "May", "Jun", "Jul", "Aug",
+        "Sep", "Oct", "Nov", "Dec"
+      };
+
+      const char* months_pt[] = {
+        "JAN", "FEV", "MAR", "ABR",
+        "MAI", "JUN", "JUL", "AGO",
+        "SET", "OUT", "NOV", "DEZ"
+      };
+
+      for (int i = 0; i < 12; i++) {
+        if (strcmp(build_month, months_en[i]) == 0) {
+          strncpy(
+            build_month,
+            months_pt[i],
+            sizeof(build_month) - 1
+          );
+
+          build_month[
+            sizeof(build_month) - 1
+          ] = '\0';
+
+          break;
+        }
+      }
+
+      snprintf(
+        build_date,
+        sizeof(build_date),
+        "%02d %s %04d",
+        build_day,
+        build_month,
+        build_year
+      );
+
+    } else {
+
+      // Nunca deixar a linha vazia mesmo que apareça
+      // futuramente um formato de data desconhecido.
+      snprintf(
+        build_date,
+        sizeof(build_date),
+        "%s",
+        raw_build_date
+      );
+    }
 
     display.setColor(UIColor::secondary_txt);
     display.setTextSize(1);
