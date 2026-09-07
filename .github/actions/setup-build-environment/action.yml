@@ -31,8 +31,13 @@ runs:
           VERSION_STRING="${GIT_TAG_NAME##*-}"
         else
           # triggered by a workflow dispatch (e.g: refs/heads/main)
-          # strip "refs/heads/" prefix and replace any remaining "/" with "-" to protect file paths
-          BRANCH_NAME="${GITHUB_REF#refs/heads/}"
-          VERSION_STRING=$(echo "$BRANCH_NAME" | tr '/' '-')
+          # use VERSION as the single source of truth for branch builds
+          if [ -f VERSION ]; then
+            VERSION_STRING=$(tr -d '[:space:]' < VERSION)
+          else
+            # fallback for branches without a VERSION file
+            BRANCH_NAME="${GITHUB_REF#refs/heads/}"
+            VERSION_STRING=$(echo "$BRANCH_NAME" | tr '/' '-')
+          fi
         fi
         echo "GIT_TAG_VERSION=${VERSION_STRING}" >> $GITHUB_ENV

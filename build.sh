@@ -132,9 +132,19 @@ build_firmware() {
   # set firmware build date
   FIRMWARE_BUILD_DATE=$(date '+%d-%b-%Y')
 
-  # get FIRMWARE_VERSION, which should be provided by the environment
+  # get firmware version from VERSION as the single source of truth.
+  # An explicit FIRMWARE_VERSION environment variable still overrides it.
   if [ -z "$FIRMWARE_VERSION" ]; then
-    echo "FIRMWARE_VERSION must be set in environment"
+    if [ ! -f VERSION ]; then
+      echo "VERSION file not found and FIRMWARE_VERSION is not set"
+      exit 1
+    fi
+
+    FIRMWARE_VERSION=$(tr -d '[:space:]' < VERSION)
+  fi
+
+  if [ -z "$FIRMWARE_VERSION" ]; then
+    echo "Firmware version is empty"
     exit 1
   fi
 
