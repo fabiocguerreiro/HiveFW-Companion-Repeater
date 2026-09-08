@@ -23,6 +23,13 @@
 
 #define LONG_PRESS_MILLIS   1200
 
+// HiveFW — linha comum para pequenos contadores/indicadores
+// no canto superior direito.
+//
+// A barra ocupa 0..10 e o separador ocupa y=11.
+// Assim os contadores ficam sempre no corpo do ecrã.
+static const int HIVEFW_PAGE_COUNTER_Y = 14;
+
 #ifndef UI_RECENT_LIST_SIZE
   #define UI_RECENT_LIST_SIZE 4
 #endif
@@ -46,6 +53,16 @@
 //   └── NICKNAME: nome do nó
 // MP-01 — RECENTES
 // MP-02 — MENSAGENS
+//   ├── NOVA MENSAGEM
+//   ├── CAIXA DE ENTRADA
+//   ├── CONTACTOS
+//   │   ├── INFO
+//   │   ├── MENSAGEM
+//   │   ├── PING
+//   │   ├── TRACE ROUTE
+//   │   ├── FAVORITO
+//   │   └── APAGAR
+//   └── [ SAIR ]
 //
 // MP-03 — COMPANION
 //   ├── INFO COMPANION
@@ -609,6 +626,23 @@ class HomeScreen : public UIScreen {
   bool _sms_messages_submenu;
   uint8_t _sms_new_menu;
   bool _sms_new_submenu;
+
+
+  // ========================================================
+  // HIVEFW — GESTOR DE CONTACTOS
+  // ========================================================
+
+  bool _contacts_submenu;
+  uint8_t _contacts_menu;
+
+  bool _contacts_action_submenu;
+  uint8_t _contacts_action_menu;
+
+  bool _contacts_info_submenu;
+
+  bool _contacts_delete_confirm;
+  uint8_t _contacts_delete_choice;
+
 
   // Nova mensagem
   // 0 = menu principal
@@ -2023,7 +2057,7 @@ class HomeScreen : public UIScreen {
 
     display.drawTextRightAlign(
       display.width() - 1,
-      8,
+      HIVEFW_PAGE_COUNTER_Y,
       counter
     );
 
@@ -3219,6 +3253,15 @@ public:
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
        _sms_new_menu(0), _sms_new_submenu(false),
+
+       _contacts_submenu(false),
+       _contacts_menu(0),
+       _contacts_action_submenu(false),
+       _contacts_action_menu(0),
+       _contacts_info_submenu(false),
+       _contacts_delete_confirm(false),
+       _contacts_delete_choice(1),
+
        _sms_new_stage(0),
        _sms_contact_menu(0),
        _sms_preset_menu(0),
@@ -3368,6 +3411,100 @@ public:
     memset(&_sms_recipient, 0, sizeof(_sms_recipient));
     memset(&_sms_channel, 0, sizeof(_sms_channel));
   }
+
+
+  // ========================================================
+  // HIVEFW — CONTACTOS
+  // ========================================================
+
+  bool getManagedContact(
+    ContactInfo& contact
+  ) {
+
+    int count =
+      the_mesh.getNumContacts();
+
+    if (count <= 0) {
+      return false;
+    }
+
+    if (_contacts_menu >= count) {
+      _contacts_menu = 0;
+    }
+
+    return the_mesh.getContactByIdx(
+      _contacts_menu +
+      MAX_ANON_CONTACTS,
+      contact
+    );
+  }
+
+
+  static const char* contactTypeName(
+    uint8_t type
+  ) {
+
+    switch (type) {
+
+      case ADV_TYPE_CHAT:
+        return "COMPANION";
+
+      case ADV_TYPE_REPEATER:
+        return "REPETIDOR";
+
+      case ADV_TYPE_ROOM:
+        return "ROOM";
+
+      case ADV_TYPE_SENSOR:
+        return "SENSOR";
+
+      default:
+        return "NÓ";
+    }
+  }
+
+
+  void beginManagedContactMessage(
+    const ContactInfo& contact
+  ) {
+
+    resetNewMessageState();
+
+    _sms_recipient =
+      contact;
+
+    _sms_recipient_valid =
+      true;
+
+    _sms_target_type = 0;
+    _sms_flow_type = 0;
+
+    _sms_char_index = 0;
+    _sms_new_stage = 3;
+    _sms_new_menu = 0;
+
+    _sms_messages_submenu =
+      false;
+
+    _sms_new_submenu =
+      true;
+
+
+    // Fechar apenas o gestor de contactos.
+    // O menu MENSAGENS permanece ativo.
+    _contacts_submenu =
+      false;
+
+    _contacts_action_submenu =
+      false;
+
+    _contacts_info_submenu =
+      false;
+
+    _contacts_delete_confirm =
+      false;
+  }
+
 
   bool sendComposedMessage() {
 
@@ -3733,6 +3870,418 @@ public:
         32,
         "MENSAGENS"
       );
+
+
+  } else if (_contacts_submenu) {
+
+    // ========================================================
+    // HIVEFW — CONTACTOS
+    // ========================================================
+
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    display.setTextSize(1);
+
+    int contact_count =
+      the_mesh.getNumContacts();
+
+
+    // --------------------------------------------------------
+    // CONFIRMAR APAGAR
+    // --------------------------------------------------------
+
+    if (_contacts_delete_confirm) {
+
+      ContactInfo contact;
+
+      display.drawTextCentered(
+        display.width() / 2,
+        20,
+        "APAGAR CONTACTO?"
+      );
+
+      if (getManagedContact(contact)) {
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextEllipsized(
+          4,
+          32,
+          display.width() - 8,
+          contact.name
+        );
+      }
+
+      const char* choices[] = {
+        "SIM",
+        "NÃO"
+      };
+
+      display.setColor(
+        UIColor::primary_txt
+      );
+
+      drawMenuSelection(
+        display,
+        choices[
+          _contacts_delete_choice
+        ],
+        51
+      );
+    }
+
+
+    // --------------------------------------------------------
+    // INFO
+    // --------------------------------------------------------
+
+    else if (_contacts_info_submenu) {
+
+      ContactInfo contact;
+
+      if (!getManagedContact(contact)) {
+
+        display.drawTextCentered(
+          display.width() / 2,
+          37,
+          "CONTACTO INVÁLIDO"
+        );
+
+      } else {
+
+        char counter[12];
+
+        snprintf(
+          counter,
+          sizeof(counter),
+          "%d/%d",
+          (int)(_contacts_menu + 1),
+          contact_count
+        );
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextRightAlign(
+          display.width() - 1,
+          HIVEFW_PAGE_COUNTER_Y,
+          counter
+        );
+
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.drawTextEllipsized(
+          3,
+          24,
+          display.width() - 6,
+          contact.name
+        );
+
+
+        char type_line[32];
+
+        snprintf(
+          type_line,
+          sizeof(type_line),
+          "%s  FAV:%s",
+          contactTypeName(
+            contact.type
+          ),
+          (
+            contact.flags &
+            0x01
+          )
+            ? "SIM"
+            : "NÃO"
+        );
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          36,
+          type_line
+        );
+
+
+        char route_line[32];
+
+        if (
+          contact.out_path_len ==
+          OUT_PATH_UNKNOWN
+        ) {
+
+          snprintf(
+            route_line,
+            sizeof(route_line),
+            "ROTA: FLOOD"
+          );
+
+        } else {
+
+          uint8_t hash_size =
+            (
+              contact.out_path_len >>
+              6
+            ) + 1;
+
+          uint8_t hop_count =
+            contact.out_path_len &
+            0x3F;
+
+          if (hop_count == 0) {
+
+            snprintf(
+              route_line,
+              sizeof(route_line),
+              "ROTA: DIRETA"
+            );
+
+          } else {
+
+            snprintf(
+              route_line,
+              sizeof(route_line),
+              "ROTA: %u HOP%s / %uB",
+              (unsigned)hop_count,
+              hop_count == 1
+                ? ""
+                : "S",
+              (unsigned)hash_size
+            );
+          }
+        }
+
+        display.drawTextCentered(
+          display.width() / 2,
+          47,
+          route_line
+        );
+
+
+        char age_line[32];
+
+        uint32_t now =
+          _rtc->getCurrentTime();
+
+        if (
+          contact.lastmod > 0 &&
+          now >= contact.lastmod
+        ) {
+
+          char elapsed[20];
+
+          formatDuration(
+            elapsed,
+            sizeof(elapsed),
+            now - contact.lastmod
+          );
+
+          snprintf(
+            age_line,
+            sizeof(age_line),
+            "HÁ: %s",
+            elapsed
+          );
+
+        } else {
+
+          snprintf(
+            age_line,
+            sizeof(age_line),
+            "HÁ: --"
+          );
+        }
+
+        display.drawTextCentered(
+          display.width() / 2,
+          58,
+          age_line
+        );
+      }
+    }
+
+
+    // --------------------------------------------------------
+    // AÇÕES DO CONTACTO
+    // --------------------------------------------------------
+
+    else if (_contacts_action_submenu) {
+
+      ContactInfo contact;
+
+      if (!getManagedContact(contact)) {
+
+        _contacts_action_submenu =
+          false;
+
+      } else {
+
+        char favourite_item[24];
+
+        snprintf(
+          favourite_item,
+          sizeof(favourite_item),
+          "FAVORITO: %s",
+          (
+            contact.flags &
+            0x01
+          )
+            ? "ON"
+            : "OFF"
+        );
+
+        const char* actions[] = {
+          "INFO",
+          "MENSAGEM",
+          "PING",
+          "TRACE ROUTE",
+          favourite_item,
+          "APAGAR",
+          "[ VOLTAR ]"
+        };
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(2);
+
+        drawMenuItemText(
+          display,
+          actions[
+            _contacts_action_menu
+          ],
+          22
+        );
+      }
+    }
+
+
+    // --------------------------------------------------------
+    // LISTA DE CONTACTOS
+    // --------------------------------------------------------
+
+    else {
+
+      if (contact_count <= 0) {
+
+        _contacts_menu = 0;
+
+        display.drawTextCentered(
+          display.width() / 2,
+          34,
+          "SEM CONTACTOS"
+        );
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          51,
+          "[ VOLTAR ]"
+        );
+
+      } else {
+
+        if (
+          _contacts_menu >=
+          contact_count
+        ) {
+          _contacts_menu = 0;
+        }
+
+        ContactInfo contact;
+
+        if (getManagedContact(contact)) {
+
+          char counter[12];
+
+          snprintf(
+            counter,
+            sizeof(counter),
+            "%d/%d",
+            (int)(_contacts_menu + 1),
+            contact_count
+          );
+
+          display.setColor(
+            UIColor::secondary_txt
+          );
+
+          display.drawTextRightAlign(
+            display.width() - 1,
+            HIVEFW_PAGE_COUNTER_Y,
+            counter
+          );
+
+
+          display.setColor(
+            UIColor::primary_txt
+          );
+
+          display.setTextSize(2);
+
+          if (
+            display.getTextWidth(
+              contact.name
+            ) >
+            display.width() - 10
+          ) {
+
+            display.setTextSize(1);
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            32,
+            contact.name
+          );
+
+
+          char info[28];
+
+          snprintf(
+            info,
+            sizeof(info),
+            "%s%s",
+            (
+              contact.flags &
+              0x01
+            )
+              ? "* "
+              : "",
+            contactTypeName(
+              contact.type
+            )
+          );
+
+          display.setColor(
+            UIColor::secondary_txt
+          );
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            51,
+            info
+          );
+        }
+      }
+    }
 
 
   } else if (_sms_new_submenu) {
@@ -4144,11 +4693,12 @@ public:
       const char* sms_items[] = {
         "Nova Mensagem",
         "Caixa de entrada",
+        "CONTACTOS",
         "[ SAIR ]"
       };
 
-      for (int i = 0; i < 3; i++) {
-        int y = 25 + (i * 12);
+      for (int i = 0; i < 4; i++) {
+        int y = 19 + (i * 12);
 
         if (i == _sms_menu) {
           display.setColor(UIColor::primary_txt);
@@ -4533,7 +5083,7 @@ public:
 
               display.drawTextRightAlign(
                 display.width() - 2,
-                10,
+                HIVEFW_PAGE_COUNTER_Y,
                 pos
               );
             }
@@ -4735,7 +5285,7 @@ public:
 
             display.drawTextCentered(
               display.width() - 12,
-              14,
+              HIVEFW_PAGE_COUNTER_Y,
               counterText
             );
 
@@ -4873,7 +5423,7 @@ public:
 
         display.drawTextRightAlign(
           display.width() - 1,
-          8,
+          HIVEFW_PAGE_COUNTER_Y,
           repeater_counter
         );
 
@@ -5708,7 +6258,7 @@ public:
 
           display.drawTextCentered(
             display.width() - 12,
-            14,
+            HIVEFW_PAGE_COUNTER_Y,
             counterText
           );
 
@@ -6050,7 +6600,7 @@ public:
 
         display.drawTextRightAlign(
           display.width() - 1,
-          14,
+          HIVEFW_PAGE_COUNTER_Y,
           command_field
             ? "2/2"
             : "1/2"
@@ -6547,6 +7097,499 @@ public:
         }
       }
     }
+
+
+    // ========================================================
+    // HIVEFW — GESTOR DE CONTACTOS
+    // ========================================================
+
+    if (
+      _page == HomePage::MESSAGES &&
+      _contacts_submenu
+    ) {
+
+      int contact_count =
+        the_mesh.getNumContacts();
+
+
+      if (
+        contact_count > 0 &&
+        _contacts_menu >= contact_count
+      ) {
+
+        _contacts_menu =
+          contact_count - 1;
+      }
+
+
+      // ------------------------------------------------------
+      // CONFIRMAÇÃO DE APAGAR
+      // ------------------------------------------------------
+
+      if (_contacts_delete_confirm) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT ||
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _contacts_delete_choice =
+            (
+              _contacts_delete_choice +
+              1
+            ) % 2;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _contacts_delete_confirm =
+            false;
+
+          _contacts_delete_choice = 1;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          // NÃO
+          if (
+            _contacts_delete_choice !=
+            0
+          ) {
+
+            _contacts_delete_confirm =
+              false;
+
+            _contacts_delete_choice = 1;
+
+            return true;
+          }
+
+
+          bool removed =
+            the_mesh.removeContactByUiIndex(
+              _contacts_menu
+            );
+
+          if (!removed) {
+
+            _task->showAlert(
+              "Falha ao apagar",
+              1500
+            );
+
+            return true;
+          }
+
+
+          contact_count =
+            the_mesh.getNumContacts();
+
+          if (contact_count <= 0) {
+
+            _contacts_menu = 0;
+
+          } else if (
+            _contacts_menu >=
+            contact_count
+          ) {
+
+            _contacts_menu =
+              contact_count - 1;
+          }
+
+
+          _contacts_delete_confirm =
+            false;
+
+          _contacts_delete_choice = 1;
+
+          _contacts_action_submenu =
+            false;
+
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            "Contacto apagado",
+            1200
+          );
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ------------------------------------------------------
+      // INFO
+      // ------------------------------------------------------
+
+      if (_contacts_info_submenu) {
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT ||
+          c == KEY_ENTER
+        ) {
+
+          _contacts_info_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ------------------------------------------------------
+      // AÇÕES
+      // ------------------------------------------------------
+
+      if (_contacts_action_submenu) {
+
+        const uint8_t action_count = 7;
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _contacts_action_menu =
+            (
+              _contacts_action_menu +
+              1
+            ) %
+            action_count;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _contacts_action_menu =
+            (
+              _contacts_action_menu +
+              action_count -
+              1
+            ) %
+            action_count;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _contacts_action_submenu =
+            false;
+
+          _contacts_action_menu = 0;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          ContactInfo contact;
+
+          if (!getManagedContact(contact)) {
+
+            _contacts_action_submenu =
+              false;
+
+            _task->showAlert(
+              "Contacto inválido",
+              1200
+            );
+
+            return true;
+          }
+
+
+          // INFO
+          if (_contacts_action_menu == 0) {
+
+            _contacts_info_submenu =
+              true;
+
+            return true;
+          }
+
+
+          // MENSAGEM
+          if (_contacts_action_menu == 1) {
+
+            beginManagedContactMessage(
+              contact
+            );
+
+            return true;
+          }
+
+
+          // PING
+          //
+          // O status request oficial aplica-se a
+          // Repeaters e Sensors.
+          if (_contacts_action_menu == 2) {
+
+            if (
+              contact.type !=
+                ADV_TYPE_REPEATER &&
+              contact.type !=
+                ADV_TYPE_SENSOR
+            ) {
+
+              _task->showAlert(
+                "Ping só Rep/Sensor",
+                1400
+              );
+
+              return true;
+            }
+
+
+            uint32_t est_timeout = 0;
+
+            int result =
+              the_mesh.sendContactPingByUiIndex(
+                _contacts_menu,
+                est_timeout
+              );
+
+            if (
+              result ==
+              MSG_SEND_FAILED
+            ) {
+
+              _task->showAlert(
+                "Falha no Ping",
+                1400
+              );
+
+            } else {
+
+              _task->notify(
+                UIEventType::ack
+              );
+
+              _task->showAlert(
+                "Ping enviado",
+                1200
+              );
+            }
+
+            return true;
+          }
+
+
+          // TRACE ROUTE
+          if (_contacts_action_menu == 3) {
+
+            bool sent =
+              the_mesh.sendContactTraceByUiIndex(
+                _contacts_menu
+              );
+
+            if (sent) {
+
+              _task->notify(
+                UIEventType::ack
+              );
+
+              _task->showAlert(
+                "Trace enviado",
+                1200
+              );
+
+            } else {
+
+              _task->showAlert(
+                "Sem rota compatível",
+                1500
+              );
+            }
+
+            return true;
+          }
+
+
+          // FAVORITO
+          if (_contacts_action_menu == 4) {
+
+            bool favourite =
+              (
+                contact.flags &
+                0x01
+              ) == 0;
+
+            bool saved =
+              the_mesh.setContactFavouriteByUiIndex(
+                _contacts_menu,
+                favourite
+              );
+
+            if (!saved) {
+
+              _task->showAlert(
+                "Falha ao guardar",
+                1400
+              );
+
+              return true;
+            }
+
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            _task->showAlert(
+              favourite
+                ? "Favorito: ON"
+                : "Favorito: OFF",
+              1100
+            );
+
+            return true;
+          }
+
+
+          // APAGAR
+          if (_contacts_action_menu == 5) {
+
+            _contacts_delete_choice = 1;
+
+            _contacts_delete_confirm =
+              true;
+
+            return true;
+          }
+
+
+          // VOLTAR
+          _contacts_action_submenu =
+            false;
+
+          _contacts_action_menu = 0;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ------------------------------------------------------
+      // LISTA
+      // ------------------------------------------------------
+
+      if (
+        c == KEY_NEXT ||
+        c == KEY_RIGHT
+      ) {
+
+        if (contact_count > 0) {
+
+          _contacts_menu =
+            (
+              _contacts_menu +
+              1
+            ) %
+            contact_count;
+        }
+
+        return true;
+      }
+
+
+      if (
+        c == KEY_PREV ||
+        c == KEY_LEFT
+      ) {
+
+        if (contact_count > 0) {
+
+          _contacts_menu =
+            (
+              _contacts_menu +
+              contact_count -
+              1
+            ) %
+            contact_count;
+        }
+
+        return true;
+      }
+
+
+      if (
+        c == KEY_CANCEL ||
+        c == KEY_SELECT
+      ) {
+
+        _contacts_submenu =
+          false;
+
+        _contacts_action_submenu =
+          false;
+
+        _contacts_info_submenu =
+          false;
+
+        _contacts_delete_confirm =
+          false;
+
+        _contacts_action_menu = 0;
+
+        return true;
+      }
+
+
+      if (c == KEY_ENTER) {
+
+        if (contact_count <= 0) {
+
+          _contacts_submenu =
+            false;
+
+          return true;
+        }
+
+        _contacts_action_menu = 0;
+
+        _contacts_action_submenu =
+          true;
+
+        return true;
+      }
+
+      return true;
+    }
+
 
     // ========================================================
     // NOVA MENSAGEM MENU
@@ -7198,13 +8241,17 @@ public:
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 
-        _sms_menu = (_sms_menu + 1) % 3;
+        _sms_menu =
+          (_sms_menu + 1) % 4;
+
         return true;
       }
 
       if (c == KEY_PREV || c == KEY_LEFT) {
 
-        _sms_menu = (_sms_menu + 2) % 3;
+        _sms_menu =
+          (_sms_menu + 3) % 4;
+
         return true;
       }
 
@@ -7219,27 +8266,66 @@ public:
         // Nova Mensagem
         if (_sms_menu == 0) {
 
+          _contacts_submenu = false;
           _sms_messages_submenu = false;
+
           _sms_new_submenu = true;
           _sms_new_menu = 0;
+
           resetNewMessageState();
 
           return true;
         }
 
+
         // Caixa de entrada
         if (_sms_menu == 1) {
 
-          _sms_messages_submenu = true;
+          _contacts_submenu = false;
+
+          _sms_messages_submenu =
+            true;
+
           _sms_messages_menu = 0;
 
           return true;
         }
 
-        // SAIR
+
+        // CONTACTOS
         if (_sms_menu == 2) {
 
+          _sms_new_submenu = false;
+          _sms_messages_submenu = false;
+
+          _contacts_menu = 0;
+
+          _contacts_action_submenu =
+            false;
+
+          _contacts_action_menu = 0;
+
+          _contacts_info_submenu =
+            false;
+
+          _contacts_delete_confirm =
+            false;
+
+          _contacts_delete_choice = 1;
+
+          _contacts_submenu =
+            true;
+
+          return true;
+        }
+
+
+        // SAIR
+        if (_sms_menu == 3) {
+
+          _contacts_submenu = false;
           _sms_submenu = false;
+
           _task->gotoHomeScreen();
 
           return true;

@@ -2853,6 +2853,273 @@ void MyMesh::saveContacts() {
   _store->saveContacts(this, save_filter);
 }
 
+
+// ========================================================================
+// HIVEFW — CONTACTOS NO DISPOSITIVO
+// ========================================================================
+
+bool MyMesh::setContactFavouriteByUiIndex(
+  uint32_t index,
+  bool favourite
+) {
+
+  ContactInfo copy;
+
+  if (
+    !getContactByIdx(
+      index + MAX_ANON_CONTACTS,
+      copy
+    )
+  ) {
+    return false;
+  }
+
+
+  ContactInfo* contact =
+    lookupContactByPubKey(
+      copy.id.pub_key,
+      PUB_KEY_SIZE
+    );
+
+  if (contact == NULL) {
+    return false;
+  }
+
+
+  if (favourite) {
+
+    contact->flags |= 0x01;
+
+  } else {
+
+    contact->flags &= ~0x01;
+  }
+
+
+  contact->lastmod =
+    getRTCClock()->getCurrentTime();
+
+  saveContacts();
+
+  return true;
+}
+
+
+bool MyMesh::removeContactByUiIndex(
+  uint32_t index
+) {
+
+  ContactInfo copy;
+
+  if (
+    !getContactByIdx(
+      index + MAX_ANON_CONTACTS,
+      copy
+    )
+  ) {
+    return false;
+  }
+
+
+  uint8_t pub_key[PUB_KEY_SIZE];
+
+  memcpy(
+    pub_key,
+    copy.id.pub_key,
+    PUB_KEY_SIZE
+  );
+
+
+  ContactInfo* contact =
+    lookupContactByPubKey(
+      pub_key,
+      PUB_KEY_SIZE
+    );
+
+  if (
+    contact == NULL ||
+    !removeContact(*contact)
+  ) {
+
+    return false;
+  }
+
+
+  _store->deleteBlobByKey(
+    pub_key,
+    PUB_KEY_SIZE
+  );
+
+  saveContacts();
+
+
+  // Se a app estiver ligada, informar também a app.
+  if (
+    _serial != NULL &&
+    _serial->isConnected()
+  ) {
+
+    out_frame[0] =
+      PUSH_CODE_CONTACT_DELETED;
+
+    memcpy(
+      &out_frame[1],
+      pub_key,
+      PUB_KEY_SIZE
+    );
+
+    _serial->writeFrame(
+      out_frame,
+      1 + PUB_KEY_SIZE
+    );
+  }
+
+  return true;
+}
+
+
+int MyMesh::sendContactPingByUiIndex(
+  uint32_t index,
+  uint32_t& est_timeout
+) {
+
+  ContactInfo contact;
+
+  if (
+    !getContactByIdx(
+      index + MAX_ANON_CONTACTS,
+      contact
+    )
+  ) {
+
+    est_timeout = 0;
+
+    return MSG_SEND_FAILED;
+  }
+
+
+  uint32_t tag = 0;
+
+  return sendRequest(
+    contact,
+    REQ_TYPE_GET_STATUS,
+    tag,
+    est_timeout
+  );
+}
+
+
+bool MyMesh::sendContactTraceByUiIndex(
+  uint32_t index
+) {
+
+  ContactInfo contact;
+
+  if (
+    !getContactByIdx(
+      index + MAX_ANON_CONTACTS,
+      contact
+    )
+  ) {
+
+    return false;
+  }
+
+
+  if (
+    contact.out_path_len ==
+    OUT_PATH_UNKNOWN
+  ) {
+
+    return false;
+  }
+
+
+  // out_path_len usa o encoding MeshCore:
+  //
+  // bits 7..6 -> hash size - 1
+  // bits 5..0 -> número de hops
+
+  const uint8_t hash_size =
+    (
+      contact.out_path_len >>
+      6
+    ) + 1;
+
+  const uint8_t hop_count =
+    contact.out_path_len &
+    0x3F;
+
+
+  if (hop_count == 0) {
+
+    // Não existe percurso de repetidores para traçar.
+    return false;
+  }
+
+
+  // TRACE atual usa no flags:
+  //
+  // 0 -> 1 byte
+  // 1 -> 2 bytes
+  //
+  // O formato atual de TRACE não representa uma entrada
+  // de 3 bytes. Não enviamos um TRACE incorreto.
+
+  uint8_t trace_flags = 0;
+
+  if (hash_size == 1) {
+
+    trace_flags = 0;
+
+  } else if (hash_size == 2) {
+
+    trace_flags = 1;
+
+  } else {
+
+    return false;
+  }
+
+
+  const uint8_t raw_path_len =
+    hop_count *
+    hash_size;
+
+
+  const uint32_t tag =
+    getRTCClock()->
+      getCurrentTimeUnique();
+
+
+  mesh::Packet* packet =
+    createTrace(
+      tag,
+      0,
+      trace_flags
+    );
+
+
+  if (packet == NULL) {
+
+    return false;
+  }
+
+
+  // Para TRACE, Mesh::sendDirect() espera o comprimento
+  // bruto do path, e não o byte codificado usado nos
+  // ContactInfo normais.
+
+  sendDirect(
+    packet,
+    contact.out_path,
+    raw_path_len
+  );
+
+  return true;
+}
+
+
 void MyMesh::enterCLIRescue() {
   _cli_rescue = true;
   cli_command[0] = 0;

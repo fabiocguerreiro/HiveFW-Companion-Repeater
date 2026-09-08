@@ -228,6 +228,30 @@ public:
     _store->savePrefs(_prefs);
   }
 
+
+  // ========================================================
+  // HiveFW — CONTACTOS NO DISPOSITIVO
+  // ========================================================
+
+  bool setContactFavouriteByUiIndex(
+    uint32_t index,
+    bool favourite
+  );
+
+  bool removeContactByUiIndex(
+    uint32_t index
+  );
+
+  int sendContactPingByUiIndex(
+    uint32_t index,
+    uint32_t& est_timeout
+  );
+
+  bool sendContactTraceByUiIndex(
+    uint32_t index
+  );
+
+
   // ========================================================
   // HiveFW — HOME ASSISTANT COMMAND STORE
   // ========================================================
