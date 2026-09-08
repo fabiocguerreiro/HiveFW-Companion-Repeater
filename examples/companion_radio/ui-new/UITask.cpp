@@ -2829,6 +2829,35 @@ class HomeScreen : public UIScreen {
         : "OFF"
     );
 
+
+    // ------------------------------------------------------
+    // HIVEFW — SEPARADOR DO DASHBOARD
+    //
+    // Ícones:
+    //   y = 19..26
+    //
+    // Smartphone / Desligado:
+    //   y = 36
+    //
+    // O separador em y=31 fica visualmente centrado
+    // entre as duas zonas.
+    //
+    // Mantém a mesma espessura lógica do separador
+    // existente imediatamente abaixo do header.
+    // ------------------------------------------------------
+
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    display.fillRect(
+      0,
+      31,
+      display.width(),
+      1
+    );
+
+
     // ------------------------------------------------------
     // LINHA 2:
     //
