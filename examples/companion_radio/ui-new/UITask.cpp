@@ -95,6 +95,9 @@
 //   │   ├── TEMPO ECRÃ
 //   │   ├── ROTAÇÃO (T114)
 //   │   └── [ SAIR ]
+//   ├── NOTIFICAÇÕES
+//   │   ├── MODO SILÊNCIO
+//   │   └── [ SAIR ]
 //   ├── GPS (quando disponível)
 //   ├── DESLIGAR
 //   └── [ SAIR ]
@@ -376,6 +379,7 @@ static const uint8_t HIVEFW_HEADER_COLOR_COUNT =
 // ========================================================================
 
 #define HIVEFW_SETTINGS_DISPLAY_OFFSET 1
+#define HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET 1
 
 static const char* hivefw_display_timeout_names[] = {
   "5 SEG",
@@ -576,6 +580,11 @@ class HomeScreen : public UIScreen {
 
   bool _settings_rotation_submenu;
   uint8_t _settings_rotation_menu;
+
+
+  // HiveFW — DEFINIÇÕES -> NOTIFICAÇÕES
+  bool _settings_notifications_submenu;
+  uint8_t _settings_notifications_menu;
 
   uint8_t _settings_advert_menu;
   bool _settings_advert_submenu;
@@ -3038,6 +3047,8 @@ public:
        _settings_timeout_menu(0),
        _settings_rotation_submenu(false),
        _settings_rotation_menu(0),
+       _settings_notifications_submenu(false),
+       _settings_notifications_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
@@ -5032,6 +5043,45 @@ public:
         }
 
 
+      } else if (_settings_notifications_submenu) {
+
+        // ====================================================
+        // HIVEFW — RENDER NOTIFICAÇÕES
+        // ====================================================
+
+        char silent_item[32];
+
+        snprintf(
+          silent_item,
+          sizeof(silent_item),
+          "MODO SILÊNCIO: %s",
+          _task->isSilentMode()
+            ? "ON"
+            : "OFF"
+        );
+
+        const char* notification_items[] = {
+          silent_item,
+          "[ SAIR ]"
+        };
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        // O texto é propositadamente size 1:
+        // "MODO SILÊNCIO: OFF" cabe confortavelmente.
+        display.setTextSize(1);
+
+        drawMenuItemText(
+          display,
+          notification_items[
+            _settings_notifications_menu
+          ],
+          32
+        );
+
+
       } else if (_settings_advert_submenu) {
 
         const char* advert_items[] = {
@@ -5142,6 +5192,7 @@ public:
           "COR DA BARRA",
 #endif
           "ECRÃ",
+          "NOTIFICAÇÕES",
 #if ENV_INCLUDE_GPS == 1
           _task->getGPSState() ? "GPS: ON" : "GPS: OFF",
 #endif
@@ -7250,6 +7301,81 @@ public:
       }
 
 
+      // ======================================================
+      // HIVEFW — HANDLER NOTIFICAÇÕES
+      // ======================================================
+
+      if (_settings_notifications_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT ||
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_notifications_menu =
+            (
+              _settings_notifications_menu +
+              1
+            ) % 2;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_notifications_submenu =
+            false;
+
+          _settings_notifications_menu = 0;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          // MODO SILÊNCIO
+          if (
+            _settings_notifications_menu == 0
+          ) {
+
+            bool enable =
+              !_task->isSilentMode();
+
+            _task->setSilentMode(
+              enable
+            );
+
+            _task->showAlert(
+              enable
+                ? "Silêncio: ON"
+                : "Silêncio: OFF",
+              1200
+            );
+
+            return true;
+          }
+
+
+          // [ SAIR ]
+          _settings_notifications_submenu =
+            false;
+
+          _settings_notifications_menu = 0;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
 #ifdef HELTEC_T114_WITH_DISPLAY
 
       // ======================================================
@@ -7495,14 +7621,16 @@ public:
         const uint8_t settings_count =
           6 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
 
 #else
 
         const uint8_t settings_count =
           5 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
 
 #endif
 
@@ -7524,14 +7652,16 @@ public:
         const uint8_t settings_count =
           6 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
 
 #else
 
         const uint8_t settings_count =
           5 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
 
 #endif
 
@@ -7572,6 +7702,9 @@ public:
 
         _settings_rotation_submenu = false;
         _settings_rotation_menu = 0;
+
+        _settings_notifications_submenu = false;
+        _settings_notifications_menu = 0;
 
         return true;
       }
@@ -7732,6 +7865,26 @@ public:
         }
 
 
+        // ----------------------------------------------------
+        // NOTIFICAÇÕES
+        // ----------------------------------------------------
+
+        if (
+          _settings_menu ==
+          3 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET
+        ) {
+
+          _settings_notifications_submenu =
+            true;
+
+          _settings_notifications_menu = 0;
+
+          return true;
+        }
+
+
 #if ENV_INCLUDE_GPS == 1
 
         // ----------------------------------------------------
@@ -7759,7 +7912,8 @@ public:
           _settings_menu ==
           4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
         ) {
 
           _shutdown_init = true;
@@ -7776,7 +7930,8 @@ public:
           _settings_menu ==
           5 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
         ) {
 
 #else
@@ -7806,7 +7961,8 @@ public:
           _settings_menu ==
           4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
         ) {
 
 #endif
@@ -7828,6 +7984,9 @@ public:
 
           _settings_timeout_submenu = false;
           _settings_timeout_menu = 0;
+
+          _settings_notifications_submenu = false;
+          _settings_notifications_menu = 0;
 
           return true;
         }
@@ -11033,6 +11192,50 @@ void UITask::gotoChannelMessages(uint8_t channel_index) {
 
 
 
+void UITask::setSilentMode(
+  bool silent
+) {
+
+  _silent_mode =
+    silent;
+
+
+#ifdef PIN_BUZZER
+
+  if (_silent_mode) {
+
+    // Silenciar sem alterar buzzer_quiet persistente.
+    buzzer.quiet(true);
+
+    // genericBuzzer::play() interrompe primeiro qualquer
+    // melodia existente antes de verificar quiet().
+    buzzer.play("");
+
+  } else {
+
+    // Restaurar a preferência permanente do utilizador.
+    buzzer.quiet(
+      _node_prefs != NULL
+        ? _node_prefs->buzzer_quiet
+        : false
+    );
+  }
+
+#endif
+
+
+#ifdef PIN_VIBRATION
+
+  if (_silent_mode) {
+
+    // Interromper imediatamente uma vibração já em curso.
+    vibration.stop();
+  }
+
+#endif
+}
+
+
 void UITask::setDisplayRotation(
   uint8_t rotation
 ) {
@@ -11153,6 +11356,15 @@ void UITask::showAlert(const char* text, int duration_millis) {
 }
 
 void UITask::notify(UIEventType t) {
+
+  // HiveFW — MODO SILÊNCIO.
+  //
+  // Não interfere com mensagens, UI, rádio ou BLE.
+  // Apenas elimina feedback local sonoro/háptico.
+  if (_silent_mode) {
+    return;
+  }
+
 #if defined(PIN_BUZZER)
 switch(t){
   case UIEventType::contactMessage:

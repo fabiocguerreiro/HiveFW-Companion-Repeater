@@ -33,6 +33,11 @@ class UITask : public AbstractUITask {
 #endif
   unsigned long _next_refresh, _auto_off;
   NodePrefs* _node_prefs;
+
+
+  // HiveFW — modo silêncio temporário.
+  // Não é persistido: reboot => OFF.
+  bool _silent_mode;
   char _alert[80];
   unsigned long _alert_expiry;
   int _msgcount;
@@ -71,7 +76,7 @@ class UITask : public AbstractUITask {
 
 public:
 
-  UITask(mesh::MainBoard* board, MultiSerialInterface* serial) : AbstractUITask(board, serial), _display(NULL), _sensors(NULL) {
+  UITask(mesh::MainBoard* board, MultiSerialInterface* serial) : AbstractUITask(board, serial), _display(NULL), _sensors(NULL), _silent_mode(false) {
     next_batt_chck = _next_refresh = 0;
     ui_started_at = 0;
     curr = NULL;
@@ -99,6 +104,13 @@ public:
   bool getGPSState();
   void toggleGPS();
   void setDisplayRotation(uint8_t rotation);
+
+
+  bool isSilentMode() const {
+    return _silent_mode;
+  }
+
+  void setSilentMode(bool silent);
 
 
   // from AbstractUITask
