@@ -278,6 +278,122 @@ class ST7789Spi : public OLEDDisplay {
 
     this->_RGB=0x00|c>>8|c<<8&0xFF00;
   }
+
+
+  // ==========================================================
+  // HiveFW — atualização parcial de uma faixa horizontal
+  //
+  // O framebuffer original continua monocromático.
+  // Esta função permite enviar apenas uma faixa usando
+  // uma cor RGB565 diferente, sem apagar o resto do TFT.
+  // ==========================================================
+
+  void displayBand(
+    uint16_t yStart,
+    uint16_t bandHeight
+  ) {
+
+    if (
+      bandHeight == 0 ||
+      yStart >= displayHeight
+    ) {
+      return;
+    }
+
+    uint32_t end32 =
+      (uint32_t)yStart +
+      (uint32_t)bandHeight;
+
+    uint16_t yEnd =
+      end32 > displayHeight
+        ? displayHeight
+        : (uint16_t)end32;
+
+    uint16_t* pixbuf =
+      (uint16_t*)rtos_malloc(
+        2 * displayWidth
+      );
+
+    if (pixbuf == nullptr) {
+      return;
+    }
+
+    set_CS(LOW);
+
+    _spi->beginTransaction(
+      _spiSettings
+    );
+
+    for (
+      uint16_t row = yStart;
+      row < yEnd;
+      row++
+    ) {
+
+      // Mesma orientação utilizada por display().
+      setAddrWindow(
+        row,
+        0,
+        1,
+        displayWidth
+      );
+
+      uint16_t byteRow =
+        row / 8;
+
+      uint8_t bit =
+        row & 7;
+
+      for (
+        uint16_t x = 0;
+        x < displayWidth;
+        x++
+      ) {
+
+        uint16_t pos =
+          x +
+          byteRow *
+          displayWidth;
+
+        bool pixel_on =
+          (
+            buffer[pos] >>
+            bit
+          ) & 0x01;
+
+        pixbuf[x] =
+          pixel_on
+            ? _RGB
+            : 0;
+      }
+
+#ifdef ESP_PLATFORM
+
+      _spi->transferBytes(
+        (uint8_t*)pixbuf,
+        NULL,
+        2 * displayWidth
+      );
+
+#else
+
+      _spi->transfer(
+        pixbuf,
+        NULL,
+        2 * displayWidth
+      );
+
+#endif
+    }
+
+    _spi->endTransaction();
+
+    set_CS(HIGH);
+
+    rtos_free(
+      pixbuf
+    );
+  }
   
   void displayOn(void) {
   //sendCommand(DISPLAYON);

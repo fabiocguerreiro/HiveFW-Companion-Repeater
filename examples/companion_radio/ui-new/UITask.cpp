@@ -2403,7 +2403,7 @@ class HomeScreen : public UIScreen {
     // ------------------------------------------------------
     // LINHA 1:
     //
-    // mensagem   BLE   GPS
+    // mensagem   BT ON/OFF   GPS ON/OFF
     // ------------------------------------------------------
 
     int msg_count =
@@ -2439,13 +2439,36 @@ class HomeScreen : public UIScreen {
       msg_text
     );
 
+    // BLE:
+    // ON/OFF representa o estado da função Bluetooth.
+    // A linha seguinte continua a indicar o peer:
+    // nome do smartphone ou "Desligado".
+    bool ble_enabled =
+      _task->isBluetoothEnabled();
+
     drawDashboardStatusItem(
       display,
       display.width() / 2,
       status_y,
       hivefw_status_ble_icon,
-      "BLE"
+      ble_enabled
+        ? "ON"
+        : "OFF"
     );
+
+    // GPS:
+    // ON/OFF representa GPS ligado/desligado.
+    // FIX / NO FIX continua reservado ao ecrã GPS.
+#if ENV_INCLUDE_GPS == 1
+
+    bool gps_enabled =
+      _task->getGPSState();
+
+#else
+
+    bool gps_enabled = false;
+
+#endif
 
     drawDashboardStatusItem(
       display,
@@ -2455,7 +2478,9 @@ class HomeScreen : public UIScreen {
       ) / 6,
       status_y,
       hivefw_status_gps_icon,
-      "GPS"
+      gps_enabled
+        ? "ON"
+        : "OFF"
     );
 
     // ------------------------------------------------------

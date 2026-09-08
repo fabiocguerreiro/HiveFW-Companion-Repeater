@@ -28,8 +28,12 @@
 
 // Color scheme
 ColorVal UIColor::window_bkg = OLEDDISPLAY_COLOR::BLACK;
-ColorVal UIColor::title_bkg = OLEDDISPLAY_COLOR::BLACK;
-ColorVal UIColor::title_txt = OLEDDISPLAY_COLOR::WHITE;
+
+// HiveFW T114:
+// a barra é desenhada como máscara branca com texto preto.
+// No endFrame() esta máscara é recolorida para verde RGB565.
+ColorVal UIColor::title_bkg = OLEDDISPLAY_COLOR::WHITE;
+ColorVal UIColor::title_txt = OLEDDISPLAY_COLOR::BLACK;
 ColorVal UIColor::primary_txt = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::secondary_txt = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::warning_txt = OLEDDISPLAY_COLOR::WHITE;
@@ -188,7 +192,55 @@ uint16_t ST7789Display::getTextWidth(const char* str) {
 }
 
 void ST7789Display::endFrame() {
+
+  // ----------------------------------------------------------
+  // PASSAGEM 1
+  //
+  // UI normal:
+  // branco sobre preto.
+  // ----------------------------------------------------------
+
+  display.setRGB(
+    ST77XX_WHITE
+  );
+
   display.display();
+
+
+  // ----------------------------------------------------------
+  // PASSAGEM 2
+  //
+  // Recolorir apenas a barra superior HiveFW.
+  //
+  // O framebuffer contém:
+  //   barra = WHITE
+  //   texto = BLACK
+  //
+  // Resultado físico:
+  //   barra = GREEN
+  //   texto = BLACK
+  // ----------------------------------------------------------
+
+  display.setRGB(
+    ST77XX_GREEN
+  );
+
+  int header_height =
+    (int)(
+      12.0f *
+      SCALE_Y +
+      Y_OFFSET +
+      1.0f
+    );
+
+  if (header_height < 1) {
+    header_height = 1;
+  }
+
+  display.displayBand(
+    0,
+    (uint16_t)header_height
+  );
 }
 
 #endif

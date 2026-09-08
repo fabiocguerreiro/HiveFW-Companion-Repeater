@@ -8,8 +8,11 @@ bool SSD1306Display::i2c_probe(TwoWire& wire, uint8_t addr) {
 
 // Color scheme
 ColorVal UIColor::window_bkg = SSD1306_BLACK;
-ColorVal UIColor::title_bkg = SSD1306_BLACK;
-ColorVal UIColor::title_txt = SSD1306_WHITE;
+
+// HiveFW:
+// barra superior invertida nos OLED monocromáticos.
+ColorVal UIColor::title_bkg = SSD1306_WHITE;
+ColorVal UIColor::title_txt = SSD1306_BLACK;
 ColorVal UIColor::primary_txt = SSD1306_WHITE;
 ColorVal UIColor::secondary_txt = SSD1306_WHITE;
 ColorVal UIColor::warning_txt = SSD1306_WHITE;
