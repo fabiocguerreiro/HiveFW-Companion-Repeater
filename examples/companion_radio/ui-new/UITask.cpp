@@ -91,6 +91,9 @@
 //   ├── ANUNCIAR NÓ
 //   ├── CANAL APPS/SOS
 //   ├── COR DA BARRA (T114 com ecrã a cores)
+//   ├── ECRÃ
+//   │   ├── TEMPO ECRÃ
+//   │   └── [ SAIR ]
 //   ├── GPS (quando disponível)
 //   ├── DESLIGAR
 //   └── [ SAIR ]
@@ -356,6 +359,47 @@ static const uint8_t HIVEFW_HEADER_COLOR_COUNT =
 
 #endif
 
+
+
+// ========================================================================
+// HIVEFW — TEMPO DO ECRÃ
+//
+// Valor persistido em NodePrefs::display_timeout:
+//
+//   0 = 5 segundos
+//   1 = 15 segundos
+//   2 = 1 minuto
+//   3 = 5 minutos
+//   4 = sempre ligado
+//
+// ========================================================================
+
+#define HIVEFW_SETTINGS_DISPLAY_OFFSET 1
+
+static const char* hivefw_display_timeout_names[] = {
+  "5 SEG",
+  "15 SEG",
+  "1 MIN",
+  "5 MIN",
+  "SEMPRE LIGADO"
+};
+
+static const uint32_t hivefw_display_timeout_ms[] = {
+  5000UL,
+  15000UL,
+  60000UL,
+  300000UL,
+  0UL
+};
+
+static const uint8_t HIVEFW_DISPLAY_TIMEOUT_COUNT =
+  sizeof(hivefw_display_timeout_names) /
+  sizeof(hivefw_display_timeout_names[0]);
+
+static const uint8_t HIVEFW_DISPLAY_TIMEOUT_DEFAULT =
+  1;
+
+
 static int findRadioPreset(
   float freq,
   float bw,
@@ -496,6 +540,14 @@ class HomeScreen : public UIScreen {
 
   bool _settings_color_submenu;
   uint8_t _settings_color_menu;
+
+
+  // HiveFW — DEFINIÇÕES -> ECRÃ
+  bool _settings_display_submenu;
+  uint8_t _settings_display_menu;
+
+  bool _settings_timeout_submenu;
+  uint8_t _settings_timeout_menu;
 
   uint8_t _settings_advert_menu;
   bool _settings_advert_submenu;
@@ -2952,6 +3004,10 @@ public:
        _settings_channel_menu(0),
        _settings_color_submenu(false),
        _settings_color_menu(0),
+       _settings_display_submenu(false),
+       _settings_display_menu(0),
+       _settings_timeout_submenu(false),
+       _settings_timeout_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
@@ -4817,6 +4873,82 @@ public:
         );
 
 #endif
+      } else if (_settings_display_submenu) {
+
+        // ====================================================
+        // HIVEFW — RENDER ECRÃ
+        // ====================================================
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        if (_settings_timeout_submenu) {
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            27,
+            "TEMPO ECRÃ"
+          );
+
+          uint8_t timeout_index =
+            _settings_timeout_menu;
+
+          if (
+            timeout_index >=
+            HIVEFW_DISPLAY_TIMEOUT_COUNT
+          ) {
+
+            timeout_index =
+              HIVEFW_DISPLAY_TIMEOUT_DEFAULT;
+          }
+
+          display.setTextSize(2);
+
+          const char* timeout_text =
+            hivefw_display_timeout_names[
+              timeout_index
+            ];
+
+          // "SEMPRE LIGADO" é demasiado largo em algumas
+          // fontes no tamanho 2. Reduzir apenas quando preciso.
+          if (
+            display.getTextWidth(
+              timeout_text
+            ) >
+            display.width() - 8
+          ) {
+
+            display.setTextSize(1);
+          }
+
+          display.drawTextCentered(
+            display.width() / 2,
+            45,
+            timeout_text
+          );
+
+        } else {
+
+          const char* display_items[] = {
+            "TEMPO ECRÃ",
+            "[ SAIR ]"
+          };
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            display_items[
+              _settings_display_menu
+            ],
+            18
+          );
+        }
+
+
       } else if (_settings_advert_submenu) {
 
         const char* advert_items[] = {
@@ -4926,6 +5058,7 @@ public:
 #ifdef HELTEC_T114_WITH_DISPLAY
           "COR DA BARRA",
 #endif
+          "ECRÃ",
 #if ENV_INCLUDE_GPS == 1
           _task->getGPSState() ? "GPS: ON" : "GPS: OFF",
 #endif
@@ -6662,6 +6795,198 @@ public:
 
     if (_page == HomePage::SETTINGS && _settings_submenu) {
 
+
+      // ======================================================
+      // HIVEFW — HANDLER TEMPO ECRÃ
+      // ======================================================
+
+      if (_settings_timeout_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_timeout_menu =
+            (
+              _settings_timeout_menu +
+              1
+            ) %
+            HIVEFW_DISPLAY_TIMEOUT_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_timeout_menu =
+            (
+              _settings_timeout_menu +
+              HIVEFW_DISPLAY_TIMEOUT_COUNT -
+              1
+            ) %
+            HIVEFW_DISPLAY_TIMEOUT_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          // Voltar ao submenu ECRÃ sem guardar.
+          _settings_timeout_submenu =
+            false;
+
+          _settings_timeout_menu =
+            _node_prefs->display_timeout;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (
+            _settings_timeout_menu >=
+            HIVEFW_DISPLAY_TIMEOUT_COUNT
+          ) {
+
+            _settings_timeout_menu =
+              HIVEFW_DISPLAY_TIMEOUT_DEFAULT;
+          }
+
+          _node_prefs->display_timeout =
+            _settings_timeout_menu;
+
+          the_mesh.savePrefs();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          char timeout_alert[40];
+
+          snprintf(
+            timeout_alert,
+            sizeof(timeout_alert),
+            "Ecrã: %s",
+            hivefw_display_timeout_names[
+              _settings_timeout_menu
+            ]
+          );
+
+          _task->showAlert(
+            timeout_alert,
+            1200
+          );
+
+          // O input que originou este ENTER é processado pelo
+          // UITask imediatamente depois deste handler e aí o
+          // novo timeout passa também a valer para o deadline
+          // atual do ecrã.
+          _settings_timeout_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ======================================================
+      // HIVEFW — HANDLER ECRÃ
+      // ======================================================
+
+      if (_settings_display_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_display_menu =
+            (
+              _settings_display_menu +
+              1
+            ) % 2;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_display_menu =
+            (
+              _settings_display_menu +
+              1
+            ) % 2;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_display_submenu =
+            false;
+
+          _settings_display_menu = 0;
+
+          _settings_timeout_submenu =
+            false;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // TEMPO ECRÃ
+          if (_settings_display_menu == 0) {
+
+            _settings_timeout_menu =
+              _node_prefs->display_timeout;
+
+            if (
+              _settings_timeout_menu >=
+              HIVEFW_DISPLAY_TIMEOUT_COUNT
+            ) {
+
+              _settings_timeout_menu =
+                HIVEFW_DISPLAY_TIMEOUT_DEFAULT;
+            }
+
+            _settings_timeout_submenu =
+              true;
+
+            return true;
+          }
+
+          // [ SAIR ]
+          _settings_display_submenu =
+            false;
+
+          _settings_display_menu = 0;
+
+          _settings_timeout_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
 #ifdef HELTEC_T114_WITH_DISPLAY
 
       // ======================================================
@@ -6901,64 +7226,114 @@ public:
       // ======================================================
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
+
 #if ENV_INCLUDE_GPS == 1
-        _settings_menu =
-          (_settings_menu + 1) %
-          (6 + HIVEFW_SETTINGS_COLOR_OFFSET);
+
+        const uint8_t settings_count =
+          6 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+
 #else
-        _settings_menu =
-          (_settings_menu + 1) %
-          (5 + HIVEFW_SETTINGS_COLOR_OFFSET);
+
+        const uint8_t settings_count =
+          5 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+
 #endif
+
+        _settings_menu =
+          (
+            _settings_menu +
+            1
+          ) %
+          settings_count;
+
         return true;
       }
+
 
       if (c == KEY_PREV || c == KEY_LEFT) {
+
 #if ENV_INCLUDE_GPS == 1
-        _settings_menu =
-          (
-            _settings_menu +
-            5 +
-            HIVEFW_SETTINGS_COLOR_OFFSET
-          ) %
-          (6 + HIVEFW_SETTINGS_COLOR_OFFSET);
+
+        const uint8_t settings_count =
+          6 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+
 #else
+
+        const uint8_t settings_count =
+          5 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET;
+
+#endif
+
         _settings_menu =
           (
             _settings_menu +
-            4 +
-            HIVEFW_SETTINGS_COLOR_OFFSET
+            settings_count -
+            1
           ) %
-          (5 + HIVEFW_SETTINGS_COLOR_OFFSET);
-#endif
+          settings_count;
+
         return true;
       }
 
-      if (c == KEY_CANCEL || c == KEY_SELECT) {
+
+      if (
+        c == KEY_CANCEL ||
+        c == KEY_SELECT
+      ) {
+
         _settings_submenu = false;
         _settings_menu = 0;
+
         _settings_advert_submenu = false;
         _settings_advert_menu = 0;
+
         _settings_channel_submenu = false;
         _settings_channel_menu = 0;
+
+        _settings_color_submenu = false;
+        _settings_color_menu = 0;
+
+        _settings_display_submenu = false;
+        _settings_display_menu = 0;
+
+        _settings_timeout_submenu = false;
+        _settings_timeout_menu = 0;
+
         return true;
       }
+
 
       if (c == KEY_ENTER) {
 
+        // ----------------------------------------------------
         // BLUETOOTH
+        // ----------------------------------------------------
+
         if (_settings_menu == 0) {
 
           bool bluetooth_enable =
             !_task->isBluetoothEnabled();
 
           if (bluetooth_enable) {
+
             _task->enableBluetooth();
+
           } else {
+
             _task->disableBluetooth();
           }
 
-          _task->notify(UIEventType::ack);
+          _task->notify(
+            UIEventType::ack
+          );
 
           _task->showAlert(
             bluetooth_enable
@@ -6970,41 +7345,65 @@ public:
           return true;
         }
 
+
+        // ----------------------------------------------------
         // ANUNCIAR NÓ
+        // ----------------------------------------------------
+
         if (_settings_menu == 1) {
 
-          _settings_advert_submenu = true;
+          _settings_advert_submenu =
+            true;
+
           _settings_advert_menu = 0;
 
           return true;
         }
 
-        // CANAL APPS
+
+        // ----------------------------------------------------
+        // CANAL APPS/SOS
+        // ----------------------------------------------------
+
         if (_settings_menu == 2) {
 
-          int channel_count = getAppsChannelCount();
+          int channel_count =
+            getAppsChannelCount();
 
           if (channel_count == 0) {
 
-            _settings_channel_submenu = true;
             _settings_channel_menu = 0;
 
           } else {
 
-            int selected = getAppsChannelMenuIndex();
+            int selected =
+              getAppsChannelMenuIndex();
 
-            if (selected >= channel_count)
+            if (
+              selected < 0 ||
+              selected >= channel_count
+            ) {
+
               selected = 0;
+            }
 
-            _settings_channel_menu = selected;
-            _settings_channel_submenu = true;
+            _settings_channel_menu =
+              selected;
           }
+
+          _settings_channel_submenu =
+            true;
 
           return true;
         }
 
+
 #ifdef HELTEC_T114_WITH_DISPLAY
+
+        // ----------------------------------------------------
         // COR DA BARRA
+        // ----------------------------------------------------
+
         if (_settings_menu == 3) {
 
           _settings_color_submenu =
@@ -7017,18 +7416,67 @@ public:
             _settings_color_menu >=
             HIVEFW_HEADER_COLOR_COUNT
           ) {
+
             _settings_color_menu = 0;
           }
 
           return true;
         }
+
 #endif
 
-#if ENV_INCLUDE_GPS == 1
-        // GPS
+
+        // ----------------------------------------------------
+        // ECRÃ
+        //
+        // T114:
+        //   índice 4
+        //
+        // Hardware sem COR DA BARRA:
+        //   índice 3
+        // ----------------------------------------------------
+
         if (
           _settings_menu ==
-          3 + HIVEFW_SETTINGS_COLOR_OFFSET
+          3 +
+          HIVEFW_SETTINGS_COLOR_OFFSET
+        ) {
+
+          _settings_display_submenu =
+            true;
+
+          _settings_display_menu = 0;
+
+          _settings_timeout_submenu =
+            false;
+
+          _settings_timeout_menu =
+            _node_prefs->display_timeout;
+
+          if (
+            _settings_timeout_menu >=
+            HIVEFW_DISPLAY_TIMEOUT_COUNT
+          ) {
+
+            _settings_timeout_menu =
+              HIVEFW_DISPLAY_TIMEOUT_DEFAULT;
+          }
+
+          return true;
+        }
+
+
+#if ENV_INCLUDE_GPS == 1
+
+        // ----------------------------------------------------
+        // GPS
+        // ----------------------------------------------------
+
+        if (
+          _settings_menu ==
+          3 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET
         ) {
 
           _task->toggleGPS();
@@ -7036,42 +7484,84 @@ public:
           return true;
         }
 
+
+        // ----------------------------------------------------
         // DESLIGAR
+        // ----------------------------------------------------
+
         if (
           _settings_menu ==
-          4 + HIVEFW_SETTINGS_COLOR_OFFSET
+          4 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET
         ) {
-#else
-        // DESLIGAR
-        if (
-          _settings_menu ==
-          3 + HIVEFW_SETTINGS_COLOR_OFFSET
-        ) {
-#endif
 
           _shutdown_init = true;
 
           return true;
         }
 
-#if ENV_INCLUDE_GPS == 1
-        // SAIR
+
+        // ----------------------------------------------------
+        // [ SAIR ]
+        // ----------------------------------------------------
+
         if (
           _settings_menu ==
-          5 + HIVEFW_SETTINGS_COLOR_OFFSET
+          5 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET
         ) {
+
 #else
-        // SAIR
+
+        // ----------------------------------------------------
+        // DESLIGAR
+        // ----------------------------------------------------
+
         if (
           _settings_menu ==
-          4 + HIVEFW_SETTINGS_COLOR_OFFSET
+          3 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET
         ) {
+
+          _shutdown_init = true;
+
+          return true;
+        }
+
+
+        // ----------------------------------------------------
+        // [ SAIR ]
+        // ----------------------------------------------------
+
+        if (
+          _settings_menu ==
+          4 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET
+        ) {
+
 #endif
 
           _settings_submenu = false;
           _settings_menu = 0;
+
+          _settings_advert_submenu = false;
+          _settings_advert_menu = 0;
+
           _settings_channel_submenu = false;
           _settings_channel_menu = 0;
+
+          _settings_color_submenu = false;
+          _settings_color_menu = 0;
+
+          _settings_display_submenu = false;
+          _settings_display_menu = 0;
+
+          _settings_timeout_submenu = false;
+          _settings_timeout_menu = 0;
 
           return true;
         }
@@ -7079,6 +7569,7 @@ public:
 
       return true;
     }
+
 
     // ========================================================
     // APLICAÇÕES MENU
@@ -10269,10 +10760,67 @@ void UITask::gotoChannelMessages(uint8_t channel_index) {
 }
 
 
+
+// ========================================================================
+// HIVEFW — TIMEOUT CONFIGURÁVEL DO ECRÃ
+// ========================================================================
+
+uint32_t UITask::getDisplayTimeoutMillis() const {
+
+  if (_node_prefs != NULL) {
+
+    uint8_t index =
+      _node_prefs->display_timeout;
+
+    if (
+      index >=
+      HIVEFW_DISPLAY_TIMEOUT_COUNT
+    ) {
+
+      index =
+        HIVEFW_DISPLAY_TIMEOUT_DEFAULT;
+    }
+
+    return
+      hivefw_display_timeout_ms[
+        index
+      ];
+  }
+
+  // Fallback apenas durante inicialização extremamente precoce.
+#if AUTO_OFF_MILLIS > 0
+  return AUTO_OFF_MILLIS;
+#else
+  return 0;
+#endif
+}
+
+
+void UITask::resetDisplayAutoOff() {
+
+  const uint32_t timeout =
+    getDisplayTimeoutMillis();
+
+  if (timeout == 0) {
+
+    // SEMPRE LIGADO.
+    _auto_off = 0;
+
+    return;
+  }
+
+  _auto_off =
+    millis() +
+    timeout;
+}
+
+
 void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* node_prefs) {
   _display = display;
   _sensors = sensors;
-  _auto_off = millis() + AUTO_OFF_MILLIS;
+  _node_prefs = node_prefs;
+
+  resetDisplayAutoOff();
 
 #if defined(PIN_USER_BTN)
   user_btn.begin();
@@ -10281,7 +10829,6 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   analog_btn.begin();
 #endif
 
-  _node_prefs = node_prefs;
 
   if (_display != NULL) {
     _display->turnOn();
@@ -10365,7 +10912,7 @@ void UITask::newMsg(uint8_t path_len, const uint8_t* channel_hash, const char* f
       _display->turnOn();
     }
     if (_display->isOn()) {
-    _auto_off = millis() + AUTO_OFF_MILLIS;  // extend the auto-off timer
+    resetDisplayAutoOff();  // extend configured auto-off timer
     _next_refresh = 100;  // trigger refresh
     }
   }
@@ -10507,7 +11054,7 @@ void UITask::loop() {
 
   if (c != 0 && curr) {
     curr->handleInput(c);
-    _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
+    resetDisplayAutoOff();   // extend configured auto-off timer
     _next_refresh = 100;  // trigger refresh
   }
 
@@ -10538,20 +11085,42 @@ void UITask::loop() {
       }
       _display->endFrame();
     }
-#if AUTO_OFF_MILLIS > 0
+    // ==================================================
+    // HIVEFW — AUTO-OFF DINÂMICO
+    //
+    // timeout == 0 -> SEMPRE LIGADO.
+    // ==================================================
+
+    const uint32_t display_timeout =
+      getDisplayTimeoutMillis();
+
+    if (display_timeout > 0) {
+
 #ifdef KEEP_DISPLAY_ON_USB
-    // Opt-in: refresh the auto-off deadline while externally powered, so the
-    // timer counts from the moment external power is removed. Off by default
-    // because OLED panels burn in quickly; only enable for LCD targets or
-    // where the display is replaceable.
-    if (board.isExternalPowered()) {
-      _auto_off = millis() + AUTO_OFF_MILLIS;
-    }
+
+      // Se este target optar por manter o ecrã ligado
+      // durante alimentação externa, o contador começa
+      // efetivamente quando essa alimentação desaparecer.
+      if (board.isExternalPowered()) {
+
+        _auto_off =
+          millis() +
+          display_timeout;
+      }
+
 #endif
-    if (millis() > _auto_off) {
-      _display->turnOff();
+
+      // Comparação segura perante rollover de millis().
+      if (
+        (int32_t)(
+          millis() -
+          _auto_off
+        ) >= 0
+      ) {
+
+        _display->turnOff();
+      }
     }
-#endif
   }
 
 #ifdef PIN_VIBRATION
@@ -10586,7 +11155,7 @@ char UITask::checkDisplayOn(char c) {
       _display->turnOn();   // turn display on and consume event
       c = 0;
     }
-    _auto_off = millis() + AUTO_OFF_MILLIS;   // extend auto-off timer
+    resetDisplayAutoOff();   // extend configured auto-off timer
     _next_refresh = 0;  // trigger refresh
   }
   return c;

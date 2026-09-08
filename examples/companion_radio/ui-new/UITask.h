@@ -56,6 +56,11 @@ class UITask : public AbstractUITask {
 
   void userLedHandler();
 
+
+  // HiveFW — timeout configurável do ecrã.
+  uint32_t getDisplayTimeoutMillis() const;
+  void resetDisplayAutoOff();
+
   // Button action handlers
   char checkDisplayOn(char c);
   char handleLongPress(char c);

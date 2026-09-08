@@ -47,6 +47,18 @@ public:
   // 4=magenta, 5=amarelo, 6=laranja, 7=branco.
   uint8_t header_color = 0;
 
+
+  // HiveFW — timeout automático do ecrã.
+  //
+  // 0 = 5 segundos
+  // 1 = 15 segundos
+  // 2 = 1 minuto
+  // 3 = 5 minutos
+  // 4 = sempre ligado
+  //
+  // Default: 15 segundos.
+  uint8_t display_timeout = 1;
+
 private:
   class RadioPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
     NodePrefs* _parent;
@@ -126,6 +138,7 @@ private:
       def("apps_ch", (void *) _parent->apps_channel_hash,
           sizeof(_parent->apps_channel_hash));
       def("hdr_col", _parent->header_color);
+      def("disp_to", _parent->display_timeout);
     }
   public:
     CompanionPrefs(NodePrefs* parent) : _parent(parent) { }
