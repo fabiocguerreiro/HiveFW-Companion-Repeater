@@ -940,6 +940,22 @@ class HomeScreen : public UIScreen {
     uint8_t old_count =
       _ha_command_count;
 
+    // ALTERAR nome/comando não deve modificar
+    // a opção LOCALIZAÇÃO já existente.
+    uint8_t preserved_flags = 0;
+
+    if (
+      _ha_edit_index != HA_EDIT_NEW &&
+      _ha_edit_index <
+        _ha_command_count
+    ) {
+
+      preserved_flags =
+        _ha_commands[
+          _ha_edit_index
+        ].flags;
+    }
+
     uint8_t target;
 
     if (_ha_edit_index == HA_EDIT_NEW) {
@@ -960,6 +976,9 @@ class HomeScreen : public UIScreen {
       0,
       sizeof(HiveFWHACommand)
     );
+
+    _ha_commands[target].flags =
+      preserved_flags;
 
     strncpy(
       _ha_commands[target].name,
@@ -1138,10 +1157,70 @@ class HomeScreen : public UIScreen {
   }
 
 
+  bool toggleHALocation(
+    uint8_t index
+  ) {
+
+    if (
+      index >=
+      _ha_command_count
+    ) {
+      return false;
+    }
+
+    uint8_t old_flags =
+      _ha_commands[index].flags;
+
+    _ha_commands[index].flags ^=
+      HIVEFW_HA_FLAG_LOCATION;
+
+    if (
+      !the_mesh.saveHACommands(
+        _ha_commands,
+        _ha_command_count
+      )
+    ) {
+
+      _ha_commands[index].flags =
+        old_flags;
+
+      _task->showAlert(
+        "Falha ao guardar",
+        1500
+      );
+
+      return false;
+    }
+
+    bool enabled =
+      (
+        _ha_commands[index].flags &
+        HIVEFW_HA_FLAG_LOCATION
+      ) != 0;
+
+    _task->notify(
+      UIEventType::ack
+    );
+
+    _task->showAlert(
+      enabled
+        ? "Localização ON"
+        : "Localização OFF",
+      1200
+    );
+
+    return true;
+  }
+
+
   bool sendHACommand(uint8_t index) {
 
-    if (index >= _ha_command_count)
+    if (
+      index >=
+      _ha_command_count
+    ) {
       return false;
+    }
 
     ChannelDetails channel;
 
@@ -1155,16 +1234,67 @@ class HomeScreen : public UIScreen {
       return false;
     }
 
-    char command[
-      HIVEFW_HA_COMMAND_LEN + 2
-    ];
+    char command[96];
 
-    snprintf(
-      command,
-      sizeof(command),
-      "!%s",
-      _ha_commands[index].command
-    );
+    bool with_location =
+      (
+        _ha_commands[index].flags &
+        HIVEFW_HA_FLAG_LOCATION
+      ) != 0;
+
+    if (with_location) {
+
+#if ENV_INCLUDE_GPS == 1
+
+      LocationProvider* location =
+        _sensors->getLocationProvider();
+
+      if (
+        location != nullptr &&
+        location->isValid()
+      ) {
+
+        snprintf(
+          command,
+          sizeof(command),
+          "!%s %.4f %.4f",
+          _ha_commands[index].command,
+          location->getLatitude() /
+            1000000.0,
+          location->getLongitude() /
+            1000000.0
+        );
+
+      } else {
+
+        snprintf(
+          command,
+          sizeof(command),
+          "!%s SEM GPS",
+          _ha_commands[index].command
+        );
+      }
+
+#else
+
+      snprintf(
+        command,
+        sizeof(command),
+        "!%s SEM GPS",
+        _ha_commands[index].command
+      );
+
+#endif
+
+    } else {
+
+      snprintf(
+        command,
+        sizeof(command),
+        "!%s",
+        _ha_commands[index].command
+      );
+    }
 
     bool success =
       the_mesh.sendGroupMessage(
@@ -4541,7 +4671,7 @@ public:
       }
 
       // ======================================================
-      // GERIR — ALTERAR / APAGAR
+      // GERIR — ALTERAR / LOCALIZAÇÃO / APAGAR
       // ======================================================
 
       else if (
@@ -4549,11 +4679,58 @@ public:
         HA_STAGE_MANAGE_ACTION
       ) {
 
+#if ENV_INCLUDE_GPS == 1
+
+        char location_item[24];
+
+        bool location_enabled =
+          (
+            _ha_edit_index <
+              _ha_command_count &&
+            (
+              _ha_commands[
+                _ha_edit_index
+              ].flags &
+              HIVEFW_HA_FLAG_LOCATION
+            ) != 0
+          );
+
+        snprintf(
+          location_item,
+          sizeof(location_item),
+          "LOCALIZAÇÃO: %s",
+          location_enabled
+            ? "ON"
+            : "OFF"
+        );
+
+        const char* items[] = {
+          "ALTERAR",
+          location_item,
+          "APAGAR",
+          "[ VOLTAR ]"
+        };
+
+        const uint8_t action_count = 4;
+
+#else
+
         const char* items[] = {
           "ALTERAR",
           "APAGAR",
           "[ VOLTAR ]"
         };
+
+        const uint8_t action_count = 3;
+
+#endif
+
+        if (
+          _ha_action_menu >=
+          action_count
+        ) {
+          _ha_action_menu = 0;
+        }
 
         display.setColor(
           UIColor::primary_txt
@@ -4561,11 +4738,10 @@ public:
 
         display.setTextSize(2);
 
-        drawSelectedMenuText(
+        drawMenuItemText(
           display,
-          display.width() / 2,
-          38,
-          items[_ha_action_menu]
+          items[_ha_action_menu],
+          32
         );
       }
 
@@ -6505,13 +6681,19 @@ public:
 
 
       // ======================================================
-      // GERIR — ALTERAR / APAGAR
+      // GERIR — ALTERAR / LOCALIZAÇÃO / APAGAR
       // ======================================================
 
       if (
         _ha_stage ==
         HA_STAGE_MANAGE_ACTION
       ) {
+
+#if ENV_INCLUDE_GPS == 1
+        const uint8_t action_count = 4;
+#else
+        const uint8_t action_count = 3;
+#endif
 
         if (
           c == KEY_NEXT ||
@@ -6520,7 +6702,7 @@ public:
 
           _ha_action_menu =
             (_ha_action_menu + 1)
-            % 3;
+            % action_count;
 
           return true;
         }
@@ -6531,8 +6713,11 @@ public:
         ) {
 
           _ha_action_menu =
-            (_ha_action_menu + 2)
-            % 3;
+            (
+              _ha_action_menu +
+              action_count -
+              1
+            ) % action_count;
 
           return true;
         }
@@ -6560,8 +6745,27 @@ public:
             return true;
           }
 
+#if ENV_INCLUDE_GPS == 1
+
+          // LOCALIZAÇÃO
+          if (_ha_action_menu == 1) {
+
+            toggleHALocation(
+              _ha_edit_index
+            );
+
+            return true;
+          }
+
+          // APAGAR
+          if (_ha_action_menu == 2) {
+
+#else
+
           // APAGAR
           if (_ha_action_menu == 1) {
+
+#endif
 
             _ha_delete_confirm = 0;
 

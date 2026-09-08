@@ -278,6 +278,18 @@ static const uint8_t HIVEFW_HA_FILE_MAGIC[4] = {
   'H', 'A', 'C', '1'
 };
 
+// Trailer opcional no MESMO ficheiro.
+//
+// Se não existir:
+//   nenhum comando usa localização.
+//
+// Se existir:
+//   cada bit indica se o comando correspondente
+//   deve anexar coordenadas GPS.
+static const uint8_t HIVEFW_HA_LOCATION_MAGIC[4] = {
+  'L', 'O', 'C', '1'
+};
+
 
 int DataStore::loadHACommands(
   HiveFWHACommand dest[],
@@ -403,6 +415,76 @@ int DataStore::loadHACommands(
     }
   }
 
+  // ========================================================
+  // HIVEFW — LOCALIZAÇÃO OPCIONAL
+  //
+  // Os registos nome+comando permanecem exatamente iguais
+  // ao formato anterior.
+  //
+  // Apenas procuramos um trailer opcional:
+  //
+  //   LOC1
+  //   uint16_t location_mask
+  //
+  // Se não estiver presente, flags permanece 0.
+  // ========================================================
+
+  if (
+    loaded == stored_count &&
+    file.available() >= 6
+  ) {
+
+    uint8_t location_magic[4];
+
+    if (
+      file.read(
+        location_magic,
+        sizeof(location_magic)
+      ) ==
+      (int)sizeof(location_magic) &&
+      memcmp(
+        location_magic,
+        HIVEFW_HA_LOCATION_MAGIC,
+        sizeof(location_magic)
+      ) == 0
+    ) {
+
+      uint8_t mask_bytes[2];
+
+      if (
+        file.read(
+          mask_bytes,
+          sizeof(mask_bytes)
+        ) ==
+        (int)sizeof(mask_bytes)
+      ) {
+
+        uint16_t location_mask =
+          (uint16_t)mask_bytes[0] |
+          (
+            (uint16_t)mask_bytes[1]
+            << 8
+          );
+
+        for (
+          int i = 0;
+          i < loaded && i < 16;
+          i++
+        ) {
+
+          if (
+            location_mask &
+            ((uint16_t)1 << i)
+          ) {
+
+            dest[i].flags |=
+              HIVEFW_HA_FLAG_LOCATION;
+          }
+        }
+      }
+    }
+  }
+
   file.close();
 
   return loaded;
@@ -508,6 +590,69 @@ bool DataStore::saveHACommands(
         (const uint8_t*)command.command,
         sizeof(command.command)
       ) != sizeof(command.command)
+    ) {
+
+      file.close();
+      return false;
+    }
+  }
+
+  // ========================================================
+  // HIVEFW — TRAILER OPCIONAL DE LOCALIZAÇÃO
+  //
+  // Se nenhum comando usar localização não escrevemos
+  // absolutamente nada extra. O ficheiro fica compatível
+  // byte-a-byte com o formato original.
+  // ========================================================
+
+  uint16_t location_mask = 0;
+
+  for (
+    int i = 0;
+    i < count && i < 16;
+    i++
+  ) {
+
+    if (
+      src[i].flags &
+      HIVEFW_HA_FLAG_LOCATION
+    ) {
+
+      location_mask |=
+        ((uint16_t)1 << i);
+    }
+  }
+
+  if (location_mask != 0) {
+
+    if (
+      file.write(
+        HIVEFW_HA_LOCATION_MAGIC,
+        sizeof(HIVEFW_HA_LOCATION_MAGIC)
+      ) !=
+      sizeof(HIVEFW_HA_LOCATION_MAGIC)
+    ) {
+
+      file.close();
+      return false;
+    }
+
+    uint8_t mask_bytes[2] = {
+      (uint8_t)(
+        location_mask & 0xFF
+      ),
+      (uint8_t)(
+        (location_mask >> 8) &
+        0xFF
+      )
+    };
+
+    if (
+      file.write(
+        mask_bytes,
+        sizeof(mask_bytes)
+      ) !=
+      sizeof(mask_bytes)
     ) {
 
       file.close();

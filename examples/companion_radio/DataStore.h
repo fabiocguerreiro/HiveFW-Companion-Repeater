@@ -19,9 +19,17 @@
 #define HIVEFW_HA_NAME_LEN     21
 #define HIVEFW_HA_COMMAND_LEN  33
 
+// Opções opcionais do comando.
+// Sem indicação = comando normal.
+#define HIVEFW_HA_FLAG_LOCATION 0x01
+
 struct HiveFWHACommand {
   char name[HIVEFW_HA_NAME_LEN];
   char command[HIVEFW_HA_COMMAND_LEN];
+
+  // Esta informação não altera o registo base
+  // nome + comando existente no ficheiro.
+  uint8_t flags;
 };
 
 
