@@ -54,6 +54,35 @@ ColorVal UIColor::popup_bkg = OLEDDISPLAY_COLOR::BLACK;
 ColorVal UIColor::popup_txt = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::corp_blue = OLEDDISPLAY_COLOR::WHITE;
 
+
+void ST7789Display::applyRotation() {
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+  if (_rotation == 1) {
+
+    // Landscape oposto ao modo HiveFW original.
+    display.flipScreenVertically();
+
+  } else {
+
+    // Orientação original do HiveFW/T114.
+    display.landscapeScreen();
+  }
+
+#else
+
+  // Preservar comportamento dos restantes ST7789.
+  display.landscapeScreen();
+
+#ifdef DISPLAY_FLIP_VERTICALLY
+  display.flipScreenVertically();
+#endif
+
+#endif
+}
+
+
 bool ST7789Display::begin() {
   if(!_isOn) {
     pinMode(PIN_TFT_VDD_CTL, OUTPUT);
@@ -67,10 +96,7 @@ bool ST7789Display::begin() {
     digitalWrite(PIN_TFT_RST, HIGH);
 
     display.init();
-    display.landscapeScreen();
-    #ifdef DISPLAY_FLIP_VERTICALLY
-    display.flipScreenVertically();
-    #endif
+    applyRotation();
     display.displayOn();
     setCursor(0,0);
 
@@ -87,10 +113,8 @@ void ST7789Display::turnOn() {
     
     // Re-initialize the display
     display.init();
+    applyRotation();
     display.displayOn();
-    #ifdef DISPLAY_FLIP_VERTICALLY
-    display.flipScreenVertically();
-    #endif
     delay(20);
 
     // Now turn on the backlight
@@ -187,6 +211,36 @@ void ST7789Display::setHeaderAccent(
       break;
   }
 }
+
+
+
+void ST7789Display::setDisplayRotation(
+  uint8_t rotation
+) {
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+  uint8_t normalized =
+    rotation ? 1 : 0;
+
+  if (_rotation == normalized) {
+    return;
+  }
+
+  _rotation =
+    normalized;
+
+  if (_isOn) {
+    applyRotation();
+  }
+
+#else
+
+  (void)rotation;
+
+#endif
+}
+
 
 void ST7789Display::setCursor(int x, int y) {
   _x = x*SCALE_X + X_OFFSET;

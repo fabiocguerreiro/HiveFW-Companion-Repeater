@@ -93,6 +93,7 @@
 //   ├── COR DA BARRA (T114 com ecrã a cores)
 //   ├── ECRÃ
 //   │   ├── TEMPO ECRÃ
+//   │   ├── ROTAÇÃO (T114)
 //   │   └── [ SAIR ]
 //   ├── GPS (quando disponível)
 //   ├── DESLIGAR
@@ -400,6 +401,29 @@ static const uint8_t HIVEFW_DISPLAY_TIMEOUT_DEFAULT =
   1;
 
 
+
+// ========================================================================
+// HIVEFW — ROTAÇÃO DO ECRÃ T114
+// ========================================================================
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+static const char* hivefw_display_rotation_names[] = {
+  "NORMAL",
+  "INVERTIDO"
+};
+
+static const uint8_t HIVEFW_DISPLAY_ROTATION_COUNT = 2;
+
+#define HIVEFW_DISPLAY_ROTATION_OFFSET 1
+
+#else
+
+#define HIVEFW_DISPLAY_ROTATION_OFFSET 0
+
+#endif
+
+
 static int findRadioPreset(
   float freq,
   float bw,
@@ -548,6 +572,10 @@ class HomeScreen : public UIScreen {
 
   bool _settings_timeout_submenu;
   uint8_t _settings_timeout_menu;
+
+
+  bool _settings_rotation_submenu;
+  uint8_t _settings_rotation_menu;
 
   uint8_t _settings_advert_menu;
   bool _settings_advert_submenu;
@@ -3008,6 +3036,8 @@ public:
        _settings_display_menu(0),
        _settings_timeout_submenu(false),
        _settings_timeout_menu(0),
+       _settings_rotation_submenu(false),
+       _settings_rotation_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
@@ -4883,6 +4913,11 @@ public:
           UIColor::primary_txt
         );
 
+
+        // ----------------------------------------------------
+        // TEMPO ECRÃ
+        // ----------------------------------------------------
+
         if (_settings_timeout_submenu) {
 
           display.setTextSize(1);
@@ -4912,8 +4947,6 @@ public:
               timeout_index
             ];
 
-          // "SEMPRE LIGADO" é demasiado largo em algumas
-          // fontes no tamanho 2. Reduzir apenas quando preciso.
           if (
             display.getTextWidth(
               timeout_text
@@ -4929,11 +4962,61 @@ public:
             45,
             timeout_text
           );
+        }
 
-        } else {
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+        // ----------------------------------------------------
+        // ROTAÇÃO
+        // ----------------------------------------------------
+
+        else if (_settings_rotation_submenu) {
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            27,
+            "ROTAÇÃO"
+          );
+
+          uint8_t rotation_index =
+            _settings_rotation_menu;
+
+          if (
+            rotation_index >=
+            HIVEFW_DISPLAY_ROTATION_COUNT
+          ) {
+
+            rotation_index = 0;
+          }
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            45,
+            hivefw_display_rotation_names[
+              rotation_index
+            ]
+          );
+        }
+
+#endif
+
+
+        // ----------------------------------------------------
+        // MENU ECRÃ
+        // ----------------------------------------------------
+
+        else {
 
           const char* display_items[] = {
             "TEMPO ECRÃ",
+#ifdef HELTEC_T114_WITH_DISPLAY
+            "ROTAÇÃO",
+#endif
             "[ SAIR ]"
           };
 
@@ -6899,10 +6982,136 @@ public:
 
 
       // ======================================================
+      // HIVEFW — HANDLER ROTAÇÃO
+      // ======================================================
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+      if (_settings_rotation_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_rotation_menu =
+            (
+              _settings_rotation_menu +
+              1
+            ) %
+            HIVEFW_DISPLAY_ROTATION_COUNT;
+
+          // Preview imediato.
+          _task->setDisplayRotation(
+            _settings_rotation_menu
+          );
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_rotation_menu =
+            (
+              _settings_rotation_menu +
+              HIVEFW_DISPLAY_ROTATION_COUNT -
+              1
+            ) %
+            HIVEFW_DISPLAY_ROTATION_COUNT;
+
+          // Preview imediato.
+          _task->setDisplayRotation(
+            _settings_rotation_menu
+          );
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          // Cancelar preview e restaurar a preferência guardada.
+          _settings_rotation_menu =
+            _node_prefs->display_rotation;
+
+          if (
+            _settings_rotation_menu >=
+            HIVEFW_DISPLAY_ROTATION_COUNT
+          ) {
+
+            _settings_rotation_menu = 0;
+          }
+
+          _task->setDisplayRotation(
+            _settings_rotation_menu
+          );
+
+          _settings_rotation_submenu =
+            false;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          if (
+            _settings_rotation_menu >=
+            HIVEFW_DISPLAY_ROTATION_COUNT
+          ) {
+
+            _settings_rotation_menu = 0;
+          }
+
+          _node_prefs->display_rotation =
+            _settings_rotation_menu;
+
+          the_mesh.savePrefs();
+
+          _task->setDisplayRotation(
+            _settings_rotation_menu
+          );
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            _settings_rotation_menu == 0
+              ? "Rotação: NORMAL"
+              : "Rotação: INVERTIDO",
+            1200
+          );
+
+          _settings_rotation_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+#endif
+
+
+      // ======================================================
       // HIVEFW — HANDLER ECRÃ
       // ======================================================
 
       if (_settings_display_submenu) {
+
+        const uint8_t display_menu_count =
+          2 +
+          HIVEFW_DISPLAY_ROTATION_OFFSET;
+
 
         if (
           c == KEY_NEXT ||
@@ -6913,10 +7122,12 @@ public:
             (
               _settings_display_menu +
               1
-            ) % 2;
+            ) %
+            display_menu_count;
 
           return true;
         }
+
 
         if (
           c == KEY_PREV ||
@@ -6926,11 +7137,14 @@ public:
           _settings_display_menu =
             (
               _settings_display_menu +
+              display_menu_count -
               1
-            ) % 2;
+            ) %
+            display_menu_count;
 
           return true;
         }
+
 
         if (
           c == KEY_CANCEL ||
@@ -6945,12 +7159,19 @@ public:
           _settings_timeout_submenu =
             false;
 
+          _settings_rotation_submenu =
+            false;
+
           return true;
         }
 
+
         if (c == KEY_ENTER) {
 
+          // --------------------------------------------------
           // TEMPO ECRÃ
+          // --------------------------------------------------
+
           if (_settings_display_menu == 0) {
 
             _settings_timeout_menu =
@@ -6971,16 +7192,58 @@ public:
             return true;
           }
 
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+          // --------------------------------------------------
+          // ROTAÇÃO
+          // --------------------------------------------------
+
+          if (_settings_display_menu == 1) {
+
+            _settings_rotation_menu =
+              _node_prefs->display_rotation;
+
+            if (
+              _settings_rotation_menu >=
+              HIVEFW_DISPLAY_ROTATION_COUNT
+            ) {
+
+              _settings_rotation_menu = 0;
+            }
+
+            _settings_rotation_submenu =
+              true;
+
+            return true;
+          }
+
+#endif
+
+
+          // --------------------------------------------------
           // [ SAIR ]
-          _settings_display_submenu =
-            false;
+          // --------------------------------------------------
 
-          _settings_display_menu = 0;
+          if (
+            _settings_display_menu ==
+            1 +
+            HIVEFW_DISPLAY_ROTATION_OFFSET
+          ) {
 
-          _settings_timeout_submenu =
-            false;
+            _settings_display_submenu =
+              false;
 
-          return true;
+            _settings_display_menu = 0;
+
+            _settings_timeout_submenu =
+              false;
+
+            _settings_rotation_submenu =
+              false;
+
+            return true;
+          }
         }
 
         return true;
@@ -7306,6 +7569,9 @@ public:
 
         _settings_timeout_submenu = false;
         _settings_timeout_menu = 0;
+
+        _settings_rotation_submenu = false;
+        _settings_rotation_menu = 0;
 
         return true;
       }
@@ -10765,6 +11031,24 @@ void UITask::gotoChannelMessages(uint8_t channel_index) {
 // HIVEFW — TIMEOUT CONFIGURÁVEL DO ECRÃ
 // ========================================================================
 
+
+
+void UITask::setDisplayRotation(
+  uint8_t rotation
+) {
+
+  if (_display == NULL) {
+    return;
+  }
+
+  _display->setDisplayRotation(
+    rotation
+  );
+
+  _next_refresh = 0;
+}
+
+
 uint32_t UITask::getDisplayTimeoutMillis() const {
 
   if (_node_prefs != NULL) {
@@ -10819,6 +11103,15 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   _display = display;
   _sensors = sensors;
   _node_prefs = node_prefs;
+
+
+  // Aplicar imediatamente a orientação persistida.
+  if (_display != NULL) {
+
+    _display->setDisplayRotation(
+      _node_prefs->display_rotation
+    );
+  }
 
   resetDisplayAutoOff();
 

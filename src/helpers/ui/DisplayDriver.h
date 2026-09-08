@@ -29,6 +29,13 @@ public:
   virtual void setHeaderAccent(uint8_t colorIndex) {
     (void)colorIndex;
   }
+
+
+  // HiveFW — orientação física do display.
+  // Drivers sem suporte podem ignorar.
+  virtual void setDisplayRotation(uint8_t rotation) {
+    (void)rotation;
+  }
   virtual void turnOn() = 0;
   virtual void turnOff() = 0;
   virtual void clear() = 0;

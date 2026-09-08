@@ -59,6 +59,13 @@ public:
   // Default: 15 segundos.
   uint8_t display_timeout = 1;
 
+
+  // HiveFW — orientação do TFT.
+  //
+  // 0 = orientação atual/original
+  // 1 = invertido 180 graus
+  uint8_t display_rotation = 0;
+
 private:
   class RadioPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
     NodePrefs* _parent;
@@ -139,6 +146,7 @@ private:
           sizeof(_parent->apps_channel_hash));
       def("hdr_col", _parent->header_color);
       def("disp_to", _parent->display_timeout);
+      def("disp_rot", _parent->display_rotation);
     }
   public:
     CompanionPrefs(NodePrefs* parent) : _parent(parent) { }

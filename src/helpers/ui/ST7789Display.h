@@ -14,6 +14,13 @@ class ST7789Display : public DisplayDriver {
   // HiveFW — RGB565 real da barra superior.
   uint16_t _headerAccent = ST77XX_RED;
 
+
+  // 0 = orientação HiveFW atual
+  // 1 = invertido 180 graus
+  uint8_t _rotation = 0;
+
+  void applyRotation();
+
   int _x=0, _y=0;
 
   bool i2c_probe(TwoWire& wire, uint8_t addr);
@@ -35,6 +42,7 @@ public:
   void setTextSize(int sz) override;
   void setColor(ColorVal c) override;
   void setHeaderAccent(uint8_t colorIndex) override;
+  void setDisplayRotation(uint8_t rotation) override;
   void setCursor(int x, int y) override;
   void print(const char* str) override;
   void printWordWrap(const char* str, int max_width) override;
