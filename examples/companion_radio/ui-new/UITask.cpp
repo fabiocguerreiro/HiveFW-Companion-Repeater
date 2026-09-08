@@ -2278,13 +2278,17 @@ class HomeScreen : public UIScreen {
       0,
       0,
       display.width(),
-      12
+      11
     );
 
     // ------------------------------------------------------
     // HIVEFW — SEPARADOR INFERIOR DA BARRA
     //
     // Uma única unidade lógica de altura.
+    //
+    // A barra colorida ocupa y=0..10 e este separador ocupa
+    // y=11. A altura total do header continua portanto a ser
+    // exatamente as 12 unidades originais.
     //
     // Fica imediatamente abaixo da barra colorida e mantém
     // sempre a cor branca/primária, independentemente da
@@ -2300,7 +2304,7 @@ class HomeScreen : public UIScreen {
 
     display.fillRect(
       0,
-      12,
+      11,
       display.width(),
       1
     );
@@ -2442,6 +2446,15 @@ class HomeScreen : public UIScreen {
   // interna dos bytes UTF-8.
   // ========================================================
 
+  // ========================================================
+  // HIVEFW — NOME DO NÓ CENTRADO
+  //
+  // O símbolo U+2622 (☢) e os variation selectors associados
+  // são omitidos apenas no dashboard.
+  //
+  // O node_name original não é alterado.
+  // ========================================================
+
   void drawCenteredNodeName(
     DisplayDriver& display,
     const char* text
@@ -2454,78 +2467,56 @@ class HomeScreen : public UIScreen {
       return;
     }
 
-    char before[48];
-    char after[48];
+    char filtered[64];
 
-    memset(
-      before,
-      0,
-      sizeof(before)
-    );
-
-    memset(
-      after,
-      0,
-      sizeof(after)
-    );
-
-    char* dest =
-      before;
-
-    size_t dest_size =
-      sizeof(before);
-
-    size_t j = 0;
-
-    bool has_radiation =
-      false;
+    size_t out = 0;
+    bool last_space = false;
 
     for (
       size_t i = 0;
-      text[i] != 0;
+      text[i] != '\0';
     ) {
 
-      const uint8_t c =
+      uint8_t c =
         (uint8_t)text[i];
 
 
       // ----------------------------------------------------
-      // U+2622 RADIOACTIVE SIGN
+      // U+2622 ☢
       //
       // UTF-8:
       //   E2 98 A2
+      //
+      // Não mostrar no dashboard.
       // ----------------------------------------------------
 
       if (
-        !has_radiation &&
         c == 0xE2 &&
-        text[i + 1] != 0 &&
-        text[i + 2] != 0 &&
+        text[i + 1] != '\0' &&
+        text[i + 2] != '\0' &&
         (uint8_t)text[i + 1] == 0x98 &&
         (uint8_t)text[i + 2] == 0xA2
       ) {
 
-        dest[j] = '\0';
+        // Manter separação visual entre o texto dos dois lados.
+        if (
+          out > 0 &&
+          filtered[out - 1] != ' ' &&
+          out < sizeof(filtered) - 1
+        ) {
 
-        has_radiation =
-          true;
-
-        dest =
-          after;
-
-        dest_size =
-          sizeof(after);
-
-        j = 0;
+          filtered[out++] = ' ';
+          last_space = true;
+        }
 
         i += 3;
 
 
-        // U+FE0E / U+FE0F imediatamente depois do símbolo.
+        // U+FE0E / U+FE0F imediatamente depois de ☢.
         if (
-          text[i] != 0 &&
-          text[i + 1] != 0 &&
-          text[i + 2] != 0 &&
+          text[i] != '\0' &&
+          text[i + 1] != '\0' &&
+          text[i + 2] != '\0' &&
           (uint8_t)text[i] == 0xEF &&
           (uint8_t)text[i + 1] == 0xB8 &&
           (
@@ -2542,13 +2533,13 @@ class HomeScreen : public UIScreen {
 
 
       // ----------------------------------------------------
-      // Variation selector isolado — ignorar.
+      // Variation selector isolado.
       // ----------------------------------------------------
 
       if (
         c == 0xEF &&
-        text[i + 1] != 0 &&
-        text[i + 2] != 0 &&
+        text[i + 1] != '\0' &&
+        text[i + 2] != '\0' &&
         (uint8_t)text[i + 1] == 0xB8 &&
         (
           (uint8_t)text[i + 2] == 0x8E ||
@@ -2562,7 +2553,7 @@ class HomeScreen : public UIScreen {
 
 
       // ----------------------------------------------------
-      // ASCII normal.
+      // ASCII.
       // ----------------------------------------------------
 
       if (
@@ -2570,13 +2561,37 @@ class HomeScreen : public UIScreen {
         c <= 126
       ) {
 
+        char ch =
+          (char)c;
+
+        if (ch == ' ') {
+
+          // Colapsar espaços duplicados que possam surgir
+          // depois da remoção do símbolo.
+          if (
+            out == 0 ||
+            last_space
+          ) {
+
+            i++;
+            continue;
+          }
+
+          last_space = true;
+
+        } else {
+
+          last_space = false;
+        }
+
+
         if (
-          j <
-          dest_size - 1
+          out <
+          sizeof(filtered) - 1
         ) {
 
-          dest[j++] =
-            (char)c;
+          filtered[out++] =
+            ch;
         }
 
         i++;
@@ -2585,27 +2600,28 @@ class HomeScreen : public UIScreen {
 
 
       // ----------------------------------------------------
-      // Outro Unicode:
+      // Outros Unicode:
       //
-      // manter comportamento MeshCore atual = um bloco por
-      // codepoint, mas nunca um bloco por byte.
+      // um codepoint continua a ocupar apenas um bloco.
       // ----------------------------------------------------
 
       if (c >= 0x80) {
 
         if (
-          j <
-          dest_size - 1
+          out <
+          sizeof(filtered) - 1
         ) {
 
-          dest[j++] =
+          filtered[out++] =
             (char)0xDB;
         }
+
+        last_space = false;
 
         i++;
 
         while (
-          text[i] != 0 &&
+          text[i] != '\0' &&
           (
             (uint8_t)text[i] &
             0xC0
@@ -2621,212 +2637,51 @@ class HomeScreen : public UIScreen {
       i++;
     }
 
-    dest[j] = '\0';
+
+    // Retirar espaços no final.
+    while (
+      out > 0 &&
+      filtered[out - 1] == ' '
+    ) {
+
+      out--;
+    }
+
+    filtered[out] =
+      '\0';
 
 
     // ------------------------------------------------------
-    // Tamanho e posição.
-    //
-    // No ST7789:
-    //   size 1 = Arial 16
-    //   size 2 = Arial 24
-    //
-    // Portanto o aumento é cerca de 1,5x.
+    // Tamanho e posição originais.
     // ------------------------------------------------------
 
-    // Tamanho e posição originais do nickname.
-    //
-    // A centragem e o ícone ☢ permanecem ativos,
-    // mas o texto volta exatamente ao tamanho utilizado
-    // antes da alteração visual.
     display.setTextSize(1);
 
-    const int text_y =
-      52;
 
-    const int icon_y =
-      51;
+    // Cortar apenas se necessário.
+    size_t len =
+      strlen(filtered);
 
-
-    // ------------------------------------------------------
-    // Sem símbolo ☢:
-    //
-    // usamos o mesmo texto filtrado mas com medição limpa.
-    // ------------------------------------------------------
-
-    if (!has_radiation) {
-
-      size_t len =
-        strlen(before);
-
-      while (
-        len > 0 &&
-        display.getTextWidth(
-          before
-        ) >
-        display.width() - 4
-      ) {
-
-        before[
-          --len
-        ] = '\0';
-      }
-
-      display.drawTextCentered(
-        display.width() / 2,
-        text_y,
-        before
-      );
-
-      return;
-    }
-
-
-    // ------------------------------------------------------
-    // Com símbolo ☢:
-    // centrar texto + ícone como uma única linha.
-    // ------------------------------------------------------
-
-    const int icon_width =
-      HIVEFW_RADIATION_ICON_WIDTH;
-
-    const int gap_before =
-      before[0] != '\0'
-        ? 1
-        : 0;
-
-    const int gap_after =
-      after[0] != '\0'
-        ? 1
-        : 0;
-
-    const int max_width =
-      display.width() - 4;
-
-
-    // Cortar apenas se for mesmo necessário.
-    while (true) {
-
-      int before_width =
-        display.getTextWidth(
-          before
-        );
-
-      int after_width =
-        display.getTextWidth(
-          after
-        );
-
-      int total_width =
-        before_width +
-        gap_before +
-        icon_width +
-        gap_after +
-        after_width;
-
-      if (
-        total_width <=
-        max_width
-      ) {
-        break;
-      }
-
-      size_t after_len =
-        strlen(after);
-
-      if (after_len > 0) {
-
-        after[
-          after_len - 1
-        ] = '\0';
-
-        continue;
-      }
-
-      size_t before_len =
-        strlen(before);
-
-      if (before_len > 0) {
-
-        before[
-          before_len - 1
-        ] = '\0';
-
-        continue;
-      }
-
-      break;
-    }
-
-
-    int before_width =
+    while (
+      len > 0 &&
       display.getTextWidth(
-        before
-      );
+        filtered
+      ) >
+      display.width() - 4
+    ) {
 
-    int after_width =
-      display.getTextWidth(
-        after
-      );
-
-    int total_width =
-      before_width +
-      gap_before +
-      icon_width +
-      gap_after +
-      after_width;
-
-    int x =
-      (
-        display.width() -
-        total_width
-      ) / 2;
-
-
-    // Prefixo.
-    if (before[0] != '\0') {
-
-      display.setCursor(
-        x,
-        text_y
-      );
-
-      display.print(
-        before
-      );
-
-      x +=
-        before_width +
-        gap_before;
+      filtered[
+        --len
+      ] = '\0';
     }
 
 
-    // Ícone ☢.
-    display.drawXbm(
-      x,
-      icon_y,
-      hivefw_radiation_icon,
-      HIVEFW_RADIATION_ICON_WIDTH,
-      HIVEFW_RADIATION_ICON_HEIGHT
+    // Centrar a largura EXATA do que vai aparecer.
+    display.drawTextCentered(
+      display.width() / 2,
+      52,
+      filtered
     );
-
-    x +=
-      icon_width +
-      gap_after;
-
-
-    // Sufixo.
-    if (after[0] != '\0') {
-
-      display.setCursor(
-        x,
-        text_y
-      );
-
-      display.print(
-        after
-      );
-    }
   }
 
 

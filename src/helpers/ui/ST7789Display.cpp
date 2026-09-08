@@ -262,7 +262,8 @@ void ST7789Display::endFrame() {
   // ----------------------------------------------------------
   // HiveFW T114
   //
-  // A barra lógica tem 12 unidades de altura.
+  // A barra colorida tem 11 unidades de altura.
+  // A unidade lógica seguinte é o separador branco.
   // Convertê-la para as linhas reais do framebuffer ST7789.
   //
   // A cor é aplicada PELO MESMO writer usado para o frame
@@ -272,7 +273,7 @@ void ST7789Display::endFrame() {
   int header_height =
     Y_OFFSET +
     (int)(
-      12.0f *
+      11.0f *
       SCALE_Y
     );
 
