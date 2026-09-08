@@ -85,6 +85,8 @@
 //   │   └── [ SAIR ]
 //   ├── GPS / SENSORES (quando disponíveis)
 //   ├── RELÓGIO
+//   │   ├── DIGITAL
+//   │   └── BINÁRIO
 //   └── [ SAIR ]
 //
 // MP-08 — DEFINIÇÕES
@@ -740,8 +742,21 @@ class HomeScreen : public UIScreen {
     APPS_VIEW_SOS = 7
   };
 
+
+  // ========================================================
+  // HIVEFW — WATCHFACES
+  // ========================================================
+
+  enum ClockView : uint8_t {
+    CLOCK_VIEW_DIGITAL = 0,
+    CLOCK_VIEW_BINARY,
+    CLOCK_VIEW_COUNT
+  };
+
+
   uint8_t _apps_menu;
   uint8_t _apps_view;
+  uint8_t _clock_view;
 
   bool _sos_submenu;
   uint8_t _sos_menu;
@@ -3276,6 +3291,7 @@ public:
       _ha_char_index(3),
       _ha_command_count(0),
        _apps_menu(0), _apps_view(0),
+       _clock_view(CLOCK_VIEW_DIGITAL),
        _sos_submenu(false), _sos_menu(0),
        _sos_confirm_submenu(false),
        _repeater_stats_page(0),
@@ -6432,20 +6448,177 @@ public:
         localTime.year()
       );
 
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 25, timeText);
+      // ====================================================
+      // WATCHFACE DIGITAL
+      // ====================================================
 
-      display.setColor(UIColor::secondary_txt);
-      display.setTextSize(1);
-      display.drawTextCentered(display.width() / 2, 41, dateText);
+      if (_clock_view == CLOCK_VIEW_DIGITAL) {
 
-      display.setTextSize(1);
-      display.drawTextCentered(
-        display.width() / 2 + 2,
-        53,
-        summerTime ? "Horário de Verão" : "Horário de Inverno"
-      );
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          25,
+          timeText
+        );
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          41,
+          dateText
+        );
+
+        display.drawTextCentered(
+          display.width() / 2 + 2,
+          53,
+          summerTime
+            ? "Horário de Verão"
+            : "Horário de Inverno"
+        );
+      }
+
+
+      // ====================================================
+      // WATCHFACE BINÁRIO
+      //
+      // BCD:
+      //
+      //   H H   M M
+      //
+      // Cada coluna representa um dígito decimal.
+      // De cima para baixo:
+      //
+      //   8
+      //   4
+      //   2
+      //   1
+      //
+      // quadrado cheio  = 1
+      // quadrado vazio  = 0
+      // ====================================================
+
+      else if (
+        _clock_view ==
+        CLOCK_VIEW_BINARY
+      ) {
+
+        const uint8_t digits[4] = {
+          (uint8_t)(
+            localTime.hour() / 10
+          ),
+          (uint8_t)(
+            localTime.hour() % 10
+          ),
+          (uint8_t)(
+            localTime.minute() / 10
+          ),
+          (uint8_t)(
+            localTime.minute() % 10
+          )
+        };
+
+        const int x_pos[4] = {
+          25,
+          47,
+          79,
+          101
+        };
+
+        const int y_pos[4] = {
+          20,
+          31,
+          42,
+          53
+        };
+
+        display.setTextSize(1);
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextCentered(
+          36,
+          12,
+          "HH"
+        );
+
+        display.drawTextCentered(
+          90,
+          12,
+          "MM"
+        );
+
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        for (
+          uint8_t column = 0;
+          column < 4;
+          column++
+        ) {
+
+          for (
+            uint8_t row = 0;
+            row < 4;
+            row++
+          ) {
+
+            const uint8_t mask =
+              1U << (3 - row);
+
+            if (
+              digits[column] &
+              mask
+            ) {
+
+              display.fillRect(
+                x_pos[column],
+                y_pos[row],
+                7,
+                7
+              );
+
+            } else {
+
+              display.drawRect(
+                x_pos[column],
+                y_pos[row],
+                7,
+                7
+              );
+            }
+          }
+        }
+
+
+        // Separador HH : MM
+        display.fillRect(
+          63,
+          33,
+          3,
+          3
+        );
+
+        display.fillRect(
+          63,
+          44,
+          3,
+          3
+        );
+      }
 
     }
     return 20000;   // next render after 5000 ms
@@ -9015,12 +9188,55 @@ public:
     if (_page == HomePage::INTERNAL_CLOCK &&
         _apps_return) {
 
-      // Qualquer ação de saída regressa diretamente à
-      // aba principal APPS.
+      // ------------------------------------------------------
+      // WATCHFACE SEGUINTE
+      // ------------------------------------------------------
 
-      if (c == KEY_CANCEL ||
-          c == KEY_SELECT ||
-          c == KEY_ENTER) {
+      if (
+        c == KEY_NEXT ||
+        c == KEY_RIGHT
+      ) {
+
+        _clock_view =
+          (
+            _clock_view + 1
+          ) %
+          CLOCK_VIEW_COUNT;
+
+        return true;
+      }
+
+
+      // ------------------------------------------------------
+      // WATCHFACE ANTERIOR
+      // ------------------------------------------------------
+
+      if (
+        c == KEY_PREV ||
+        c == KEY_LEFT
+      ) {
+
+        _clock_view =
+          (
+            _clock_view +
+            CLOCK_VIEW_COUNT -
+            1
+          ) %
+          CLOCK_VIEW_COUNT;
+
+        return true;
+      }
+
+
+      // ------------------------------------------------------
+      // SAIR
+      // ------------------------------------------------------
+
+      if (
+        c == KEY_CANCEL ||
+        c == KEY_SELECT ||
+        c == KEY_ENTER
+      ) {
 
         _page = HomePage::APPS;
 
