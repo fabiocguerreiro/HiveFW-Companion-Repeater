@@ -53,6 +53,7 @@
 //   │   ├── ADVERT TX / ADVERT RX
 //   │   ├── NOME BLE / SMARTPHONE / NOME DO NO
 //   │   └── MODO / FIRMWARE / VERSAO
+//   ├── ESTADO RELÓGIO (estado / origem / idade do último acerto)
 //   ├── SINCRONIZAR RELÓGIO
 //   ├── SINCRONIZAR VIA GPS (quando disponível)
 //   ├── DESCOBRIR REPETIDORES
@@ -552,6 +553,7 @@ class HomeScreen : public UIScreen {
 
   enum CompanionMenu : uint8_t {
     COMP_MENU_INFO = 0,
+    COMP_MENU_CLOCK_STATUS,
     COMP_MENU_SYNC_CLOCK,
 #if ENV_INCLUDE_GPS == 1
     COMP_MENU_SYNC_GPS,
@@ -599,6 +601,7 @@ class HomeScreen : public UIScreen {
   bool _companion_submenu;
   bool _companion_info_submenu;
   uint8_t _companion_info_page;
+  bool _companion_clock_submenu;
 
   uint8_t _sms_menu;
   bool _sms_submenu;
@@ -1766,11 +1769,11 @@ class HomeScreen : public UIScreen {
     return percentage;
   }
 
-  static void formatUptime(
+  static void formatDuration(
     char* dest,
-    size_t dest_len
+    size_t dest_len,
+    uint32_t seconds
   ) {
-    uint32_t seconds = millis() / 1000;
     uint32_t days = seconds / 86400;
     seconds %= 86400;
 
@@ -1793,6 +1796,42 @@ class HomeScreen : public UIScreen {
         (unsigned long)minutes,
         (unsigned long)seconds);
     }
+  }
+
+  static void formatUptime(char* dest, size_t dest_len) {
+    formatDuration(dest, dest_len, millis() / 1000);
+  }
+
+  void renderClockStatus(DisplayDriver& display) {
+    const uint32_t now = _rtc->getCurrentTime();
+    const uint32_t last_sync = _rtc->getLastSyncTime();
+    const mesh::RTCClock::SyncSource source = _rtc->getLastSyncSource();
+    const bool synced = source != mesh::RTCClock::SyncSource::None && now >= last_sync;
+
+    const char* source_name = "NENHUMA";
+    if (synced) {
+      source_name = source == mesh::RTCClock::SyncSource::GPS ? "GPS" : "APP";
+    }
+
+    char origin[24];
+    char age[32];
+    snprintf(origin, sizeof(origin), "ORIGEM: %s", source_name);
+
+    if (synced) {
+      char elapsed[24];
+      formatDuration(elapsed, sizeof(elapsed), now - last_sync);
+      snprintf(age, sizeof(age), "HÁ: %s", elapsed);
+    } else {
+      snprintf(age, sizeof(age), "ÚLTIMO ACERTO: --");
+    }
+
+    display.setTextSize(1);
+    display.setColor(UIColor::primary_txt);
+    display.drawTextCentered(display.width() / 2, 18, "ESTADO RELÓGIO");
+    display.drawTextCentered(display.width() / 2, 30,
+      synced ? "SINCRONIZADO" : "POR SINCRONIZAR");
+    display.drawTextCentered(display.width() / 2, 42, origin);
+    display.drawTextCentered(display.width() / 2, 54, age);
   }
 
   static uint8_t dutyCyclePercentFromAirtimeFactor(
@@ -3152,6 +3191,7 @@ public:
        _companion_menu(0), _companion_submenu(false),
        _companion_info_submenu(false),
        _companion_info_page(0),
+       _companion_clock_submenu(false),
        _sms_menu(0), _sms_submenu(false),
        _sms_messages_menu(0), _sms_messages_submenu(false),
        _sms_new_menu(0), _sms_new_submenu(false),
@@ -3595,6 +3635,11 @@ public:
         return 20000;
       }
 
+      if (_companion_clock_submenu) {
+        renderClockStatus(display);
+        return 1000;
+      }
+
       // MP-03 — MENU
       // ======================================================
 
@@ -3603,6 +3648,7 @@ public:
 
       const char* companion_items[] = {
         "INFO COMPANION",
+        "ESTADO RELÓGIO",
         "SINCRONIZAR RELÓGIO",
 #if ENV_INCLUDE_GPS == 1
         "SINCRONIZAR VIA GPS",
@@ -9528,6 +9574,13 @@ public:
 
     if (_page == HomePage::COMPANION) {
 
+      if (_companion_clock_submenu) {
+        if (c == KEY_CANCEL || c == KEY_SELECT || c == KEY_ENTER) {
+          _companion_clock_submenu = false;
+        }
+        return true;
+      }
+
       // ======================================================
       // INFO COMPANION — 12 páginas
       // ======================================================
@@ -9642,6 +9695,11 @@ public:
       }
 
       if (c == KEY_ENTER) {
+
+        if (_companion_menu == COMP_MENU_CLOCK_STATUS) {
+          _companion_clock_submenu = true;
+          return true;
+        }
 
         // INFO COMPANION
         if (_companion_menu == COMP_MENU_INFO) {

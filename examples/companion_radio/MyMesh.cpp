@@ -1777,8 +1777,9 @@ bool MyMesh::syncClockFromCompanionTime() {
     _companion_time_ref +
     elapsed_seconds;
 
-  getRTCClock()->setCurrentTime(
-    new_time
+  getRTCClock()->setCurrentTimeFromSource(
+    new_time,
+    mesh::RTCClock::SyncSource::Companion
   );
 
   return true;
@@ -2065,8 +2066,9 @@ void MyMesh::handleCmdFrame(size_t len) {
 
     if (offset >= -60) {
 
-      getRTCClock()->setCurrentTime(
-        secs
+      getRTCClock()->setCurrentTimeFromSource(
+        secs,
+        mesh::RTCClock::SyncSource::Companion
       );
 
       writeOKFrame();

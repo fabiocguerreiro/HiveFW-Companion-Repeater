@@ -85,9 +85,15 @@ public:
  * An abstraction of the device's Realtime Clock.
 */
 class RTCClock {
+public:
+  enum class SyncSource : uint8_t { None, Companion, GPS };
+
+private:
   uint32_t last_unique;
+  uint32_t last_sync_time;
+  SyncSource last_sync_source;
 protected:
-  RTCClock() { last_unique = 0; }
+  RTCClock() : last_unique(0), last_sync_time(0), last_sync_source(SyncSource::None) { }
 
 public:
   /**
@@ -99,6 +105,17 @@ public:
    * \param time  current time in UNIX epoch seconds.
   */
   virtual void setCurrentTime(uint32_t time) = 0;
+
+  // Record an applied external time reference for this boot only. A timestamp
+  // restored from storage at startup is not evidence of a fresh time sync.
+  void setCurrentTimeFromSource(uint32_t time, SyncSource source) {
+    setCurrentTime(time);
+    last_sync_source = time >= 946684800UL ? source : SyncSource::None;
+    last_sync_time = last_sync_source == SyncSource::None ? 0 : time;
+  }
+
+  SyncSource getLastSyncSource() const { return last_sync_source; }
+  uint32_t getLastSyncTime() const { return last_sync_time; }
 
   /**
    * override in classes that need to periodically update internal state

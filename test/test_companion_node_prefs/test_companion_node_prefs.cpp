@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <MeshCore.h>
 
 #include <cstdio>
 #include <cstring>
