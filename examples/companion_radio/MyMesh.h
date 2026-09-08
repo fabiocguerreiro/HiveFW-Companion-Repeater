@@ -228,6 +228,30 @@ public:
     _store->savePrefs(_prefs);
   }
 
+  // ========================================================
+  // HiveFW — HOME ASSISTANT COMMAND STORE
+  // ========================================================
+
+  int loadHACommands(
+    HiveFWHACommand dest[],
+    int max_count
+  ) {
+    return _store->loadHACommands(
+      dest,
+      max_count
+    );
+  }
+
+  bool saveHACommands(
+    const HiveFWHACommand src[],
+    int count
+  ) {
+    return _store->saveHACommands(
+      src,
+      count
+    );
+  }
+
 #if ENV_INCLUDE_GPS == 1
   void applyGpsPrefs() {
     sensors.setSettingValue("gps", _prefs.gps_enabled ? "1" : "0");

@@ -5,6 +5,26 @@
 #include <helpers/ChannelDetails.h>
 #include "NodePrefs.h"
 
+
+// ============================================================================
+// HIVEFW — HOME ASSISTANT COMMAND STORE
+//
+// Não existem comandos Home Assistant pré-definidos no firmware.
+// Todos os comandos são criados pelo utilizador e guardados localmente.
+//
+// O "!" não é armazenado. É acrescentado apenas no momento do envio.
+// ============================================================================
+
+#define HIVEFW_HA_MAX_COMMANDS 12
+#define HIVEFW_HA_NAME_LEN     21
+#define HIVEFW_HA_COMMAND_LEN  33
+
+struct HiveFWHACommand {
+  char name[HIVEFW_HA_NAME_LEN];
+  char command[HIVEFW_HA_COMMAND_LEN];
+};
+
+
 class DataStoreHost {
 public:
   virtual bool onContactLoaded(const ContactInfo& contact) =0;
@@ -35,6 +55,18 @@ public:
   bool saveMainIdentity(const mesh::LocalIdentity &identity);
   void loadPrefs(NodePrefs& prefs);
   bool savePrefs(NodePrefs& prefs);
+
+  // HiveFW — comandos Home Assistant personalizados.
+  int loadHACommands(
+    HiveFWHACommand dest[],
+    int max_count
+  );
+
+  bool saveHACommands(
+    const HiveFWHACommand src[],
+    int count
+  );
+
   void loadContacts(DataStoreHost* host);
   void saveContacts(DataStoreHost* host, bool (*filter)(const ContactInfo& c) = NULL);
   void loadChannels(DataStoreHost* host);

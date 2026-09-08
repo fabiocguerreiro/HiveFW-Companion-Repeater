@@ -75,6 +75,10 @@
 //
 // MP-07 — APLICAÇÕES
 //   ├── HOME ASSISTANT
+//   │   ├── <COMANDOS CONFIGURADOS PELO UTILIZADOR>
+//   │   ├── ADICIONAR COMANDO
+//   │   ├── GERIR COMANDOS (quando existirem comandos)
+//   │   └── [ SAIR ]
 //   ├── GPS / SENSORES (quando disponíveis)
 //   ├── RELÓGIO
 //   └── [ SAIR ]
@@ -458,10 +462,38 @@ class HomeScreen : public UIScreen {
   bool _settings_advert_submenu;
   bool _settings_confirm;
   uint8_t _settings_confirm_menu;
+  // ========================================================
+  // HOME ASSISTANT — comandos totalmente configuráveis
+  // ========================================================
+
+  enum HAStage : uint8_t {
+    HA_STAGE_MAIN = 0,
+    HA_STAGE_EDIT_NAME,
+    HA_STAGE_EDIT_COMMAND,
+    HA_STAGE_MANAGE_LIST,
+    HA_STAGE_MANAGE_ACTION,
+    HA_STAGE_DELETE_CONFIRM
+  };
+
+  static const uint8_t HA_EDIT_NEW = 0xFF;
+
   uint8_t _ha_menu;
   bool _ha_submenu;
-  uint8_t _ha_confirm;
-  bool _ha_confirm_submenu;
+  uint8_t _ha_stage;
+
+  uint8_t _ha_manage_menu;
+  uint8_t _ha_action_menu;
+  uint8_t _ha_delete_confirm;
+
+  uint8_t _ha_edit_index;
+  uint8_t _ha_char_index;
+  uint8_t _ha_command_count;
+
+  HiveFWHACommand
+    _ha_commands[HIVEFW_HA_MAX_COMMANDS];
+
+  char _ha_edit_name[HIVEFW_HA_NAME_LEN];
+  char _ha_edit_command[HIVEFW_HA_COMMAND_LEN];
 
   // APLICAÇÕES — índices oficiais do menu
   enum AppsMenu {
@@ -574,6 +606,611 @@ class HomeScreen : public UIScreen {
 
   bool _apps_submenu;
   bool _apps_return;
+
+
+  // ========================================================================
+  // HOME ASSISTANT — HELPERS
+  // ========================================================================
+
+  static const char* haEditorCharset() {
+
+    // Índice 0 = apagar
+    // Índice 1 = cancelar
+    // Índice 2 = espaço
+    // Índice 3 = A (posição inicial)
+    //
+    // "!" não existe no editor.
+    // É acrescentado automaticamente ao enviar.
+
+    return
+      "\b\x1B "
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+      "abcdefghijklmnopqrstuvwxyz"
+      "0123456789"
+      "-_/.,?@#():";
+  }
+
+
+  int haMainCount() const {
+
+    // comandos guardados
+    // + ADICIONAR COMANDO
+    // + GERIR COMANDOS, apenas se existirem comandos
+    // + [ SAIR ]
+
+    return
+      _ha_command_count +
+      2 +
+      (_ha_command_count > 0 ? 1 : 0);
+  }
+
+
+  int haAddIndex() const {
+    return _ha_command_count;
+  }
+
+
+  int haManageIndex() const {
+
+    if (_ha_command_count == 0)
+      return -1;
+
+    return _ha_command_count + 1;
+  }
+
+
+  int haExitIndex() const {
+
+    return
+      _ha_command_count +
+      1 +
+      (_ha_command_count > 0 ? 1 : 0);
+  }
+
+
+  const char* haMainLabel() {
+
+    if (_ha_menu < _ha_command_count)
+      return _ha_commands[_ha_menu].name;
+
+    if (_ha_menu == haAddIndex())
+      return "ADICIONAR COMANDO";
+
+    if (
+      _ha_command_count > 0 &&
+      _ha_menu == haManageIndex()
+    )
+      return "GERIR COMANDOS";
+
+    return "[ SAIR ]";
+  }
+
+
+  void loadHACommands() {
+
+    memset(
+      _ha_commands,
+      0,
+      sizeof(_ha_commands)
+    );
+
+    int count =
+      the_mesh.loadHACommands(
+        _ha_commands,
+        HIVEFW_HA_MAX_COMMANDS
+      );
+
+    if (count < 0)
+      count = 0;
+
+    if (count > HIVEFW_HA_MAX_COMMANDS)
+      count = HIVEFW_HA_MAX_COMMANDS;
+
+    _ha_command_count =
+      (uint8_t)count;
+
+    _ha_menu = 0;
+    _ha_manage_menu = 0;
+    _ha_action_menu = 0;
+    _ha_delete_confirm = 0;
+    _ha_stage = HA_STAGE_MAIN;
+  }
+
+
+  static void trimHAField(char* text) {
+
+    if (text == nullptr)
+      return;
+
+    char* start = text;
+
+    while (*start == ' ')
+      start++;
+
+    if (start != text) {
+
+      memmove(
+        text,
+        start,
+        strlen(start) + 1
+      );
+    }
+
+    size_t len = strlen(text);
+
+    while (
+      len > 0 &&
+      text[len - 1] == ' '
+    ) {
+
+      text[len - 1] = '\0';
+      len--;
+    }
+  }
+
+
+  bool haNameExists(
+    const char* name,
+    int ignore_index
+  ) const {
+
+    for (
+      int i = 0;
+      i < _ha_command_count;
+      i++
+    ) {
+
+      if (i == ignore_index)
+        continue;
+
+      if (
+        strcmp(
+          _ha_commands[i].name,
+          name
+        ) == 0
+      )
+        return true;
+    }
+
+    return false;
+  }
+
+
+  void beginHAAdd() {
+
+    _ha_edit_index = HA_EDIT_NEW;
+    _ha_char_index = 3;
+
+    _ha_edit_name[0] = '\0';
+    _ha_edit_command[0] = '\0';
+
+    _ha_stage = HA_STAGE_EDIT_NAME;
+  }
+
+
+  void beginHAEdit(uint8_t index) {
+
+    if (index >= _ha_command_count)
+      return;
+
+    _ha_edit_index = index;
+    _ha_char_index = 3;
+
+    strncpy(
+      _ha_edit_name,
+      _ha_commands[index].name,
+      sizeof(_ha_edit_name) - 1
+    );
+
+    _ha_edit_name[
+      sizeof(_ha_edit_name) - 1
+    ] = '\0';
+
+    strncpy(
+      _ha_edit_command,
+      _ha_commands[index].command,
+      sizeof(_ha_edit_command) - 1
+    );
+
+    _ha_edit_command[
+      sizeof(_ha_edit_command) - 1
+    ] = '\0';
+
+    _ha_stage = HA_STAGE_EDIT_NAME;
+  }
+
+
+  void cancelHAEditor() {
+
+    if (
+      _ha_stage ==
+      HA_STAGE_EDIT_COMMAND
+    ) {
+
+      _ha_stage =
+        HA_STAGE_EDIT_NAME;
+
+      _ha_char_index = 3;
+
+      return;
+    }
+
+    if (_ha_edit_index == HA_EDIT_NEW) {
+
+      _ha_stage = HA_STAGE_MAIN;
+      _ha_menu = haAddIndex();
+
+    } else {
+
+      _ha_stage =
+        HA_STAGE_MANAGE_ACTION;
+
+      _ha_action_menu = 0;
+    }
+  }
+
+
+  bool saveHAEditor() {
+
+    trimHAField(_ha_edit_name);
+    trimHAField(_ha_edit_command);
+
+    // Nunca guardar "!".
+    while (_ha_edit_command[0] == '!') {
+
+      memmove(
+        _ha_edit_command,
+        _ha_edit_command + 1,
+        strlen(_ha_edit_command)
+      );
+    }
+
+    if (_ha_edit_name[0] == '\0') {
+
+      _task->showAlert(
+        "Nome vazio",
+        1200
+      );
+
+      _ha_stage =
+        HA_STAGE_EDIT_NAME;
+
+      return false;
+    }
+
+    if (_ha_edit_command[0] == '\0') {
+
+      _task->showAlert(
+        "Comando vazio",
+        1200
+      );
+
+      return false;
+    }
+
+    int ignore =
+      (_ha_edit_index == HA_EDIT_NEW)
+        ? -1
+        : _ha_edit_index;
+
+    if (
+      haNameExists(
+        _ha_edit_name,
+        ignore
+      )
+    ) {
+
+      _task->showAlert(
+        "Nome já existe",
+        1500
+      );
+
+      _ha_stage =
+        HA_STAGE_EDIT_NAME;
+
+      return false;
+    }
+
+    if (
+      _ha_edit_index == HA_EDIT_NEW &&
+      _ha_command_count >=
+        HIVEFW_HA_MAX_COMMANDS
+    ) {
+
+      _task->showAlert(
+        "Lista cheia",
+        1500
+      );
+
+      _ha_stage =
+        HA_STAGE_MAIN;
+
+      return false;
+    }
+
+    HiveFWHACommand
+      backup[HIVEFW_HA_MAX_COMMANDS];
+
+    memcpy(
+      backup,
+      _ha_commands,
+      sizeof(_ha_commands)
+    );
+
+    uint8_t old_count =
+      _ha_command_count;
+
+    uint8_t target;
+
+    if (_ha_edit_index == HA_EDIT_NEW) {
+
+      target =
+        _ha_command_count;
+
+      _ha_command_count++;
+
+    } else {
+
+      target =
+        _ha_edit_index;
+    }
+
+    memset(
+      &_ha_commands[target],
+      0,
+      sizeof(HiveFWHACommand)
+    );
+
+    strncpy(
+      _ha_commands[target].name,
+      _ha_edit_name,
+      sizeof(_ha_commands[target].name) - 1
+    );
+
+    strncpy(
+      _ha_commands[target].command,
+      _ha_edit_command,
+      sizeof(_ha_commands[target].command) - 1
+    );
+
+    if (
+      !the_mesh.saveHACommands(
+        _ha_commands,
+        _ha_command_count
+      )
+    ) {
+
+      memcpy(
+        _ha_commands,
+        backup,
+        sizeof(_ha_commands)
+      );
+
+      _ha_command_count =
+        old_count;
+
+      _task->showAlert(
+        "Falha ao guardar",
+        1500
+      );
+
+      return false;
+    }
+
+    bool was_new =
+      (_ha_edit_index == HA_EDIT_NEW);
+
+    _task->notify(
+      UIEventType::ack
+    );
+
+    _task->showAlert(
+      "Comando guardado",
+      1200
+    );
+
+    if (was_new) {
+
+      _ha_stage =
+        HA_STAGE_MAIN;
+
+      _ha_menu = target;
+
+    } else {
+
+      _ha_stage =
+        HA_STAGE_MANAGE_LIST;
+
+      _ha_manage_menu =
+        target;
+    }
+
+    _ha_edit_index =
+      HA_EDIT_NEW;
+
+    return true;
+  }
+
+
+  bool deleteHACommand(uint8_t index) {
+
+    if (index >= _ha_command_count)
+      return false;
+
+    HiveFWHACommand
+      backup[HIVEFW_HA_MAX_COMMANDS];
+
+    memcpy(
+      backup,
+      _ha_commands,
+      sizeof(_ha_commands)
+    );
+
+    uint8_t old_count =
+      _ha_command_count;
+
+    for (
+      int i = index;
+      i < _ha_command_count - 1;
+      i++
+    ) {
+
+      _ha_commands[i] =
+        _ha_commands[i + 1];
+    }
+
+    if (_ha_command_count > 0)
+      _ha_command_count--;
+
+    if (
+      _ha_command_count <
+      HIVEFW_HA_MAX_COMMANDS
+    ) {
+
+      memset(
+        &_ha_commands[_ha_command_count],
+        0,
+        sizeof(HiveFWHACommand)
+      );
+    }
+
+    if (
+      !the_mesh.saveHACommands(
+        _ha_commands,
+        _ha_command_count
+      )
+    ) {
+
+      memcpy(
+        _ha_commands,
+        backup,
+        sizeof(_ha_commands)
+      );
+
+      _ha_command_count =
+        old_count;
+
+      _task->showAlert(
+        "Falha ao apagar",
+        1500
+      );
+
+      return false;
+    }
+
+    _task->notify(
+      UIEventType::ack
+    );
+
+    _task->showAlert(
+      "Comando apagado",
+      1200
+    );
+
+    if (_ha_command_count == 0) {
+
+      _ha_stage =
+        HA_STAGE_MAIN;
+
+      _ha_menu = 0;
+
+    } else {
+
+      _ha_stage =
+        HA_STAGE_MANAGE_LIST;
+
+      if (
+        index >=
+        _ha_command_count
+      ) {
+
+        _ha_manage_menu =
+          _ha_command_count - 1;
+
+      } else {
+
+        _ha_manage_menu =
+          index;
+      }
+    }
+
+    return true;
+  }
+
+
+  bool sendHACommand(uint8_t index) {
+
+    if (index >= _ha_command_count)
+      return false;
+
+    ChannelDetails channel;
+
+    if (!getAppsChannel(channel)) {
+
+      _task->showAlert(
+        "Canal APPS não definido",
+        1500
+      );
+
+      return false;
+    }
+
+    char command[
+      HIVEFW_HA_COMMAND_LEN + 2
+    ];
+
+    snprintf(
+      command,
+      sizeof(command),
+      "!%s",
+      _ha_commands[index].command
+    );
+
+    bool success =
+      the_mesh.sendGroupMessage(
+        _rtc->getCurrentTime(),
+        channel.channel,
+        _node_prefs->node_name,
+        command,
+        strlen(command)
+      );
+
+    _task->notify(
+      UIEventType::ack
+    );
+
+    _task->showAlert(
+      success
+        ? "Comando Enviado"
+        : "Falha ao enviar",
+      1200
+    );
+
+    return success;
+  }
+
+
+  void exitHomeAssistant() {
+
+    _page =
+      HomePage::APPS;
+
+    _apps_submenu = false;
+    _apps_menu = 0;
+    _apps_view = APPS_VIEW_NONE;
+    _apps_return = false;
+
+    _ha_submenu = false;
+    _ha_stage = HA_STAGE_MAIN;
+
+    _ha_menu = 0;
+    _ha_manage_menu = 0;
+    _ha_action_menu = 0;
+    _ha_delete_confirm = 0;
+    _ha_edit_index = HA_EDIT_NEW;
+    _ha_char_index = 3;
+  }
+
 
   // Discovery ativo — INDEPENDENTE de AdvertPath.
   static const uint8_t ACTIVE_DISCOVERY_MAX_NODES = 8;
@@ -1205,7 +1842,13 @@ public:
       _settings_advert_menu(0), _settings_advert_submenu(false),
       _settings_confirm(false), _settings_confirm_menu(0),
       _ha_menu(0), _ha_submenu(false),
-      _ha_confirm(0), _ha_confirm_submenu(false),
+      _ha_stage(HA_STAGE_MAIN),
+      _ha_manage_menu(0),
+      _ha_action_menu(0),
+      _ha_delete_confirm(0),
+      _ha_edit_index(HA_EDIT_NEW),
+      _ha_char_index(3),
+      _ha_command_count(0),
        _apps_menu(0), _apps_view(0),
        _sos_submenu(false), _sos_menu(0),
        _sos_confirm_submenu(false),
@@ -1216,6 +1859,15 @@ public:
        _shutdown_init(false), sensors_lpp(200) {
     _sms_text[0] = '\0';
     memset(&_sms_recipient, 0, sizeof(_sms_recipient));
+
+    memset(
+      _ha_commands,
+      0,
+      sizeof(_ha_commands)
+    );
+
+    _ha_edit_name[0] = '\0';
+    _ha_edit_command[0] = '\0';
 
     for (int i = 0; i < MAX_CHANNEL_UNREAD; i++) {
       _channel_unread[i].count = 0;
@@ -3641,7 +4293,10 @@ public:
 
       if (!_ha_submenu) {
 
-        display.setColor(UIColor::corp_blue);
+        display.setColor(
+          UIColor::corp_blue
+        );
+
         display.drawXbm(
           (display.width() - 32) / 2,
           15,
@@ -3650,31 +4305,302 @@ public:
           32
         );
 
-        display.setColor(UIColor::primary_txt);
+        display.setColor(
+          UIColor::primary_txt
+        );
+
         display.setTextSize(1);
+
         display.drawTextCentered(
           display.width() / 2,
           55,
           "Home Assistant"
         );
+      }
 
-      } else {
+      // ======================================================
+      // MENU PRINCIPAL
+      // ======================================================
 
-        display.setColor(UIColor::primary_txt);
+      else if (_ha_stage == HA_STAGE_MAIN) {
+
+        int total =
+          haMainCount();
+
+        if (
+          total <= 0 ||
+          _ha_menu >= total
+        )
+          _ha_menu = 0;
+
+        const char* text =
+          haMainLabel();
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
         display.setTextSize(2);
 
-        const char* ha_items[] = {
-          "PORTA-PREDIO",
-          "PING",
-          "GPS",
-          "[ SAIR ]"
-        };
+        if (
+          display.getTextWidth(text) >
+          display.width() - 8
+        )
+          display.setTextSize(1);
 
         drawSelectedMenuText(
           display,
           display.width() / 2,
           38,
-          ha_items[_ha_menu]
+          text
+        );
+      }
+
+      // ======================================================
+      // EDITOR NOME / COMANDO
+      // ======================================================
+
+      else if (
+        _ha_stage == HA_STAGE_EDIT_NAME ||
+        _ha_stage == HA_STAGE_EDIT_COMMAND
+      ) {
+
+        bool command_field =
+          _ha_stage ==
+          HA_STAGE_EDIT_COMMAND;
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextRightAlign(
+          display.width() - 1,
+          14,
+          command_field
+            ? "2/2"
+            : "1/2"
+        );
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          22,
+          command_field
+            ? "COMANDO"
+            : "NOME DO COMANDO"
+        );
+
+        if (command_field) {
+
+          display.setCursor(
+            2,
+            36
+          );
+
+          display.print("!");
+
+          display.drawTextEllipsized(
+            10,
+            36,
+            display.width() - 12,
+            _ha_edit_command
+          );
+
+        } else {
+
+          display.drawTextEllipsized(
+            2,
+            36,
+            display.width() - 4,
+            _ha_edit_name
+          );
+        }
+
+        const char* charset =
+          haEditorCharset();
+
+        int charset_len =
+          strlen(charset);
+
+        if (
+          _ha_char_index >=
+          charset_len
+        )
+          _ha_char_index = 3;
+
+        char selected =
+          charset[_ha_char_index];
+
+        char label[24];
+
+        if (selected == '\b') {
+
+          snprintf(
+            label,
+            sizeof(label),
+            "< APAGAR"
+          );
+
+        } else if (
+          selected == '\x1B'
+        ) {
+
+          snprintf(
+            label,
+            sizeof(label),
+            "[ CANCELAR ]"
+          );
+
+        } else if (
+          selected == ' '
+        ) {
+
+          snprintf(
+            label,
+            sizeof(label),
+            "CARACTER: ESPACO"
+          );
+
+        } else {
+
+          snprintf(
+            label,
+            sizeof(label),
+            "CARACTER: %c",
+            selected
+          );
+        }
+
+        display.setColor(
+          UIColor::secondary_txt
+        );
+
+        display.drawTextCentered(
+          display.width() / 2,
+          54,
+          label
+        );
+      }
+
+      // ======================================================
+      // GERIR COMANDOS — LISTA
+      // ======================================================
+
+      else if (
+        _ha_stage ==
+        HA_STAGE_MANAGE_LIST
+      ) {
+
+        if (_ha_command_count == 0) {
+
+          _ha_stage =
+            HA_STAGE_MAIN;
+
+          _ha_menu = 0;
+
+        } else {
+
+          int total =
+            _ha_command_count + 1;
+
+          if (_ha_manage_menu >= total)
+            _ha_manage_menu = 0;
+
+          const char* text =
+            (_ha_manage_menu <
+             _ha_command_count)
+              ? _ha_commands[
+                  _ha_manage_menu
+                ].name
+              : "[ SAIR ]";
+
+          display.setColor(
+            UIColor::primary_txt
+          );
+
+          display.setTextSize(2);
+
+          if (
+            display.getTextWidth(text) >
+            display.width() - 8
+          )
+            display.setTextSize(1);
+
+          drawSelectedMenuText(
+            display,
+            display.width() / 2,
+            38,
+            text
+          );
+        }
+      }
+
+      // ======================================================
+      // GERIR — ALTERAR / APAGAR
+      // ======================================================
+
+      else if (
+        _ha_stage ==
+        HA_STAGE_MANAGE_ACTION
+      ) {
+
+        const char* items[] = {
+          "ALTERAR",
+          "APAGAR",
+          "[ VOLTAR ]"
+        };
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(2);
+
+        drawSelectedMenuText(
+          display,
+          display.width() / 2,
+          38,
+          items[_ha_action_menu]
+        );
+      }
+
+      // ======================================================
+      // CONFIRMAR APAGAR
+      // ======================================================
+
+      else if (
+        _ha_stage ==
+        HA_STAGE_DELETE_CONFIRM
+      ) {
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          21,
+          "APAGAR COMANDO?"
+        );
+
+        const char* items[] = {
+          "SIM",
+          "NAO"
+        };
+
+        drawMenuSelection(
+          display,
+          items[
+            _ha_delete_confirm
+          ],
+          42
         );
       }
 
@@ -4887,9 +5813,16 @@ public:
             _apps_return = true;
 
             _ha_submenu = true;
+
+            loadHACommands();
+
             _ha_menu = 0;
-            _ha_confirm = 0;
-            _ha_confirm_submenu = false;
+            _ha_stage = HA_STAGE_MAIN;
+            _ha_manage_menu = 0;
+            _ha_action_menu = 0;
+            _ha_delete_confirm = 0;
+            _ha_edit_index = HA_EDIT_NEW;
+            _ha_char_index = 3;
 
             _page = HomePage::INTERNAL_HOME_ASSISTANT;
             return true;
@@ -5314,217 +6247,509 @@ public:
 
     // --------------------------------------------------------
     // APLICAÇÕES -> HOME ASSISTANT
+    //
+    // Zero comandos pré-definidos.
+    // Todos são carregados do armazenamento HiveFW.
     // --------------------------------------------------------
 
-    if (_page == HomePage::INTERNAL_HOME_ASSISTANT &&
-        _apps_return) {
+    if (
+      _page ==
+        HomePage::INTERNAL_HOME_ASSISTANT &&
+      _apps_return
+    ) {
 
-      if (c == KEY_NEXT ||
-          c == KEY_RIGHT) {
+      // ======================================================
+      // EDITOR
+      // ======================================================
 
-        _ha_menu =
-          (_ha_menu + 1) % 4;
+      if (
+        _ha_stage == HA_STAGE_EDIT_NAME ||
+        _ha_stage == HA_STAGE_EDIT_COMMAND
+      ) {
+
+        const char* charset =
+          haEditorCharset();
+
+        int charset_len =
+          strlen(charset);
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _ha_char_index =
+            (_ha_char_index + 1)
+            % charset_len;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _ha_char_index =
+            (
+              _ha_char_index +
+              charset_len -
+              1
+            ) % charset_len;
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL) {
+
+          cancelHAEditor();
+          return true;
+        }
+
+        // SELECT / 3 cliques:
+        // terminar o campo atual.
+        if (c == KEY_SELECT) {
+
+          if (
+            _ha_stage ==
+            HA_STAGE_EDIT_NAME
+          ) {
+
+            trimHAField(
+              _ha_edit_name
+            );
+
+            if (
+              _ha_edit_name[0] ==
+              '\0'
+            ) {
+
+              _task->showAlert(
+                "Nome vazio",
+                1200
+              );
+
+              return true;
+            }
+
+            _ha_stage =
+              HA_STAGE_EDIT_COMMAND;
+
+            _ha_char_index = 3;
+
+            return true;
+          }
+
+          saveHAEditor();
+
+          return true;
+        }
+
+        // ENTER / long press:
+        // inserir carácter ou executar função.
+        if (c == KEY_ENTER) {
+
+          char selected =
+            charset[_ha_char_index];
+
+          char* text =
+            (_ha_stage ==
+             HA_STAGE_EDIT_NAME)
+              ? _ha_edit_name
+              : _ha_edit_command;
+
+          size_t capacity =
+            (_ha_stage ==
+             HA_STAGE_EDIT_NAME)
+              ? sizeof(_ha_edit_name)
+              : sizeof(_ha_edit_command);
+
+          // APAGAR
+          if (selected == '\b') {
+
+            size_t len =
+              strlen(text);
+
+            if (len > 0)
+              text[len - 1] = '\0';
+
+            return true;
+          }
+
+          // CANCELAR
+          if (selected == '\x1B') {
+
+            cancelHAEditor();
+            return true;
+          }
+
+          size_t len =
+            strlen(text);
+
+          if (
+            len <
+            capacity - 1
+          ) {
+
+            text[len] = selected;
+            text[len + 1] = '\0';
+
+          } else {
+
+            _task->showAlert(
+              "Limite atingido",
+              1000
+            );
+          }
+
+          return true;
+        }
 
         return true;
       }
 
-      if (c == KEY_PREV ||
-          c == KEY_LEFT) {
 
-        _ha_menu =
-          (_ha_menu + 3) % 4;
+      // ======================================================
+      // GERIR — LISTA
+      // ======================================================
+
+      if (
+        _ha_stage ==
+        HA_STAGE_MANAGE_LIST
+      ) {
+
+        if (_ha_command_count == 0) {
+
+          _ha_stage =
+            HA_STAGE_MAIN;
+
+          _ha_menu = 0;
+
+          return true;
+        }
+
+        int total =
+          _ha_command_count + 1;
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _ha_manage_menu =
+            (_ha_manage_menu + 1)
+            % total;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _ha_manage_menu =
+            (
+              _ha_manage_menu +
+              total -
+              1
+            ) % total;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _ha_stage =
+            HA_STAGE_MAIN;
+
+          _ha_menu =
+            haManageIndex();
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // [ SAIR ]
+          if (
+            _ha_manage_menu >=
+            _ha_command_count
+          ) {
+
+            _ha_stage =
+              HA_STAGE_MAIN;
+
+            _ha_menu =
+              haManageIndex();
+
+            return true;
+          }
+
+          _ha_edit_index =
+            _ha_manage_menu;
+
+          _ha_action_menu = 0;
+
+          _ha_stage =
+            HA_STAGE_MANAGE_ACTION;
+
+          return true;
+        }
 
         return true;
       }
 
-      if (c == KEY_CANCEL ||
-          c == KEY_SELECT) {
 
-        _page = HomePage::APPS;
+      // ======================================================
+      // GERIR — ALTERAR / APAGAR
+      // ======================================================
 
-        _apps_submenu = false;
-        _apps_menu = 0;
-        _apps_view = APPS_VIEW_NONE;
-        _apps_return = false;
+      if (
+        _ha_stage ==
+        HA_STAGE_MANAGE_ACTION
+      ) {
 
-        _ha_submenu = false;
-        _ha_confirm_submenu = false;
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
 
+          _ha_action_menu =
+            (_ha_action_menu + 1)
+            % 3;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _ha_action_menu =
+            (_ha_action_menu + 2)
+            % 3;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _ha_stage =
+            HA_STAGE_MANAGE_LIST;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // ALTERAR
+          if (_ha_action_menu == 0) {
+
+            beginHAEdit(
+              _ha_edit_index
+            );
+
+            return true;
+          }
+
+          // APAGAR
+          if (_ha_action_menu == 1) {
+
+            _ha_delete_confirm = 0;
+
+            _ha_stage =
+              HA_STAGE_DELETE_CONFIRM;
+
+            return true;
+          }
+
+          // VOLTAR
+          _ha_stage =
+            HA_STAGE_MANAGE_LIST;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ======================================================
+      // CONFIRMAÇÃO APAGAR
+      // ======================================================
+
+      if (
+        _ha_stage ==
+        HA_STAGE_DELETE_CONFIRM
+      ) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT ||
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _ha_delete_confirm =
+            (_ha_delete_confirm + 1)
+            % 2;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _ha_stage =
+            HA_STAGE_MANAGE_ACTION;
+
+          _ha_delete_confirm = 0;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (_ha_delete_confirm == 0) {
+
+            deleteHACommand(
+              _ha_edit_index
+            );
+
+          } else {
+
+            _ha_stage =
+              HA_STAGE_MANAGE_ACTION;
+          }
+
+          _ha_delete_confirm = 0;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ======================================================
+      // MENU PRINCIPAL DINÂMICO
+      // ======================================================
+
+      int total =
+        haMainCount();
+
+      if (total <= 0)
+        total = 2;
+
+      if (_ha_menu >= total)
+        _ha_menu = 0;
+
+      if (
+        c == KEY_NEXT ||
+        c == KEY_RIGHT
+      ) {
+
+        _ha_menu =
+          (_ha_menu + 1)
+          % total;
+
+        return true;
+      }
+
+      if (
+        c == KEY_PREV ||
+        c == KEY_LEFT
+      ) {
+
+        _ha_menu =
+          (
+            _ha_menu +
+            total -
+            1
+          ) % total;
+
+        return true;
+      }
+
+      if (
+        c == KEY_CANCEL ||
+        c == KEY_SELECT
+      ) {
+
+        exitHomeAssistant();
         return true;
       }
 
       if (c == KEY_ENTER) {
 
-        // ------------------------------------------------------
-        // PORTA-PREDIO
-        // ------------------------------------------------------
+        // COMANDO PERSONALIZADO
+        if (
+          _ha_menu <
+          _ha_command_count
+        ) {
 
-        if (_ha_menu == 0) {
+          sendHACommand(
+            _ha_menu
+          );
 
-          ChannelDetails channel;
+          return true;
+        }
 
-          if (!getAppsChannel(channel)) {
+        // ADICIONAR COMANDO
+        if (
+          _ha_menu ==
+          haAddIndex()
+        ) {
+
+          if (
+            _ha_command_count >=
+            HIVEFW_HA_MAX_COMMANDS
+          ) {
 
             _task->showAlert(
-              "Canal APPS não definido",
+              "Lista cheia",
               1500
             );
 
             return true;
           }
 
-          const char* command =
-            "!portapredio";
+          beginHAAdd();
+          return true;
+        }
 
-          bool success =
-            the_mesh.sendGroupMessage(
-              _rtc->getCurrentTime(),
-              channel.channel,
-              _node_prefs->node_name,
-              command,
-              strlen(command)
-            );
+        // GERIR COMANDOS
+        if (
+          _ha_command_count > 0 &&
+          _ha_menu ==
+          haManageIndex()
+        ) {
 
-          _task->notify(UIEventType::ack);
+          _ha_manage_menu = 0;
 
-          _task->showAlert(
-            success
-              ? "Comando Enviado"
-              : "Falha ao enviar",
-            1200
-          );
+          _ha_stage =
+            HA_STAGE_MANAGE_LIST;
 
           return true;
         }
 
-        // ------------------------------------------------------
-        // PING
-        // ------------------------------------------------------
+        // [ SAIR ]
+        if (
+          _ha_menu ==
+          haExitIndex()
+        ) {
 
-        if (_ha_menu == 1) {
-
-          ChannelDetails channel;
-
-          if (!getAppsChannel(channel)) {
-
-            _task->showAlert(
-              "Canal APPS não definido",
-              1500
-            );
-
-            return true;
-          }
-
-          const char* command =
-            "!ping";
-
-          bool success =
-            the_mesh.sendGroupMessage(
-              _rtc->getCurrentTime(),
-              channel.channel,
-              _node_prefs->node_name,
-              command,
-              strlen(command)
-            );
-
-          _task->notify(UIEventType::ack);
-
-          _task->showAlert(
-            success
-              ? "PING ENVIADO"
-              : "Falha ao enviar",
-            1200
-          );
-
-          return true;
-        }
-
-        // ------------------------------------------------------
-        // GPS
-        // ------------------------------------------------------
-
-        if (_ha_menu == 2) {
-
-          ChannelDetails channel;
-
-          if (!getAppsChannel(channel)) {
-
-            _task->showAlert(
-              "Canal APPS não definido",
-              1500
-            );
-
-            return true;
-          }
-
-          char command[64];
-
-#if ENV_INCLUDE_GPS == 1
-          LocationProvider* nmea =
-            sensors.getLocationProvider();
-
-          if (nmea != NULL && nmea->isValid()) {
-
-            snprintf(
-              command,
-              sizeof(command),
-              "!gps %.4f %.4f",
-              nmea->getLatitude() / 1000000.0,
-              nmea->getLongitude() / 1000000.0
-            );
-
-          } else {
-            snprintf(
-              command,
-              sizeof(command),
-              "!gps SEM GPS"
-            );
-          }
-#else
-          snprintf(
-            command,
-            sizeof(command),
-            "!gps SEM GPS"
-          );
-#endif
-
-          bool success =
-            the_mesh.sendGroupMessage(
-              _rtc->getCurrentTime(),
-              channel.channel,
-              _node_prefs->node_name,
-              command,
-              strlen(command)
-            );
-
-          _task->notify(UIEventType::ack);
-
-          _task->showAlert(
-            success
-              ? "GPS ENVIADO"
-              : "Falha ao enviar",
-            1200
-          );
-
-          return true;
-        }
-
-        // ------------------------------------------------------
-        // SAIR
-        // ------------------------------------------------------
-
-        if (_ha_menu == 3) {
-
-          _page = HomePage::APPS;
-
-          _apps_submenu = false;
-          _apps_menu = 0;
-          _apps_view = APPS_VIEW_NONE;
-          _apps_return = false;
-
-          _ha_submenu = false;
-          _ha_confirm_submenu = false;
-
+          exitHomeAssistant();
           return true;
         }
       }
@@ -7052,10 +8277,19 @@ public:
     // ENTER HOME ASSISTANT
     // ========================================================
 
-    if (c == KEY_ENTER && _page == HomePage::INTERNAL_HOME_ASSISTANT) {
+    if (
+      c == KEY_ENTER &&
+      _page ==
+        HomePage::INTERNAL_HOME_ASSISTANT
+    ) {
+
       _ha_submenu = true;
+
+      loadHACommands();
+
       _ha_menu = 0;
-      _ha_confirm_submenu = false;
+      _ha_stage = HA_STAGE_MAIN;
+
       return true;
     }
 

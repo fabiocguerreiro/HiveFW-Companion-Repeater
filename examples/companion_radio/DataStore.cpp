@@ -256,6 +256,271 @@ bool DataStore::savePrefs(NodePrefs& _prefs) {
   return false;
 }
 
+
+// ============================================================================
+// HIVEFW — HOME ASSISTANT COMMAND STORE
+//
+// Formato:
+//   4 bytes  magic "HAC1"
+//   1 byte   quantidade
+//   N x:
+//      HIVEFW_HA_NAME_LEN bytes
+//      HIVEFW_HA_COMMAND_LEN bytes
+//
+// Não existem defaults.
+// Se o ficheiro não existir, o menu começa vazio.
+// ============================================================================
+
+static const char* HIVEFW_HA_COMMANDS_FILE =
+  "/hivefw_ha_commands";
+
+static const uint8_t HIVEFW_HA_FILE_MAGIC[4] = {
+  'H', 'A', 'C', '1'
+};
+
+
+int DataStore::loadHACommands(
+  HiveFWHACommand dest[],
+  int max_count
+) {
+
+  if (dest == nullptr || max_count <= 0) {
+    return 0;
+  }
+
+  if (max_count > HIVEFW_HA_MAX_COMMANDS) {
+    max_count = HIVEFW_HA_MAX_COMMANDS;
+  }
+
+  memset(
+    dest,
+    0,
+    sizeof(HiveFWHACommand) * max_count
+  );
+
+  if (!_fs->exists(HIVEFW_HA_COMMANDS_FILE)) {
+    return 0;
+  }
+
+  File file =
+    openRead(
+      _fs,
+      HIVEFW_HA_COMMANDS_FILE
+    );
+
+  if (!file) {
+    return 0;
+  }
+
+  uint8_t magic[4];
+
+  if (
+    file.read(
+      magic,
+      sizeof(magic)
+    ) != (int)sizeof(magic)
+  ) {
+
+    file.close();
+    return 0;
+  }
+
+  if (
+    memcmp(
+      magic,
+      HIVEFW_HA_FILE_MAGIC,
+      sizeof(magic)
+    ) != 0
+  ) {
+
+    file.close();
+    return 0;
+  }
+
+  uint8_t stored_count = 0;
+
+  if (
+    file.read(
+      &stored_count,
+      1
+    ) != 1
+  ) {
+
+    file.close();
+    return 0;
+  }
+
+  int loaded = 0;
+
+  for (
+    int i = 0;
+    i < stored_count;
+    i++
+  ) {
+
+    HiveFWHACommand command;
+
+    memset(
+      &command,
+      0,
+      sizeof(command)
+    );
+
+    if (
+      file.read(
+        (uint8_t*)command.name,
+        sizeof(command.name)
+      ) != (int)sizeof(command.name)
+    ) {
+      break;
+    }
+
+    if (
+      file.read(
+        (uint8_t*)command.command,
+        sizeof(command.command)
+      ) != (int)sizeof(command.command)
+    ) {
+      break;
+    }
+
+    command.name[
+      sizeof(command.name) - 1
+    ] = '\0';
+
+    command.command[
+      sizeof(command.command) - 1
+    ] = '\0';
+
+    if (
+      loaded < max_count &&
+      command.name[0] != '\0' &&
+      command.command[0] != '\0'
+    ) {
+
+      dest[loaded] = command;
+      loaded++;
+    }
+  }
+
+  file.close();
+
+  return loaded;
+}
+
+
+bool DataStore::saveHACommands(
+  const HiveFWHACommand src[],
+  int count
+) {
+
+  if (
+    count < 0 ||
+    count > HIVEFW_HA_MAX_COMMANDS
+  ) {
+    return false;
+  }
+
+  // Sem comandos = sem ficheiro.
+  if (count == 0) {
+
+    if (_fs->exists(HIVEFW_HA_COMMANDS_FILE)) {
+      _fs->remove(HIVEFW_HA_COMMANDS_FILE);
+    }
+
+    return true;
+  }
+
+  if (src == nullptr) {
+    return false;
+  }
+
+  File file =
+    openWrite(
+      _fs,
+      HIVEFW_HA_COMMANDS_FILE
+    );
+
+  if (!file) {
+    return false;
+  }
+
+  if (
+    file.write(
+      HIVEFW_HA_FILE_MAGIC,
+      sizeof(HIVEFW_HA_FILE_MAGIC)
+    ) != sizeof(HIVEFW_HA_FILE_MAGIC)
+  ) {
+
+    file.close();
+    return false;
+  }
+
+  uint8_t stored_count =
+    (uint8_t)count;
+
+  if (
+    file.write(
+      &stored_count,
+      1
+    ) != 1
+  ) {
+
+    file.close();
+    return false;
+  }
+
+  for (int i = 0; i < count; i++) {
+
+    HiveFWHACommand command;
+
+    memset(
+      &command,
+      0,
+      sizeof(command)
+    );
+
+    strncpy(
+      command.name,
+      src[i].name,
+      sizeof(command.name) - 1
+    );
+
+    strncpy(
+      command.command,
+      src[i].command,
+      sizeof(command.command) - 1
+    );
+
+    if (
+      file.write(
+        (const uint8_t*)command.name,
+        sizeof(command.name)
+      ) != sizeof(command.name)
+    ) {
+
+      file.close();
+      return false;
+    }
+
+    if (
+      file.write(
+        (const uint8_t*)command.command,
+        sizeof(command.command)
+      ) != sizeof(command.command)
+    ) {
+
+      file.close();
+      return false;
+    }
+  }
+
+  file.close();
+
+  return true;
+}
+
+
 void DataStore::loadContacts(DataStoreHost* host) {
 File file = openRead(_getContactsChannelsFS(), "/contacts3");
     if (file) {
