@@ -90,10 +90,10 @@
 //   ├── BLUETOOTH
 //   ├── ANUNCIAR NÓ
 //   ├── CANAL APPS/SOS
-//   ├── COR DA BARRA (T114 com ecrã a cores)
 //   ├── ECRÃ
 //   │   ├── TEMPO ECRÃ
 //   │   ├── ROTAÇÃO (T114)
+//   │   ├── COR DA BARRA (T114)
 //   │   ├── FORMATO HORA
 //   │   └── [ SAIR ]
 //   ├── NOTIFICAÇÕES
@@ -356,11 +356,11 @@ static const uint8_t HIVEFW_HEADER_COLOR_COUNT =
   sizeof(hivefw_header_color_names) /
   sizeof(hivefw_header_color_names[0]);
 
-#define HIVEFW_SETTINGS_COLOR_OFFSET 1
+#define HIVEFW_DISPLAY_COLOR_OFFSET 1
 
 #else
 
-#define HIVEFW_SETTINGS_COLOR_OFFSET 0
+#define HIVEFW_DISPLAY_COLOR_OFFSET 0
 
 #endif
 
@@ -381,6 +381,7 @@ static const uint8_t HIVEFW_HEADER_COLOR_COUNT =
 
 #define HIVEFW_SETTINGS_DISPLAY_OFFSET 1
 #define HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET 1
+#define HIVEFW_SETTINGS_COLOR_OFFSET 0
 
 static const char* hivefw_display_timeout_names[] = {
   "5 SEG",
@@ -5172,6 +5173,7 @@ public:
             "TEMPO ECRÃ",
 #ifdef HELTEC_T114_WITH_DISPLAY
             "ROTAÇÃO",
+            "COR DA BARRA",
 #endif
             clock_item,
             "[ SAIR ]"
@@ -5407,9 +5409,6 @@ public:
           bluetooth_item,
           "ANUNCIAR NÓ",
           "CANAL APPS/SOS",
-#ifdef HELTEC_T114_WITH_DISPLAY
-          "COR DA BARRA",
-#endif
           "ECRÃ",
           "NOTIFICAÇÕES",
 #if ENV_INCLUDE_GPS == 1
@@ -7406,11 +7405,13 @@ public:
       // HIVEFW — HANDLER ECRÃ
       // ======================================================
 
-      if (_settings_display_submenu) {
+      // O seletor de cor recebe as teclas enquanto estiver aberto.
+      if (_settings_display_submenu && !_settings_color_submenu) {
 
         const uint8_t display_menu_count =
           3 +
-          HIVEFW_DISPLAY_ROTATION_OFFSET;
+          HIVEFW_DISPLAY_ROTATION_OFFSET +
+          HIVEFW_DISPLAY_COLOR_OFFSET;
 
 
         if (
@@ -7522,13 +7523,34 @@ public:
 
 
           // --------------------------------------------------
+          // COR DA BARRA
+          // --------------------------------------------------
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+          if (
+            _settings_display_menu ==
+            1 + HIVEFW_DISPLAY_ROTATION_OFFSET
+          ) {
+            _settings_color_menu = _node_prefs->header_color;
+
+            if (_settings_color_menu >= HIVEFW_HEADER_COLOR_COUNT) {
+              _settings_color_menu = 0;
+            }
+
+            _settings_color_submenu = true;
+            return true;
+          }
+#endif
+
+          // --------------------------------------------------
           // FORMATO HORA
           // --------------------------------------------------
 
           if (
             _settings_display_menu ==
             1 +
-            HIVEFW_DISPLAY_ROTATION_OFFSET
+            HIVEFW_DISPLAY_ROTATION_OFFSET +
+            HIVEFW_DISPLAY_COLOR_OFFSET
           ) {
 
             _node_prefs->clock_24h =
@@ -7560,7 +7582,8 @@ public:
           if (
             _settings_display_menu ==
             2 +
-            HIVEFW_DISPLAY_ROTATION_OFFSET
+            HIVEFW_DISPLAY_ROTATION_OFFSET +
+            HIVEFW_DISPLAY_COLOR_OFFSET
           ) {
 
             _settings_display_submenu =
@@ -8283,42 +8306,10 @@ public:
         }
 
 
-#ifdef HELTEC_T114_WITH_DISPLAY
-
-        // ----------------------------------------------------
-        // COR DA BARRA
-        // ----------------------------------------------------
-
-        if (_settings_menu == 3) {
-
-          _settings_color_submenu =
-            true;
-
-          _settings_color_menu =
-            _node_prefs->header_color;
-
-          if (
-            _settings_color_menu >=
-            HIVEFW_HEADER_COLOR_COUNT
-          ) {
-
-            _settings_color_menu = 0;
-          }
-
-          return true;
-        }
-
-#endif
-
-
         // ----------------------------------------------------
         // ECRÃ
         //
-        // T114:
-        //   índice 4
-        //
-        // Hardware sem COR DA BARRA:
-        //   índice 3
+        // Índice 3 em todos os targets.
         // ----------------------------------------------------
 
         if (
