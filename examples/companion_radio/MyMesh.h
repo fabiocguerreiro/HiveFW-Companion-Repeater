@@ -108,6 +108,10 @@ public:
   NodePrefs *getNodePrefs();
   uint32_t getBLEPin();
 
+  // HiveFW — aplicar manualmente a última referência
+  // temporal recebida do Companion/app.
+  bool syncClockFromCompanionTime();
+
   void loop();
   void handleCmdFrame(size_t len);
   bool advert(bool flood = false);
@@ -283,6 +287,16 @@ private:
   uint32_t _iter_filter_since;
   uint32_t _most_recent_lastmod;
   uint32_t _active_ble_pin;
+
+  // Última hora enviada pela app através de
+  // CMD_SET_DEVICE_TIME.
+  //
+  // millis() permite extrapolar essa referência quando
+  // o utilizador executa SINCRONIZAR RELÓGIO manualmente.
+  uint32_t _companion_time_ref = 0;
+  unsigned long _companion_time_ref_millis = 0;
+  bool _has_companion_time_ref = false;
+
   bool _iter_started;
   bool _cli_rescue;
   bool send_unscoped;   // force un-scoped flood (instead of using send_scope)

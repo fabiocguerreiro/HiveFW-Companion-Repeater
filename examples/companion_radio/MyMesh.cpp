@@ -1755,6 +1755,36 @@ uint32_t MyMesh::getBLEPin() {
   return _active_ble_pin;
 }
 
+
+bool MyMesh::syncClockFromCompanionTime() {
+
+  if (!_has_companion_time_ref) {
+    return false;
+  }
+
+  // A referência foi recebida da app em epoch UTC.
+  // Compensamos o tempo que passou desde essa receção.
+  //
+  // A subtração unsigned de millis() também funciona
+  // corretamente através do rollover normal de millis().
+  uint32_t elapsed_seconds =
+    (uint32_t)(
+      (millis() - _companion_time_ref_millis)
+      / 1000UL
+    );
+
+  uint32_t new_time =
+    _companion_time_ref +
+    elapsed_seconds;
+
+  getRTCClock()->setCurrentTime(
+    new_time
+  );
+
+  return true;
+}
+
+
 struct FreqRange {
   uint32_t lower_freq, upper_freq;
 };
@@ -2002,6 +2032,20 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_SET_DEVICE_TIME && len >= 5) {
     uint32_t secs;
     memcpy(&secs, &cmd_frame[1], 4);
+
+    // Guardar a referência enviada pelo Companion/app.
+    //
+    // Isto permite que o utilizador force manualmente
+    // a sincronização no menu COMPANION caso o RTC esteja
+    // demasiado adiantado para a janela automática.
+    _companion_time_ref =
+      secs;
+
+    _companion_time_ref_millis =
+      millis();
+
+    _has_companion_time_ref =
+      true;
 
     uint32_t curr =
       getRTCClock()->getCurrentTime();

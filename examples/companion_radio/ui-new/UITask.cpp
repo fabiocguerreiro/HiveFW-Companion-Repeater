@@ -50,6 +50,8 @@
 //   │   ├── ADVERT TX / ADVERT RX
 //   │   ├── NOME BLE / SMARTPHONE / NOME DO NO
 //   │   └── MODO / FIRMWARE / VERSAO
+//   ├── SINCRONIZAR RELÓGIO
+//   ├── SINCRONIZAR VIA GPS (quando disponível)
 //   ├── DESCOBRIR REPETIDORES
 //   ├── REPETIDORES DESCOBERTOS
 //   └── [ SAIR ]
@@ -360,6 +362,10 @@ class HomeScreen : public UIScreen {
 
   enum CompanionMenu : uint8_t {
     COMP_MENU_INFO = 0,
+    COMP_MENU_SYNC_CLOCK,
+#if ENV_INCLUDE_GPS == 1
+    COMP_MENU_SYNC_GPS,
+#endif
     COMP_MENU_DISCOVERY,
     COMP_MENU_DISCOVERED,
     COMP_MENU_EXIT,
@@ -1109,18 +1115,23 @@ class HomeScreen : public UIScreen {
     int batteryPercentage =
       batteryPercentageFromMilliVolts(batteryMilliVolts);
 
-    char batteryText[24];
+    char batteryText[8];
+
     snprintf(
       batteryText,
       sizeof(batteryText),
-      "%d%% %.2fV",
-      batteryPercentage,
-      batteryMilliVolts / 1000.0f
+      "%d%%",
+      batteryPercentage
     );
 
     display.setColor(UIColor::secondary_txt);
     display.setTextSize(1);
-    display.drawTextCentered(display.width() - 24, 1, batteryText);
+
+    display.drawTextRightAlign(
+      display.width() - 1,
+      1,
+      batteryText
+    );
   }
 
   CayenneLPP sensors_lpp;
@@ -1612,6 +1623,10 @@ public:
 
       const char* companion_items[] = {
         "INFO COMPANION",
+        "SINCRONIZAR RELÓGIO",
+#if ENV_INCLUDE_GPS == 1
+        "SINCRONIZAR VIA GPS",
+#endif
         "DESCOBRIR REPETIDORES",
         "REPETIDORES DESCOBERTOS",
         "[ SAIR ]"
@@ -5663,6 +5678,91 @@ public:
 
           return true;
         }
+
+        // --------------------------------------------------
+        // SINCRONIZAR RELÓGIO
+        //
+        // Usa a última referência enviada pelo Companion/app.
+        // É também o override manual para um RTC demasiado
+        // adiantado para a janela automática de -60 s.
+        // --------------------------------------------------
+
+        if (_companion_menu == COMP_MENU_SYNC_CLOCK) {
+
+          bool synced =
+            the_mesh.syncClockFromCompanionTime();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            synced
+              ? "Relógio sincronizado"
+              : "Ligue primeiro à app",
+            1500
+          );
+
+          return true;
+        }
+
+
+#if ENV_INCLUDE_GPS == 1
+
+        // --------------------------------------------------
+        // SINCRONIZAR VIA GPS
+        //
+        // Equivalente funcional ao comando oficial:
+        //
+        //   gps sync
+        //
+        // syncTime() pede ao LocationProvider para aplicar
+        // hora UTC do GPS ao RTC.
+        // --------------------------------------------------
+
+        if (_companion_menu == COMP_MENU_SYNC_GPS) {
+
+          LocationProvider* location =
+            _sensors->getLocationProvider();
+
+          if (location == NULL) {
+
+            _task->showAlert(
+              "GPS indisponível",
+              1500
+            );
+
+            return true;
+          }
+
+          if (!location->isEnabled()) {
+
+            _task->showAlert(
+              "Ative o GPS primeiro",
+              1500
+            );
+
+            return true;
+          }
+
+          location->syncTime();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            location->isValid()
+              ? "GPS sync pedido"
+              : "Aguardar fix GPS",
+            1500
+          );
+
+          return true;
+        }
+
+#endif
+
 
         // DESCOBRIR REPETIDORES
         if (_companion_menu == COMP_MENU_DISCOVERY) {
