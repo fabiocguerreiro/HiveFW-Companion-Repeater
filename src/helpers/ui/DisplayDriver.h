@@ -62,6 +62,29 @@ public:
     size_t j = 0;
     for (size_t i = 0; src[i] != 0 && j < dest_size - 1; i++) {
       unsigned char c = (unsigned char)src[i];
+
+      // Unicode variation selectors:
+      //
+      //   U+FE0E = text presentation
+      //   U+FE0F = emoji presentation
+      //
+      // Não ocupam largura própria no ecrã e portanto não
+      // devem gerar um bloco adicional.
+      if (
+        c == 0xEF &&
+        src[i + 1] != 0 &&
+        src[i + 2] != 0 &&
+        (unsigned char)src[i + 1] == 0xB8 &&
+        (
+          (unsigned char)src[i + 2] == 0x8E ||
+          (unsigned char)src[i + 2] == 0x8F
+        )
+      ) {
+
+        i += 2;
+        continue;
+      }
+
       if (c >= 32 && c <= 126) {
         dest[j++] = c;  // ASCII printable
       } else if (c >= 0x80) {

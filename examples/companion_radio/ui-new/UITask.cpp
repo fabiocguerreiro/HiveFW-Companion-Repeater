@@ -2429,6 +2429,416 @@ class HomeScreen : public UIScreen {
   }
 
 
+  // ========================================================
+  // HIVEFW — NOME DO NÓ CENTRADO COM ÍCONE RADIOATIVO
+  //
+  // O Unicode U+2622 é substituído por um bitmap próprio.
+  //
+  // A largura usada para centrar é:
+  //
+  //   prefixo + espaço + ícone + espaço + sufixo
+  //
+  // Assim a posição deixa de depender da representação
+  // interna dos bytes UTF-8.
+  // ========================================================
+
+  void drawCenteredNodeName(
+    DisplayDriver& display,
+    const char* text
+  ) {
+
+    if (
+      text == NULL ||
+      text[0] == '\0'
+    ) {
+      return;
+    }
+
+    char before[48];
+    char after[48];
+
+    memset(
+      before,
+      0,
+      sizeof(before)
+    );
+
+    memset(
+      after,
+      0,
+      sizeof(after)
+    );
+
+    char* dest =
+      before;
+
+    size_t dest_size =
+      sizeof(before);
+
+    size_t j = 0;
+
+    bool has_radiation =
+      false;
+
+    for (
+      size_t i = 0;
+      text[i] != 0;
+    ) {
+
+      const uint8_t c =
+        (uint8_t)text[i];
+
+
+      // ----------------------------------------------------
+      // U+2622 RADIOACTIVE SIGN
+      //
+      // UTF-8:
+      //   E2 98 A2
+      // ----------------------------------------------------
+
+      if (
+        !has_radiation &&
+        c == 0xE2 &&
+        text[i + 1] != 0 &&
+        text[i + 2] != 0 &&
+        (uint8_t)text[i + 1] == 0x98 &&
+        (uint8_t)text[i + 2] == 0xA2
+      ) {
+
+        dest[j] = '\0';
+
+        has_radiation =
+          true;
+
+        dest =
+          after;
+
+        dest_size =
+          sizeof(after);
+
+        j = 0;
+
+        i += 3;
+
+
+        // U+FE0E / U+FE0F imediatamente depois do símbolo.
+        if (
+          text[i] != 0 &&
+          text[i + 1] != 0 &&
+          text[i + 2] != 0 &&
+          (uint8_t)text[i] == 0xEF &&
+          (uint8_t)text[i + 1] == 0xB8 &&
+          (
+            (uint8_t)text[i + 2] == 0x8E ||
+            (uint8_t)text[i + 2] == 0x8F
+          )
+        ) {
+
+          i += 3;
+        }
+
+        continue;
+      }
+
+
+      // ----------------------------------------------------
+      // Variation selector isolado — ignorar.
+      // ----------------------------------------------------
+
+      if (
+        c == 0xEF &&
+        text[i + 1] != 0 &&
+        text[i + 2] != 0 &&
+        (uint8_t)text[i + 1] == 0xB8 &&
+        (
+          (uint8_t)text[i + 2] == 0x8E ||
+          (uint8_t)text[i + 2] == 0x8F
+        )
+      ) {
+
+        i += 3;
+        continue;
+      }
+
+
+      // ----------------------------------------------------
+      // ASCII normal.
+      // ----------------------------------------------------
+
+      if (
+        c >= 32 &&
+        c <= 126
+      ) {
+
+        if (
+          j <
+          dest_size - 1
+        ) {
+
+          dest[j++] =
+            (char)c;
+        }
+
+        i++;
+        continue;
+      }
+
+
+      // ----------------------------------------------------
+      // Outro Unicode:
+      //
+      // manter comportamento MeshCore atual = um bloco por
+      // codepoint, mas nunca um bloco por byte.
+      // ----------------------------------------------------
+
+      if (c >= 0x80) {
+
+        if (
+          j <
+          dest_size - 1
+        ) {
+
+          dest[j++] =
+            (char)0xDB;
+        }
+
+        i++;
+
+        while (
+          text[i] != 0 &&
+          (
+            (uint8_t)text[i] &
+            0xC0
+          ) == 0x80
+        ) {
+
+          i++;
+        }
+
+        continue;
+      }
+
+      i++;
+    }
+
+    dest[j] = '\0';
+
+
+    // ------------------------------------------------------
+    // Tamanho e posição.
+    //
+    // No ST7789:
+    //   size 1 = Arial 16
+    //   size 2 = Arial 24
+    //
+    // Portanto o aumento é cerca de 1,5x.
+    // ------------------------------------------------------
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+    display.setTextSize(2);
+
+    const int text_y =
+      48;
+
+    const int icon_y =
+      49;
+
+#else
+
+    display.setTextSize(1);
+
+    const int text_y =
+      52;
+
+    const int icon_y =
+      51;
+
+#endif
+
+
+    // ------------------------------------------------------
+    // Sem símbolo ☢:
+    //
+    // usamos o mesmo texto filtrado mas com medição limpa.
+    // ------------------------------------------------------
+
+    if (!has_radiation) {
+
+      size_t len =
+        strlen(before);
+
+      while (
+        len > 0 &&
+        display.getTextWidth(
+          before
+        ) >
+        display.width() - 4
+      ) {
+
+        before[
+          --len
+        ] = '\0';
+      }
+
+      display.drawTextCentered(
+        display.width() / 2,
+        text_y,
+        before
+      );
+
+      return;
+    }
+
+
+    // ------------------------------------------------------
+    // Com símbolo ☢:
+    // centrar texto + ícone como uma única linha.
+    // ------------------------------------------------------
+
+    const int icon_width =
+      HIVEFW_RADIATION_ICON_WIDTH;
+
+    const int gap_before =
+      before[0] != '\0'
+        ? 1
+        : 0;
+
+    const int gap_after =
+      after[0] != '\0'
+        ? 1
+        : 0;
+
+    const int max_width =
+      display.width() - 4;
+
+
+    // Cortar apenas se for mesmo necessário.
+    while (true) {
+
+      int before_width =
+        display.getTextWidth(
+          before
+        );
+
+      int after_width =
+        display.getTextWidth(
+          after
+        );
+
+      int total_width =
+        before_width +
+        gap_before +
+        icon_width +
+        gap_after +
+        after_width;
+
+      if (
+        total_width <=
+        max_width
+      ) {
+        break;
+      }
+
+      size_t after_len =
+        strlen(after);
+
+      if (after_len > 0) {
+
+        after[
+          after_len - 1
+        ] = '\0';
+
+        continue;
+      }
+
+      size_t before_len =
+        strlen(before);
+
+      if (before_len > 0) {
+
+        before[
+          before_len - 1
+        ] = '\0';
+
+        continue;
+      }
+
+      break;
+    }
+
+
+    int before_width =
+      display.getTextWidth(
+        before
+      );
+
+    int after_width =
+      display.getTextWidth(
+        after
+      );
+
+    int total_width =
+      before_width +
+      gap_before +
+      icon_width +
+      gap_after +
+      after_width;
+
+    int x =
+      (
+        display.width() -
+        total_width
+      ) / 2;
+
+
+    // Prefixo.
+    if (before[0] != '\0') {
+
+      display.setCursor(
+        x,
+        text_y
+      );
+
+      display.print(
+        before
+      );
+
+      x +=
+        before_width +
+        gap_before;
+    }
+
+
+    // Ícone ☢.
+    display.drawXbm(
+      x,
+      icon_y,
+      hivefw_radiation_icon,
+      HIVEFW_RADIATION_ICON_WIDTH,
+      HIVEFW_RADIATION_ICON_HEIGHT
+    );
+
+    x +=
+      icon_width +
+      gap_after;
+
+
+    // Sufixo.
+    if (after[0] != '\0') {
+
+      display.setCursor(
+        x,
+        text_y
+      );
+
+      display.print(
+        after
+      );
+    }
+  }
+
+
   void drawDashboardStatusItem(
     DisplayDriver& display,
     int center_x,
@@ -2607,9 +3017,8 @@ class HomeScreen : public UIScreen {
       UIColor::secondary_txt
     );
 
-    drawCenteredClippedText(
+    drawCenteredNodeName(
       display,
-      52,
       _node_prefs->node_name
     );
   }

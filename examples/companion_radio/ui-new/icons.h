@@ -66,6 +66,30 @@ static const uint8_t hivefw_status_gps_icon[] = {
 };
 
 
+// ============================================================
+// HIVEFW — ÍCONE RADIOATIVO DO NOME DO NÓ
+//
+// Substitui visualmente U+2622 no dashboard.
+// 10x10, 1-bit, MSB-first.
+// ============================================================
+
+#define HIVEFW_RADIATION_ICON_WIDTH   10
+#define HIVEFW_RADIATION_ICON_HEIGHT  10
+
+static const uint8_t hivefw_radiation_icon[] = {
+  0x1E, 0x00,   // ...####...
+  0x3F, 0x00,   // ..######..
+  0x61, 0x80,   // .##....##.
+  0x6D, 0x80,   // .##.##.##.
+  0x0C, 0x00,   // ....##....
+  0xCC, 0xC0,   // ##..##..##
+  0xE1, 0xC0,   // ###....###
+  0x6D, 0x80,   // .##.##.##.
+  0x3F, 0x00,   // ..######..
+  0x1E, 0x00    // ...####...
+};
+
+
 static const uint8_t bluetooth_on[] = {
   0x00, 0x00, 0x00, 0x00, 
   0x00, 0x00, 0x00, 0x00, 
