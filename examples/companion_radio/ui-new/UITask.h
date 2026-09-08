@@ -103,6 +103,7 @@ public:
   void toggleBuzzer();
   bool getGPSState();
   void toggleGPS();
+  bool setGPSInterval(uint32_t seconds);
   void setDisplayRotation(uint8_t rotation);
 
 

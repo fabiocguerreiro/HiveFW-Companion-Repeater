@@ -428,6 +428,82 @@ static const uint8_t HIVEFW_DISPLAY_ROTATION_COUNT = 2;
 #endif
 
 
+
+// ========================================================================
+// HIVEFW — INTERVALO GPS
+//
+// Usa diretamente EnvironmentSensorManager::gps_interval.
+// ========================================================================
+
+#if ENV_INCLUDE_GPS == 1
+
+static const char* hivefw_gps_interval_names[] = {
+  "1 SEG",
+  "5 SEG",
+  "15 SEG",
+  "30 SEG",
+  "1 MIN",
+  "5 MIN",
+  "15 MIN",
+  "30 MIN",
+  "1 HORA"
+};
+
+static const uint32_t hivefw_gps_interval_seconds[] = {
+  1UL,
+  5UL,
+  15UL,
+  30UL,
+  60UL,
+  300UL,
+  900UL,
+  1800UL,
+  3600UL
+};
+
+static const uint8_t HIVEFW_GPS_INTERVAL_COUNT =
+  sizeof(hivefw_gps_interval_seconds) /
+  sizeof(hivefw_gps_interval_seconds[0]);
+
+
+static uint8_t hivefwGpsIntervalIndex(
+  uint32_t seconds
+) {
+
+  if (seconds == 0) {
+    return 0;
+  }
+
+  uint8_t best = 0;
+  uint32_t best_diff = 0xFFFFFFFFUL;
+
+  for (
+    uint8_t i = 0;
+    i < HIVEFW_GPS_INTERVAL_COUNT;
+    i++
+  ) {
+
+    uint32_t value =
+      hivefw_gps_interval_seconds[i];
+
+    uint32_t diff =
+      value > seconds
+        ? value - seconds
+        : seconds - value;
+
+    if (diff < best_diff) {
+
+      best_diff = diff;
+      best = i;
+    }
+  }
+
+  return best;
+}
+
+#endif
+
+
 static int findRadioPreset(
   float freq,
   float bw,
@@ -585,6 +661,15 @@ class HomeScreen : public UIScreen {
   // HiveFW — DEFINIÇÕES -> NOTIFICAÇÕES
   bool _settings_notifications_submenu;
   uint8_t _settings_notifications_menu;
+
+
+  // HiveFW — DEFINIÇÕES -> GPS
+  bool _settings_gps_submenu;
+  uint8_t _settings_gps_menu;
+
+  bool _settings_gps_interval_submenu;
+  uint8_t _settings_gps_interval_menu;
+
 
   uint8_t _settings_advert_menu;
   bool _settings_advert_submenu;
@@ -3049,6 +3134,10 @@ public:
        _settings_rotation_menu(0),
        _settings_notifications_submenu(false),
        _settings_notifications_menu(0),
+       _settings_gps_submenu(false),
+       _settings_gps_menu(0),
+       _settings_gps_interval_submenu(false),
+       _settings_gps_interval_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
@@ -5082,6 +5171,79 @@ public:
         );
 
 
+#if ENV_INCLUDE_GPS == 1
+
+      } else if (_settings_gps_submenu) {
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+
+        if (_settings_gps_interval_submenu) {
+
+          uint8_t index =
+            _settings_gps_interval_menu;
+
+          if (
+            index >=
+            HIVEFW_GPS_INTERVAL_COUNT
+          ) {
+
+            index = 0;
+          }
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            27,
+            "INTERVALO GPS"
+          );
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            45,
+            hivefw_gps_interval_names[
+              index
+            ]
+          );
+
+        } else {
+
+          char gps_item[24];
+
+          snprintf(
+            gps_item,
+            sizeof(gps_item),
+            "GPS: %s",
+            _task->getGPSState()
+              ? "ON"
+              : "OFF"
+          );
+
+          const char* gps_items[] = {
+            gps_item,
+            "INTERVALO GPS",
+            "[ SAIR ]"
+          };
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            gps_items[
+              _settings_gps_menu
+            ],
+            18
+          );
+        }
+
+#endif
+
+
       } else if (_settings_advert_submenu) {
 
         const char* advert_items[] = {
@@ -5194,7 +5356,7 @@ public:
           "ECRÃ",
           "NOTIFICAÇÕES",
 #if ENV_INCLUDE_GPS == 1
-          _task->getGPSState() ? "GPS: ON" : "GPS: OFF",
+          "GPS",
 #endif
           "DESLIGAR",
           "[ SAIR ]"
@@ -7301,6 +7463,211 @@ public:
       }
 
 
+#if ENV_INCLUDE_GPS == 1
+
+      // ======================================================
+      // HIVEFW — HANDLER GPS
+      // ======================================================
+
+      if (_settings_gps_interval_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_gps_interval_menu =
+            (
+              _settings_gps_interval_menu +
+              1
+            ) %
+            HIVEFW_GPS_INTERVAL_COUNT;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_gps_interval_menu =
+            (
+              _settings_gps_interval_menu +
+              HIVEFW_GPS_INTERVAL_COUNT -
+              1
+            ) %
+            HIVEFW_GPS_INTERVAL_COUNT;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_gps_interval_submenu =
+            false;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          uint8_t index =
+            _settings_gps_interval_menu;
+
+          if (
+            index >=
+            HIVEFW_GPS_INTERVAL_COUNT
+          ) {
+
+            index = 0;
+          }
+
+          uint32_t seconds =
+            hivefw_gps_interval_seconds[
+              index
+            ];
+
+          if (
+            !_task->setGPSInterval(
+              seconds
+            )
+          ) {
+
+            _task->showAlert(
+              "Falha intervalo GPS",
+              1500
+            );
+
+            return true;
+          }
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            hivefw_gps_interval_names[
+              index
+            ],
+            1000
+          );
+
+          _settings_gps_interval_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      if (_settings_gps_submenu) {
+
+        const uint8_t count = 3;
+
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_gps_menu =
+            (
+              _settings_gps_menu +
+              1
+            ) %
+            count;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_gps_menu =
+            (
+              _settings_gps_menu +
+              count -
+              1
+            ) %
+            count;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_gps_submenu =
+            false;
+
+          _settings_gps_menu = 0;
+
+          _settings_gps_interval_submenu =
+            false;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          // GPS ON/OFF
+          if (_settings_gps_menu == 0) {
+
+            _task->toggleGPS();
+
+            return true;
+          }
+
+
+          // INTERVALO GPS
+          if (_settings_gps_menu == 1) {
+
+            _settings_gps_interval_menu =
+              hivefwGpsIntervalIndex(
+                _node_prefs->gps_interval
+              );
+
+            _settings_gps_interval_submenu =
+              true;
+
+            return true;
+          }
+
+
+          // [ SAIR ]
+          _settings_gps_submenu =
+            false;
+
+          _settings_gps_menu = 0;
+
+          _settings_gps_interval_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+#endif
+
+
       // ======================================================
       // HIVEFW — HANDLER NOTIFICAÇÕES
       // ======================================================
@@ -7895,10 +8262,22 @@ public:
           _settings_menu ==
           3 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
         ) {
 
-          _task->toggleGPS();
+          _settings_gps_submenu =
+            true;
+
+          _settings_gps_menu = 0;
+
+          _settings_gps_interval_submenu =
+            false;
+
+          _settings_gps_interval_menu =
+            hivefwGpsIntervalIndex(
+              _node_prefs->gps_interval
+            );
 
           return true;
         }
@@ -7944,7 +8323,8 @@ public:
           _settings_menu ==
           3 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
         ) {
 
           _shutdown_init = true;
@@ -10591,8 +10971,16 @@ public:
     if (c == KEY_ENTER && _page == HomePage::SETTINGS) {
       _settings_submenu = true;
       _settings_menu = 0;
+
       _settings_advert_submenu = false;
       _settings_advert_menu = 0;
+
+      _settings_gps_submenu = false;
+      _settings_gps_menu = 0;
+
+      _settings_gps_interval_submenu = false;
+      _settings_gps_interval_menu = 0;
+
       return true;
     }
 
@@ -11698,6 +12086,61 @@ bool UITask::getGPSState() {
   }
   return false;
 }
+
+bool UITask::setGPSInterval(
+  uint32_t seconds
+) {
+
+#if ENV_INCLUDE_GPS == 1
+
+  if (
+    _sensors == NULL ||
+    _node_prefs == NULL
+  ) {
+
+    return false;
+  }
+
+  if (seconds < 1UL) {
+    seconds = 1UL;
+  }
+
+  char value[12];
+
+  snprintf(
+    value,
+    sizeof(value),
+    "%lu",
+    (unsigned long)seconds
+  );
+
+  if (
+    !_sensors->setSettingValue(
+      "gps_interval",
+      value
+    )
+  ) {
+
+    return false;
+  }
+
+  _node_prefs->gps_interval =
+    seconds;
+
+  the_mesh.savePrefs();
+
+  _next_refresh = 0;
+
+  return true;
+
+#else
+
+  (void)seconds;
+  return false;
+
+#endif
+}
+
 
 void UITask::toggleGPS() {
     if (_sensors != NULL) {
