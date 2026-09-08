@@ -2002,12 +2002,36 @@ void MyMesh::handleCmdFrame(size_t len) {
   } else if (cmd_frame[0] == CMD_SET_DEVICE_TIME && len >= 5) {
     uint32_t secs;
     memcpy(&secs, &cmd_frame[1], 4);
-    uint32_t curr = getRTCClock()->getCurrentTime();
-    if (secs >= curr) {
-      getRTCClock()->setCurrentTime(secs);
+
+    uint32_t curr =
+      getRTCClock()->getCurrentTime();
+
+    // HiveFW:
+    // O Companion original apenas aceita acertar o relógio
+    // para a frente. Isso pode impedir a sincronização por
+    // browser/app quando o RTC está apenas alguns segundos
+    // adiantado.
+    //
+    // Mantemos a proteção contra grandes recuos temporais,
+    // mas permitimos correções de manutenção até 60 segundos
+    // para trás.
+    int64_t offset =
+      (int64_t)secs -
+      (int64_t)curr;
+
+    if (offset >= -60) {
+
+      getRTCClock()->setCurrentTime(
+        secs
+      );
+
       writeOKFrame();
+
     } else {
-      writeErrFrame(ERR_CODE_ILLEGAL_ARG);
+
+      writeErrFrame(
+        ERR_CODE_ILLEGAL_ARG
+      );
     }
   } else if (cmd_frame[0] == CMD_SEND_SELF_ADVERT) {
     mesh::Packet* pkt;

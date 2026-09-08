@@ -63,6 +63,7 @@
 // MP-05 — REPETIDOR
 //   ├── REPETIDOR
 //   ├── AUTOADVERT
+//   ├── DUTY CYCLE
 //   ├── VIZINHOS
 //   ├── INFO REPETIDOR
 //   └── [ SAIR ]
@@ -79,7 +80,7 @@
 // MP-08 — DEFINIÇÕES
 //   ├── BLUETOOTH
 //   ├── ANUNCIAR NÓ
-//   ├── CANAL APPS
+//   ├── CANAL APPS/SOS
 //   ├── GPS (quando disponível)
 //   ├── DESLIGAR
 //   └── [ SAIR ]
@@ -384,6 +385,7 @@ class HomeScreen : public UIScreen {
   enum RepeaterMenu : uint8_t {
     REPEATER_MENU_TOGGLE = 0,
     REPEATER_MENU_AUTOADVERT,
+    REPEATER_MENU_DUTY_CYCLE,
     REPEATER_MENU_NEIGHBOURS,
     REPEATER_MENU_INFO,
     REPEATER_MENU_EXIT,
@@ -525,8 +527,10 @@ class HomeScreen : public UIScreen {
   bool _repeater_submenu;
   bool _repeater_info_submenu;
   bool _repeater_neighbours_submenu;
+  bool _repeater_duty_submenu;
   uint8_t _repeater_menu;
   uint8_t _repeater_neighbour_menu;
+  uint8_t _repeater_duty_value;
 
   // ========================================================================
   // MP-04 — RÁDIO
@@ -802,6 +806,51 @@ class HomeScreen : public UIScreen {
         (unsigned long)seconds);
     }
   }
+
+  static uint8_t dutyCyclePercentFromAirtimeFactor(
+    float airtime_factor
+  ) {
+
+    // No HiveFW Companion mantemos a gama oficial
+    // suportada pelo firmware atual: AF 1..9.
+    if (airtime_factor < 1.0f)
+      airtime_factor = 1.0f;
+
+    if (airtime_factor > 9.0f)
+      airtime_factor = 9.0f;
+
+    int duty =
+      (int)(
+        100.0f /
+        (1.0f + airtime_factor)
+        + 0.5f
+      );
+
+    if (duty < 10)
+      duty = 10;
+
+    if (duty > 50)
+      duty = 50;
+
+    return (uint8_t)duty;
+  }
+
+
+  static float airtimeFactorFromDutyCyclePercent(
+    uint8_t duty
+  ) {
+
+    if (duty < 10)
+      duty = 10;
+
+    if (duty > 50)
+      duty = 50;
+
+    return
+      (100.0f / (float)duty)
+      - 1.0f;
+  }
+
 
   void getCompanionPeerName(
     char* dest,
@@ -1128,8 +1177,10 @@ public:
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
+       _repeater_duty_submenu(false),
        _repeater_menu(0),
        _repeater_neighbour_menu(0),
+       _repeater_duty_value(50),
        _radio_submenu(false),
        _radio_menu(0),
        _radio_freq_edit(false),
@@ -2474,16 +2525,20 @@ public:
       //
       // 1. REPETIDOR
       // 2. AUTOADVERT
-      // 3. INFO REPETIDOR
-      // 4. SAIR
+      // 3. DUTY CYCLE
+      // 4. VIZINHOS
+      // 5. INFO REPETIDOR
+      // 6. SAIR
       // ======================================================
 
       else if (_repeater_submenu &&
                !_repeater_info_submenu &&
-               !_repeater_neighbours_submenu) {
+               !_repeater_neighbours_submenu &&
+               !_repeater_duty_submenu) {
 
         char repeater_state[32];
         char autoadvert_state[32];
+        char duty_state[32];
 
         snprintf(
           repeater_state,
@@ -2499,9 +2554,22 @@ public:
           the_mesh.getNodePrefs()->isAutoAdvertEn() ? "ON" : "OFF"
         );
 
+        uint8_t current_duty =
+          dutyCyclePercentFromAirtimeFactor(
+            the_mesh.getNodePrefs()->airtime_factor
+          );
+
+        snprintf(
+          duty_state,
+          sizeof(duty_state),
+          "DUTY CYCLE: %u%%",
+          (unsigned)current_duty
+        );
+
         const char* repeater_items[] = {
           repeater_state,
           autoadvert_state,
+          duty_state,
           "VIZINHOS",
           "INFO REPETIDOR",
           "[ SAIR ]"
@@ -2518,7 +2586,48 @@ public:
       }
 
       // ======================================================
-      // MP-05.2.1 — VIZINHOS
+      // MP-05.2.1 — DUTY CYCLE
+      //
+      // NEXT / RIGHT -> +1%
+      // PREV / LEFT  -> -1%
+      // ENTER        -> guardar
+      // SELECT/CANCEL -> cancelar
+      // ======================================================
+
+      else if (_repeater_duty_submenu) {
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          23,
+          "DUTY CYCLE"
+        );
+
+        char dutyText[12];
+
+        snprintf(
+          dutyText,
+          sizeof(dutyText),
+          "%u%%",
+          (unsigned)_repeater_duty_value
+        );
+
+        display.setTextSize(2);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          41,
+          dutyText
+        );
+      }
+
+      // ======================================================
+      // MP-05.2.2 — VIZINHOS
       //
       // Mostra os repetidores vizinhos ouvidos directamente.
       //
@@ -6387,6 +6496,7 @@ public:
         if (c == KEY_ENTER) {
           _repeater_submenu = true;
           _repeater_info_submenu = false;
+          _repeater_duty_submenu = false;
           _repeater_menu = 0;
           return true;
         }
@@ -6394,6 +6504,7 @@ public:
         if (c == KEY_CANCEL || c == KEY_SELECT) {
           _repeater_menu = 0;
           _repeater_info_submenu = false;
+          _repeater_duty_submenu = false;
           _repeater_submenu = false;
           _page = HomePage::RADIO;
           return true;
@@ -6433,7 +6544,71 @@ public:
       // ======================================================
 
       // ======================================================
-      // MP-05.2.1 — HANDLER VIZINHOS
+      // MP-05.2.1 — HANDLER DUTY CYCLE
+      // ======================================================
+
+      if (_repeater_duty_submenu) {
+
+        if (c == KEY_NEXT ||
+            c == KEY_RIGHT) {
+
+          if (_repeater_duty_value >= 50) {
+            _repeater_duty_value = 10;
+          } else {
+            _repeater_duty_value++;
+          }
+
+          return true;
+        }
+
+        if (c == KEY_PREV ||
+            c == KEY_LEFT) {
+
+          if (_repeater_duty_value <= 10) {
+            _repeater_duty_value = 50;
+          } else {
+            _repeater_duty_value--;
+          }
+
+          return true;
+        }
+
+        if (c == KEY_CANCEL ||
+            c == KEY_SELECT) {
+
+          _repeater_duty_submenu = false;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          _node_prefs->airtime_factor =
+            airtimeFactorFromDutyCyclePercent(
+              _repeater_duty_value
+            );
+
+          the_mesh.savePrefs();
+
+          _repeater_duty_submenu = false;
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            "Duty Cycle guardado",
+            1000
+          );
+
+          return true;
+        }
+
+        return true;
+      }
+
+      // ======================================================
+      // MP-05.2.2 — HANDLER VIZINHOS
       //
       // NEXT / RIGHT -> vizinho seguinte
       // PREV / LEFT  -> vizinho anterior
@@ -6484,7 +6659,8 @@ public:
 
       if (_repeater_submenu &&
           !_repeater_info_submenu &&
-          !_repeater_neighbours_submenu) {
+          !_repeater_neighbours_submenu &&
+          !_repeater_duty_submenu) {
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
           _repeater_menu =
@@ -6503,6 +6679,7 @@ public:
           _repeater_submenu = false;
           _repeater_info_submenu = false;
           _repeater_neighbours_submenu = false;
+          _repeater_duty_submenu = false;
           return true;
         }
 
@@ -6563,7 +6740,23 @@ public:
           }
 
           // ------------------------------------------------
-          // 3. VIZINHOS
+          // 3. DUTY CYCLE
+          // ------------------------------------------------
+
+          if (_repeater_menu == REPEATER_MENU_DUTY_CYCLE) {
+
+            _repeater_duty_value =
+              dutyCyclePercentFromAirtimeFactor(
+                _node_prefs->airtime_factor
+              );
+
+            _repeater_duty_submenu = true;
+
+            return true;
+          }
+
+          // ------------------------------------------------
+          // 4. VIZINHOS
           // ------------------------------------------------
 
           if (_repeater_menu == REPEATER_MENU_NEIGHBOURS) {
@@ -6575,7 +6768,7 @@ public:
           }
 
           // ------------------------------------------------
-          // 4. INFO REPETIDOR
+          // 5. INFO REPETIDOR
           // ------------------------------------------------
 
           if (_repeater_menu == REPEATER_MENU_INFO) {
@@ -6587,13 +6780,14 @@ public:
           }
 
           // ------------------------------------------------
-          // 5. SAIR
+          // 6. SAIR
           // ------------------------------------------------
 
           if (_repeater_menu == REPEATER_MENU_EXIT) {
 
             _repeater_menu = 0;
             _repeater_info_submenu = false;
+            _repeater_duty_submenu = false;
             _repeater_submenu = false;
             _page = HomePage::RADIO;
 
