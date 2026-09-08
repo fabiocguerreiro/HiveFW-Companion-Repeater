@@ -1827,11 +1827,35 @@ class HomeScreen : public UIScreen {
 
     display.setTextSize(1);
     display.setColor(UIColor::primary_txt);
-    display.drawTextCentered(display.width() / 2, 18, "ESTADO RELÓGIO");
-    display.drawTextCentered(display.width() / 2, 30,
-      synced ? "SINCRONIZADO" : "POR SINCRONIZAR");
-    display.drawTextCentered(display.width() / 2, 42, origin);
-    display.drawTextCentered(display.width() / 2, 54, age);
+
+    // Ecrã deliberadamente simples:
+    //
+    //   SINCRONIZADO
+    //   ORIGEM: APP / GPS
+    //   HÁ: 00:00:xx
+    //
+    // O nome "ESTADO RELÓGIO" já aparece no menu anterior
+    // e não é repetido aqui.
+
+    display.drawTextCentered(
+      display.width() / 2,
+      22,
+      synced
+        ? "SINCRONIZADO"
+        : "POR SINCRONIZAR"
+    );
+
+    display.drawTextCentered(
+      display.width() / 2,
+      38,
+      origin
+    );
+
+    display.drawTextCentered(
+      display.width() / 2,
+      54,
+      age
+    );
   }
 
   static uint8_t dutyCyclePercentFromAirtimeFactor(
