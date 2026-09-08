@@ -2281,6 +2281,30 @@ class HomeScreen : public UIScreen {
       12
     );
 
+    // ------------------------------------------------------
+    // HIVEFW — SEPARADOR INFERIOR DA BARRA
+    //
+    // Uma única unidade lógica de altura.
+    //
+    // Fica imediatamente abaixo da barra colorida e mantém
+    // sempre a cor branca/primária, independentemente da
+    // cor selecionada em DEFINIÇÕES -> COR DA BARRA.
+    //
+    // Se visualmente ficar demasiado fino ou grosso,
+    // ajustamos apenas este valor mais tarde.
+    // ------------------------------------------------------
+
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    display.fillRect(
+      0,
+      12,
+      display.width(),
+      1
+    );
+
     display.setTextSize(1);
     display.setColor(
       UIColor::title_txt
