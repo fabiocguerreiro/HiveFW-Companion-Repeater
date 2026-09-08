@@ -2634,18 +2634,11 @@ class HomeScreen : public UIScreen {
     // Portanto o aumento é cerca de 1,5x.
     // ------------------------------------------------------
 
-#ifdef HELTEC_T114_WITH_DISPLAY
-
-    display.setTextSize(2);
-
-    const int text_y =
-      48;
-
-    const int icon_y =
-      49;
-
-#else
-
+    // Tamanho e posição originais do nickname.
+    //
+    // A centragem e o ícone ☢ permanecem ativos,
+    // mas o texto volta exatamente ao tamanho utilizado
+    // antes da alteração visual.
     display.setTextSize(1);
 
     const int text_y =
@@ -2653,8 +2646,6 @@ class HomeScreen : public UIScreen {
 
     const int icon_y =
       51;
-
-#endif
 
 
     // ------------------------------------------------------
