@@ -90,6 +90,7 @@
 //   ├── BLUETOOTH
 //   ├── ANUNCIAR NÓ
 //   ├── CANAL APPS/SOS
+//   ├── COR DA BARRA (T114 com ecrã a cores)
 //   ├── GPS (quando disponível)
 //   ├── DESLIGAR
 //   └── [ SAIR ]
@@ -323,6 +324,38 @@ static const RadioPreset radio_presets[] = {
 static const int RADIO_PRESET_COUNT =
   sizeof(radio_presets) / sizeof(radio_presets[0]);
 
+
+// ========================================================================
+// HIVEFW — CORES DA BARRA SUPERIOR
+//
+// A opção só aparece em hardware T114 com TFT a cores.
+// ========================================================================
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+static const char* hivefw_header_color_names[] = {
+  "VERMELHO",
+  "VERDE",
+  "AZUL",
+  "CIANO",
+  "MAGENTA",
+  "AMARELO",
+  "LARANJA",
+  "BRANCO"
+};
+
+static const uint8_t HIVEFW_HEADER_COLOR_COUNT =
+  sizeof(hivefw_header_color_names) /
+  sizeof(hivefw_header_color_names[0]);
+
+#define HIVEFW_SETTINGS_COLOR_OFFSET 1
+
+#else
+
+#define HIVEFW_SETTINGS_COLOR_OFFSET 0
+
+#endif
+
 static int findRadioPreset(
   float freq,
   float bw,
@@ -460,6 +493,9 @@ class HomeScreen : public UIScreen {
 
   bool _settings_channel_submenu;
   uint8_t _settings_channel_menu;
+
+  bool _settings_color_submenu;
+  uint8_t _settings_color_menu;
 
   uint8_t _settings_advert_menu;
   bool _settings_advert_submenu;
@@ -2203,6 +2239,36 @@ class HomeScreen : public UIScreen {
     DisplayDriver& display
   ) {
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+    uint8_t header_color =
+      _node_prefs->header_color;
+
+    if (
+      header_color >=
+      HIVEFW_HEADER_COLOR_COUNT
+    ) {
+      header_color = 0;
+    }
+
+    // Durante o seletor mostramos a cor imediatamente,
+    // sem a gravar até ENTER.
+    if (
+      _page == HomePage::SETTINGS &&
+      _settings_submenu &&
+      _settings_color_submenu
+    ) {
+
+      header_color =
+        _settings_color_menu;
+    }
+
+    display.setHeaderAccent(
+      header_color
+    );
+
+#endif
+
     // Barra superior.
     display.setColor(
       UIColor::title_bkg
@@ -2267,27 +2333,6 @@ class HomeScreen : public UIScreen {
     display.print(
       page_text
     );
-
-    // HiveFW em destaque apenas na página principal.
-    //
-    // O DisplayDriver atual não possui uma fonte bold
-    // dedicada comum ao T114 e aos OLED. Uma segunda
-    // passagem deslocada 1 pixel cria um bold limpo,
-    // mantendo exatamente o mesmo tamanho do header.
-    if (
-      page ==
-      HomePage::FIRST
-    ) {
-
-      display.setCursor(
-        2,
-        2
-      );
-
-      display.print(
-        page_text
-      );
-    }
 
     // ------------------------------------------------------
     // CENTRO — HORA
@@ -2597,6 +2642,8 @@ public:
        _settings_menu(0), _settings_submenu(false),
        _settings_channel_submenu(false),
        _settings_channel_menu(0),
+       _settings_color_submenu(false),
+       _settings_color_menu(0),
        _repeater_submenu(false),
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
@@ -4426,6 +4473,42 @@ public:
           7
         );
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+      } else if (_settings_color_submenu) {
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(1);
+
+        display.drawTextCentered(
+          display.width() / 2,
+          27,
+          "COR DA BARRA"
+        );
+
+        display.setTextSize(2);
+
+        uint8_t color_index =
+          _settings_color_menu;
+
+        if (
+          color_index >=
+          HIVEFW_HEADER_COLOR_COUNT
+        ) {
+          color_index = 0;
+        }
+
+        display.drawTextCentered(
+          display.width() / 2,
+          45,
+          hivefw_header_color_names[
+            color_index
+          ]
+        );
+
+#endif
       } else if (_settings_advert_submenu) {
 
         const char* advert_items[] = {
@@ -4532,6 +4615,9 @@ public:
           bluetooth_item,
           "ANUNCIAR NÓ",
           "CANAL APPS/SOS",
+#ifdef HELTEC_T114_WITH_DISPLAY
+          "COR DA BARRA",
+#endif
 #if ENV_INCLUDE_GPS == 1
           _task->getGPSState() ? "GPS: ON" : "GPS: OFF",
 #endif
@@ -6268,6 +6354,104 @@ public:
 
     if (_page == HomePage::SETTINGS && _settings_submenu) {
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+      // ======================================================
+      // SUBMENU COR DA BARRA
+      // ======================================================
+
+      if (_settings_color_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_color_menu =
+            (
+              _settings_color_menu +
+              1
+            ) %
+            HIVEFW_HEADER_COLOR_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_color_menu =
+            (
+              _settings_color_menu +
+              HIVEFW_HEADER_COLOR_COUNT -
+              1
+            ) %
+            HIVEFW_HEADER_COLOR_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_color_submenu =
+            false;
+
+          _settings_color_menu =
+            _node_prefs->header_color;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (
+            _settings_color_menu >=
+            HIVEFW_HEADER_COLOR_COUNT
+          ) {
+            _settings_color_menu = 0;
+          }
+
+          _node_prefs->header_color =
+            _settings_color_menu;
+
+          the_mesh.savePrefs();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          char color_alert[32];
+
+          snprintf(
+            color_alert,
+            sizeof(color_alert),
+            "Cor: %s",
+            hivefw_header_color_names[
+              _settings_color_menu
+            ]
+          );
+
+          _task->showAlert(
+            color_alert,
+            1000
+          );
+
+          _settings_color_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+#endif
+
       // ======================================================
       // SUBMENU ANUNCIAR NÓ
       // ======================================================
@@ -6410,18 +6594,34 @@ public:
 
       if (c == KEY_NEXT || c == KEY_RIGHT) {
 #if ENV_INCLUDE_GPS == 1
-        _settings_menu = (_settings_menu + 1) % 6;
+        _settings_menu =
+          (_settings_menu + 1) %
+          (6 + HIVEFW_SETTINGS_COLOR_OFFSET);
 #else
-        _settings_menu = (_settings_menu + 1) % 5;
+        _settings_menu =
+          (_settings_menu + 1) %
+          (5 + HIVEFW_SETTINGS_COLOR_OFFSET);
 #endif
         return true;
       }
 
       if (c == KEY_PREV || c == KEY_LEFT) {
 #if ENV_INCLUDE_GPS == 1
-        _settings_menu = (_settings_menu + 5) % 6;
+        _settings_menu =
+          (
+            _settings_menu +
+            5 +
+            HIVEFW_SETTINGS_COLOR_OFFSET
+          ) %
+          (6 + HIVEFW_SETTINGS_COLOR_OFFSET);
 #else
-        _settings_menu = (_settings_menu + 4) % 5;
+        _settings_menu =
+          (
+            _settings_menu +
+            4 +
+            HIVEFW_SETTINGS_COLOR_OFFSET
+          ) %
+          (5 + HIVEFW_SETTINGS_COLOR_OFFSET);
 #endif
         return true;
       }
@@ -6495,9 +6695,33 @@ public:
           return true;
         }
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+        // COR DA BARRA
+        if (_settings_menu == 3) {
+
+          _settings_color_submenu =
+            true;
+
+          _settings_color_menu =
+            _node_prefs->header_color;
+
+          if (
+            _settings_color_menu >=
+            HIVEFW_HEADER_COLOR_COUNT
+          ) {
+            _settings_color_menu = 0;
+          }
+
+          return true;
+        }
+#endif
+
 #if ENV_INCLUDE_GPS == 1
         // GPS
-        if (_settings_menu == 3) {
+        if (
+          _settings_menu ==
+          3 + HIVEFW_SETTINGS_COLOR_OFFSET
+        ) {
 
           _task->toggleGPS();
 
@@ -6505,10 +6729,16 @@ public:
         }
 
         // DESLIGAR
-        if (_settings_menu == 4) {
+        if (
+          _settings_menu ==
+          4 + HIVEFW_SETTINGS_COLOR_OFFSET
+        ) {
 #else
         // DESLIGAR
-        if (_settings_menu == 3) {
+        if (
+          _settings_menu ==
+          3 + HIVEFW_SETTINGS_COLOR_OFFSET
+        ) {
 #endif
 
           _shutdown_init = true;
@@ -6518,10 +6748,16 @@ public:
 
 #if ENV_INCLUDE_GPS == 1
         // SAIR
-        if (_settings_menu == 5) {
+        if (
+          _settings_menu ==
+          5 + HIVEFW_SETTINGS_COLOR_OFFSET
+        ) {
 #else
         // SAIR
-        if (_settings_menu == 4) {
+        if (
+          _settings_menu ==
+          4 + HIVEFW_SETTINGS_COLOR_OFFSET
+        ) {
 #endif
 
           _settings_submenu = false;

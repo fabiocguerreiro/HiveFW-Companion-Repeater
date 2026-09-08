@@ -37,7 +37,7 @@ ColorVal UIColor::window_bkg = OLEDDISPLAY_COLOR::BLACK;
 //   texto = pixels apagados
 //
 // O writer RGB converte os pixels ativos desta zona
-// diretamente para vermelho durante a passagem normal.
+// diretamente para a cor selecionada durante a passagem normal.
 ColorVal UIColor::title_bkg = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::title_txt = OLEDDISPLAY_COLOR::BLACK;
 
@@ -143,6 +143,51 @@ void ST7789Display::setColor(ColorVal c) {
   display.setRGB(_color == OLEDDISPLAY_COLOR::WHITE ? ST77XX_WHITE : ST77XX_BLACK);
 }
 
+
+void ST7789Display::setHeaderAccent(
+  uint8_t colorIndex
+) {
+
+  switch (colorIndex) {
+
+    case 0:
+      _headerAccent = ST77XX_RED;
+      break;
+
+    case 1:
+      _headerAccent = ST77XX_GREEN;
+      break;
+
+    case 2:
+      _headerAccent = ST77XX_BLUE;
+      break;
+
+    case 3:
+      _headerAccent = ST77XX_CYAN;
+      break;
+
+    case 4:
+      _headerAccent = ST77XX_MAGENTA;
+      break;
+
+    case 5:
+      _headerAccent = ST77XX_YELLOW;
+      break;
+
+    case 6:
+      _headerAccent = ST77XX_ORANGE;
+      break;
+
+    case 7:
+      _headerAccent = ST77XX_WHITE;
+      break;
+
+    default:
+      _headerAccent = ST77XX_RED;
+      break;
+  }
+}
+
 void ST7789Display::setCursor(int x, int y) {
   _x = x*SCALE_X + X_OFFSET;
   _y = y*SCALE_Y + Y_OFFSET;
@@ -237,7 +282,7 @@ void ST7789Display::endFrame() {
 
   display.setTopBand(
     (uint16_t)header_height,
-    ST77XX_RED
+    _headerAccent
   );
 
 #else

@@ -23,6 +23,12 @@ public:
 
   virtual bool isOn() = 0;
   virtual bool isEink() { return false; } // default to non-eink, override in eink drivers
+
+  // HiveFW — cor/accent da barra superior.
+  // Drivers monocromáticos podem ignorar.
+  virtual void setHeaderAccent(uint8_t colorIndex) {
+    (void)colorIndex;
+  }
   virtual void turnOn() = 0;
   virtual void turnOff() = 0;
   virtual void clear() = 0;

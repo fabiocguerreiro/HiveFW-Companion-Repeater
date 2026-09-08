@@ -42,6 +42,11 @@ public:
   uint8_t default_scope_key[16];
   uint8_t apps_channel_hash[PATH_HASH_SIZE];
 
+  // HiveFW — cor da barra superior do ecrã a cores.
+  // 0=vermelho, 1=verde, 2=azul, 3=ciano,
+  // 4=magenta, 5=amarelo, 6=laranja, 7=branco.
+  uint8_t header_color = 0;
+
 private:
   class RadioPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
     NodePrefs* _parent;
@@ -120,6 +125,7 @@ private:
       def("tel_env", _parent->telemetry_mode_env);
       def("apps_ch", (void *) _parent->apps_channel_hash,
           sizeof(_parent->apps_channel_hash));
+      def("hdr_col", _parent->header_color);
     }
   public:
     CompanionPrefs(NodePrefs* parent) : _parent(parent) { }

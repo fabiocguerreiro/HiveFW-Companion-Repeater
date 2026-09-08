@@ -10,6 +10,10 @@ class ST7789Display : public DisplayDriver {
   ST7789Spi display;
   bool _isOn;
   uint16_t _color;
+
+  // HiveFW — RGB565 real da barra superior.
+  uint16_t _headerAccent = ST77XX_RED;
+
   int _x=0, _y=0;
 
   bool i2c_probe(TwoWire& wire, uint8_t addr);
@@ -30,6 +34,7 @@ public:
   void startFrame(ColorVal bkg = UIColor::window_bkg) override;
   void setTextSize(int sz) override;
   void setColor(ColorVal c) override;
+  void setHeaderAccent(uint8_t colorIndex) override;
   void setCursor(int x, int y) override;
   void print(const char* str) override;
   void printWordWrap(const char* str, int max_width) override;
