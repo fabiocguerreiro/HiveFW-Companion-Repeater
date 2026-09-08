@@ -105,6 +105,13 @@ class ST7789Spi : public OLEDDisplay {
       SPIClass * _spi;
       SPISettings 		    _spiSettings;
       uint16_t            _RGB=0xFFFF;
+
+      // HiveFW:
+      // cor RGB565 usada apenas nos pixels ativos
+      // pertencentes à barra superior.
+      uint16_t            _hiveTopRGB=0xFFFF;
+      uint16_t            _hiveTopHeight=0;
+
       uint8_t             _buffheight;
   public:
     /* pass _cs as -1 to indicate "do not use CS pin", for cases where it is hard wired low */
@@ -195,9 +202,18 @@ class ST7789Spi : public OLEDDisplay {
               //setAddrWindow(y*8+temp,minBoundX,1,maxBoundX-minBoundX+1);
               uint32_t const pixbufcount = maxBoundX-minBoundX+1;
               uint16_t *pixbuf = (uint16_t *)rtos_malloc(2 * pixbufcount);
+              uint16_t row_rgb =
+                (
+                  (uint16_t)(
+                    y * 8 + temp
+                  ) <
+                  _hiveTopHeight
+                )
+                  ? _hiveTopRGB
+                  : _RGB;
               for (x = minBoundX; x <= maxBoundX; x++)
               {
-                pixbuf[x-minBoundX] = ((buffer[x + y * displayWidth]>>temp)&0x01)==1?_RGB:0;
+                pixbuf[x-minBoundX] = ((buffer[x + y * displayWidth]>>temp)&0x01)==1?row_rgb:0;
               }
 #ifdef ESP_PLATFORM
               _spi->transferBytes((uint8_t *)pixbuf, NULL, 2 * pixbufcount);
@@ -223,9 +239,18 @@ class ST7789Spi : public OLEDDisplay {
               setAddrWindow(y*8+temp,0,1,displayWidth);
               uint32_t const pixbufcount = displayWidth;
               uint16_t *pixbuf = (uint16_t *)rtos_malloc(2 * pixbufcount);
+              uint16_t row_rgb =
+                (
+                  (uint16_t)(
+                    y * 8 + temp
+                  ) <
+                  _hiveTopHeight
+                )
+                  ? _hiveTopRGB
+                  : _RGB;
               for (x = 0; x < displayWidth; x++)
               {
-                pixbuf[x] = ((buffer[x + y * displayWidth]>>temp)&0x01)==1?_RGB:0;
+                pixbuf[x] = ((buffer[x + y * displayWidth]>>temp)&0x01)==1?row_rgb:0;
               }
 #ifdef ESP_PLATFORM
               _spi->transferBytes((uint8_t *)pixbuf, NULL, 2 * pixbufcount);
@@ -276,125 +301,39 @@ class ST7789Spi : public OLEDDisplay {
   void setRGB(uint16_t c)
   {
 
-    this->_RGB=0x00|c>>8|c<<8&0xFF00;
+    this->_RGB =
+      (uint16_t)(
+        (c >> 8) |
+        ((c << 8) & 0xFF00)
+      );
   }
 
 
   // ==========================================================
-  // HiveFW — atualização parcial de uma faixa horizontal
+  // HiveFW — header RGB dentro da passagem normal do frame
   //
-  // O framebuffer original continua monocromático.
-  // Esta função permite enviar apenas uma faixa usando
-  // uma cor RGB565 diferente, sem apagar o resto do TFT.
+  // Não faz uma segunda escrita no TFT.
+  // Apenas escolhe uma cor diferente para as linhas do
+  // framebuffer que pertencem à barra superior.
   // ==========================================================
 
-  void displayBand(
-    uint16_t yStart,
-    uint16_t bandHeight
+  void setTopBand(
+    uint16_t height,
+    uint16_t color
   ) {
 
-    if (
-      bandHeight == 0 ||
-      yStart >= displayHeight
-    ) {
-      return;
-    }
+    _hiveTopHeight =
+      height;
 
-    uint32_t end32 =
-      (uint32_t)yStart +
-      (uint32_t)bandHeight;
-
-    uint16_t yEnd =
-      end32 > displayHeight
-        ? displayHeight
-        : (uint16_t)end32;
-
-    uint16_t* pixbuf =
-      (uint16_t*)rtos_malloc(
-        2 * displayWidth
+    _hiveTopRGB =
+      (uint16_t)(
+        (color >> 8) |
+        ((color << 8) & 0xFF00)
       );
-
-    if (pixbuf == nullptr) {
-      return;
-    }
-
-    set_CS(LOW);
-
-    _spi->beginTransaction(
-      _spiSettings
-    );
-
-    for (
-      uint16_t row = yStart;
-      row < yEnd;
-      row++
-    ) {
-
-      // Mesma orientação utilizada por display().
-      setAddrWindow(
-        row,
-        0,
-        1,
-        displayWidth
-      );
-
-      uint16_t byteRow =
-        row / 8;
-
-      uint8_t bit =
-        row & 7;
-
-      for (
-        uint16_t x = 0;
-        x < displayWidth;
-        x++
-      ) {
-
-        uint16_t pos =
-          x +
-          byteRow *
-          displayWidth;
-
-        bool pixel_on =
-          (
-            buffer[pos] >>
-            bit
-          ) & 0x01;
-
-        pixbuf[x] =
-          pixel_on
-            ? _RGB
-            : 0;
-      }
-
-#ifdef ESP_PLATFORM
-
-      _spi->transferBytes(
-        (uint8_t*)pixbuf,
-        NULL,
-        2 * displayWidth
-      );
-
-#else
-
-      _spi->transfer(
-        pixbuf,
-        NULL,
-        2 * displayWidth
-      );
-
-#endif
-    }
-
-    _spi->endTransaction();
-
-    set_CS(HIGH);
-
-    rtos_free(
-      pixbuf
-    );
   }
-  
+
+
+
   void displayOn(void) {
   //sendCommand(DISPLAYON);
   }

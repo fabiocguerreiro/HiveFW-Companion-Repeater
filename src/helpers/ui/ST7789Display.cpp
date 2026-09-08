@@ -29,11 +29,24 @@
 // Color scheme
 ColorVal UIColor::window_bkg = OLEDDISPLAY_COLOR::BLACK;
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+
 // HiveFW T114:
-// a barra é desenhada como máscara branca com texto preto.
-// No endFrame() esta máscara é recolorida para verde RGB565.
+// framebuffer:
+//   barra = pixels ativos
+//   texto = pixels apagados
+//
+// O writer RGB converte os pixels ativos desta zona
+// diretamente para verde durante a passagem normal.
 ColorVal UIColor::title_bkg = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::title_txt = OLEDDISPLAY_COLOR::BLACK;
+
+#else
+
+ColorVal UIColor::title_bkg = OLEDDISPLAY_COLOR::BLACK;
+ColorVal UIColor::title_txt = OLEDDISPLAY_COLOR::WHITE;
+
+#endif
 ColorVal UIColor::primary_txt = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::secondary_txt = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::warning_txt = OLEDDISPLAY_COLOR::WHITE;
@@ -193,54 +206,50 @@ uint16_t ST7789Display::getTextWidth(const char* str) {
 
 void ST7789Display::endFrame() {
 
-  // ----------------------------------------------------------
-  // PASSAGEM 1
-  //
   // UI normal:
   // branco sobre preto.
-  // ----------------------------------------------------------
-
   display.setRGB(
     ST77XX_WHITE
   );
 
-  display.display();
-
+#ifdef HELTEC_T114_WITH_DISPLAY
 
   // ----------------------------------------------------------
-  // PASSAGEM 2
+  // HiveFW T114
   //
-  // Recolorir apenas a barra superior HiveFW.
+  // A barra lógica tem 12 unidades de altura.
+  // Convertê-la para as linhas reais do framebuffer ST7789.
   //
-  // O framebuffer contém:
-  //   barra = WHITE
-  //   texto = BLACK
-  //
-  // Resultado físico:
-  //   barra = GREEN
-  //   texto = BLACK
+  // A cor é aplicada PELO MESMO writer usado para o frame
+  // completo. Não existe uma segunda passagem/rotação.
   // ----------------------------------------------------------
-
-  display.setRGB(
-    ST77XX_GREEN
-  );
 
   int header_height =
+    Y_OFFSET +
     (int)(
       12.0f *
-      SCALE_Y +
-      Y_OFFSET +
-      1.0f
+      SCALE_Y
     );
 
   if (header_height < 1) {
     header_height = 1;
   }
 
-  display.displayBand(
-    0,
-    (uint16_t)header_height
+  display.setTopBand(
+    (uint16_t)header_height,
+    ST77XX_GREEN
   );
+
+#else
+
+  display.setTopBand(
+    0,
+    ST77XX_WHITE
+  );
+
+#endif
+
+  display.display();
 }
 
 #endif
