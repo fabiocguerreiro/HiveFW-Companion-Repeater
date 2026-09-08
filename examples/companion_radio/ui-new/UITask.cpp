@@ -94,6 +94,7 @@
 //   ├── ECRÃ
 //   │   ├── TEMPO ECRÃ
 //   │   ├── ROTAÇÃO (T114)
+//   │   ├── FORMATO HORA
 //   │   └── [ SAIR ]
 //   ├── NOTIFICAÇÕES
 //   │   ├── MODO SILÊNCIO
@@ -2369,12 +2370,56 @@ class HomeScreen : public UIScreen {
       local_now
     );
 
+
+    // --------------------------------------------------------
+    // 24 HORAS
+    // --------------------------------------------------------
+
+    if (
+      _node_prefs == NULL ||
+      _node_prefs->clock_24h
+    ) {
+
+      snprintf(
+        dest,
+        dest_len,
+        "%02d:%02d",
+        local_time.hour(),
+        local_time.minute()
+      );
+
+      return;
+    }
+
+
+    // --------------------------------------------------------
+    // 12 HORAS
+    //
+    // Formato compacto para caber no header:
+    //
+    //   9:27PM
+    // --------------------------------------------------------
+
+    int hour =
+      local_time.hour();
+
+    bool pm =
+      hour >= 12;
+
+    int hour12 =
+      hour % 12;
+
+    if (hour12 == 0) {
+      hour12 = 12;
+    }
+
     snprintf(
       dest,
       dest_len,
-      "%02d:%02d",
-      local_time.hour(),
-      local_time.minute()
+      "%d:%02d%s",
+      hour12,
+      local_time.minute(),
+      pm ? "PM" : "AM"
     );
   }
 
@@ -5112,11 +5157,23 @@ public:
 
         else {
 
+          char clock_item[32];
+
+          snprintf(
+            clock_item,
+            sizeof(clock_item),
+            "FORMATO HORA: %s",
+            _node_prefs->clock_24h
+              ? "24H"
+              : "12H"
+          );
+
           const char* display_items[] = {
             "TEMPO ECRÃ",
 #ifdef HELTEC_T114_WITH_DISPLAY
             "ROTAÇÃO",
 #endif
+            clock_item,
             "[ SAIR ]"
           };
 
@@ -6259,13 +6316,43 @@ public:
       char timeText[16];
       char dateText[16];
 
-      snprintf(
-        timeText,
-        sizeof(timeText),
-        "%02d:%02d",
-        localTime.hour(),
-        localTime.minute()
-      );
+      if (
+        _node_prefs == NULL ||
+        _node_prefs->clock_24h
+      ) {
+
+        snprintf(
+          timeText,
+          sizeof(timeText),
+          "%02d:%02d",
+          localTime.hour(),
+          localTime.minute()
+        );
+
+      } else {
+
+        int clock_hour =
+          localTime.hour();
+
+        bool clock_pm =
+          clock_hour >= 12;
+
+        int clock_hour12 =
+          clock_hour % 12;
+
+        if (clock_hour12 == 0) {
+          clock_hour12 = 12;
+        }
+
+        snprintf(
+          timeText,
+          sizeof(timeText),
+          "%d:%02d %s",
+          clock_hour12,
+          localTime.minute(),
+          clock_pm ? "PM" : "AM"
+        );
+      }
 
       snprintf(
         dateText,
@@ -7322,7 +7409,7 @@ public:
       if (_settings_display_submenu) {
 
         const uint8_t display_menu_count =
-          2 +
+          3 +
           HIVEFW_DISPLAY_ROTATION_OFFSET;
 
 
@@ -7435,12 +7522,44 @@ public:
 
 
           // --------------------------------------------------
-          // [ SAIR ]
+          // FORMATO HORA
           // --------------------------------------------------
 
           if (
             _settings_display_menu ==
             1 +
+            HIVEFW_DISPLAY_ROTATION_OFFSET
+          ) {
+
+            _node_prefs->clock_24h =
+              _node_prefs->clock_24h
+                ? 0
+                : 1;
+
+            the_mesh.savePrefs();
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            _task->showAlert(
+              _node_prefs->clock_24h
+                ? "Hora: 24H"
+                : "Hora: 12H",
+              1000
+            );
+
+            return true;
+          }
+
+
+          // --------------------------------------------------
+          // [ SAIR ]
+          // --------------------------------------------------
+
+          if (
+            _settings_display_menu ==
+            2 +
             HIVEFW_DISPLAY_ROTATION_OFFSET
           ) {
 

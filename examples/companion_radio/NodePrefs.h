@@ -66,6 +66,15 @@ public:
   // 1 = invertido 180 graus
   uint8_t display_rotation = 0;
 
+
+  // HiveFW — formato de apresentação da hora.
+  //
+  // 1 = 24H
+  // 0 = 12H
+  //
+  // Default: 24H.
+  uint8_t clock_24h = 1;
+
 private:
   class RadioPrefs : public ConfigSerializer {  // COPIED from CommonCLI (for now)
     NodePrefs* _parent;
@@ -147,6 +156,7 @@ private:
       def("hdr_col", _parent->header_color);
       def("disp_to", _parent->display_timeout);
       def("disp_rot", _parent->display_rotation);
+      def("clk24", _parent->clock_24h);
     }
   public:
     CompanionPrefs(NodePrefs* parent) : _parent(parent) { }
