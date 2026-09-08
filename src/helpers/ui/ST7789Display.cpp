@@ -37,7 +37,7 @@ ColorVal UIColor::window_bkg = OLEDDISPLAY_COLOR::BLACK;
 //   texto = pixels apagados
 //
 // O writer RGB converte os pixels ativos desta zona
-// diretamente para verde durante a passagem normal.
+// diretamente para vermelho durante a passagem normal.
 ColorVal UIColor::title_bkg = OLEDDISPLAY_COLOR::WHITE;
 ColorVal UIColor::title_txt = OLEDDISPLAY_COLOR::BLACK;
 
@@ -237,7 +237,7 @@ void ST7789Display::endFrame() {
 
   display.setTopBand(
     (uint16_t)header_height,
-    ST77XX_GREEN
+    ST77XX_RED
   );
 
 #else

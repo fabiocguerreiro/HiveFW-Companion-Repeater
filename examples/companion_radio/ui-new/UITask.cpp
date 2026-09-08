@@ -2268,6 +2268,27 @@ class HomeScreen : public UIScreen {
       page_text
     );
 
+    // HiveFW em destaque apenas na página principal.
+    //
+    // O DisplayDriver atual não possui uma fonte bold
+    // dedicada comum ao T114 e aos OLED. Uma segunda
+    // passagem deslocada 1 pixel cria um bold limpo,
+    // mantendo exatamente o mesmo tamanho do header.
+    if (
+      page ==
+      HomePage::FIRST
+    ) {
+
+      display.setCursor(
+        2,
+        2
+      );
+
+      display.print(
+        page_text
+      );
+    }
+
     // ------------------------------------------------------
     // CENTRO — HORA
     // ------------------------------------------------------
