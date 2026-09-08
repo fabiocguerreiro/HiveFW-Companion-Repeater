@@ -24,6 +24,48 @@ static const uint8_t hivefw_logo[] PROGMEM = {
 };
 
 
+// ============================================================
+// HIVEFW — ÍCONES DO DASHBOARD INICIAL
+// 8x8, monocromáticos.
+// ============================================================
+
+// Mensagem / envelope
+static const uint8_t hivefw_status_message_icon[] = {
+  0x00,
+  0x7E,
+  0x42,
+  0x66,
+  0x5A,
+  0x42,
+  0x7E,
+  0x00
+};
+
+// Bluetooth
+static const uint8_t hivefw_status_ble_icon[] = {
+  0x08,
+  0x0C,
+  0x2A,
+  0x1C,
+  0x1C,
+  0x2A,
+  0x0C,
+  0x08
+};
+
+// GPS / posição
+static const uint8_t hivefw_status_gps_icon[] = {
+  0x18,
+  0x18,
+  0x7E,
+  0x42,
+  0x42,
+  0x7E,
+  0x18,
+  0x18
+};
+
+
 static const uint8_t bluetooth_on[] = {
   0x00, 0x00, 0x00, 0x00, 
   0x00, 0x00, 0x00, 0x00, 

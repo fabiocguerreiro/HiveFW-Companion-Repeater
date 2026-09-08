@@ -41,6 +41,9 @@
 // ============================================================================
 //
 // MP-00 — FIRST
+//   ├── MENSAGENS / BLE / GPS
+//   ├── SMARTPHONE BLE: nome do dispositivo ou Desligado
+//   └── NICKNAME: nome do nó
 // MP-01 — RECENTES
 // MP-02 — MENSAGENS
 //
@@ -1629,18 +1632,24 @@ class HomeScreen : public UIScreen {
     char* dest,
     size_t dest_len
   ) {
-    if (dest == NULL || dest_len == 0) {
+
+    if (
+      dest == NULL ||
+      dest_len == 0
+    ) {
       return;
     }
 
     dest[0] = '\0';
 
     if (!_task->hasConnection()) {
+
       snprintf(
         dest,
         dest_len,
-        "NAO LIGADO"
+        "Desligado"
       );
+
       return;
     }
 
@@ -1652,10 +1661,14 @@ class HomeScreen : public UIScreen {
       Bluefruit.connHandle();
 
     BLEConnection* connection =
-      Bluefruit.Connection(conn_handle);
+      Bluefruit.Connection(
+        conn_handle
+      );
 
-    if (connection != nullptr &&
-        connection->connected()) {
+    if (
+      connection != nullptr &&
+      connection->connected()
+    ) {
 
       uint16_t peer_len =
         connection->getPeerName(
@@ -1667,8 +1680,10 @@ class HomeScreen : public UIScreen {
         sizeof(peer_name) - 1
       ] = '\0';
 
-      if (peer_len > 0 &&
-          peer_name[0] != '\0') {
+      if (
+        peer_len > 0 &&
+        peer_name[0] != '\0'
+      ) {
 
         snprintf(
           dest,
@@ -1679,10 +1694,12 @@ class HomeScreen : public UIScreen {
 
       } else {
 
+        // Ligação BLE válida, mas o dispositivo
+        // remoto não forneceu um nome utilizável.
         snprintf(
           dest,
           dest_len,
-          "SEM NOME"
+          "Ligado"
         );
       }
 
@@ -1691,20 +1708,24 @@ class HomeScreen : public UIScreen {
       snprintf(
         dest,
         dest_len,
-        "N/D"
+        "Ligado"
       );
     }
 
 #else
 
+    // A build V3 Companion Wi-Fi não deve
+    // apresentar uma ligação Wi-Fi como se
+    // fosse um smartphone Bluetooth.
     snprintf(
       dest,
       dest_len,
-      "N/D"
+      "Desligado"
     );
 
 #endif
   }
+
 
   void renderCompanionInfo(DisplayDriver& display) {
     char counter[8];
@@ -1878,21 +1899,96 @@ class HomeScreen : public UIScreen {
     );
   }
 
-  void renderBatteryIndicator(DisplayDriver& display, uint16_t batteryMilliVolts) {
+  void renderBatteryIndicator(
+    DisplayDriver& display,
+    uint16_t batteryMilliVolts
+  ) {
+
     int batteryPercentage =
-      batteryPercentageFromMilliVolts(batteryMilliVolts);
+      batteryPercentageFromMilliVolts(
+        batteryMilliVolts
+      );
 
     char batteryText[8];
 
-    snprintf(
-      batteryText,
-      sizeof(batteryText),
-      "%d%%",
-      batteryPercentage
+    if (batteryMilliVolts > 0) {
+
+      snprintf(
+        batteryText,
+        sizeof(batteryText),
+        "%d%%",
+        batteryPercentage
+      );
+
+    } else {
+
+      snprintf(
+        batteryText,
+        sizeof(batteryText),
+        "--%%"
+      );
+    }
+
+    display.setTextSize(1);
+    display.setColor(
+      UIColor::title_txt
     );
 
-    display.setColor(UIColor::secondary_txt);
-    display.setTextSize(1);
+    int text_width =
+      display.getTextWidth(
+        batteryText
+      );
+
+    // Bateria 11x6 + terminal.
+    const int icon_width = 11;
+    const int gap = 2;
+
+    int icon_x =
+      display.width() -
+      1 -
+      text_width -
+      gap -
+      icon_width;
+
+    const int icon_y = 3;
+
+    display.drawRect(
+      icon_x,
+      icon_y,
+      9,
+      6
+    );
+
+    display.fillRect(
+      icon_x + 9,
+      icon_y + 2,
+      2,
+      2
+    );
+
+    // Área útil interna = 5 pixels.
+    int fill =
+      (
+        batteryPercentage *
+        5 +
+        99
+      ) / 100;
+
+    if (fill < 0)
+      fill = 0;
+
+    if (fill > 5)
+      fill = 5;
+
+    if (fill > 0) {
+
+      display.fillRect(
+        icon_x + 2,
+        icon_y + 2,
+        fill,
+        2
+      );
+    }
 
     display.drawTextRightAlign(
       display.width() - 1,
@@ -1900,6 +1996,509 @@ class HomeScreen : public UIScreen {
       batteryText
     );
   }
+
+
+  // ========================================================
+  // HIVEFW — HORA LOCAL LISBOA
+  //
+  // RTC interno permanece em UTC.
+  // O header mostra a hora local portuguesa,
+  // incluindo mudança automática de horário.
+  // ========================================================
+
+  bool isLisbonSummerTime(
+    uint32_t timestamp
+  ) const {
+
+    DateTime utc(timestamp);
+
+    int month = utc.month();
+
+    if (
+      month < 3 ||
+      month > 10
+    ) {
+      return false;
+    }
+
+    if (
+      month > 3 &&
+      month < 10
+    ) {
+      return true;
+    }
+
+    int days_in_month = 31;
+
+    if (
+      month == 4 ||
+      month == 6 ||
+      month == 9 ||
+      month == 11
+    ) {
+
+      days_in_month = 30;
+
+    } else if (month == 2) {
+
+      int year =
+        utc.year();
+
+      bool leap =
+        (
+          (
+            year % 4 == 0 &&
+            year % 100 != 0
+          ) ||
+          year % 400 == 0
+        );
+
+      days_in_month =
+        leap ? 29 : 28;
+    }
+
+    int y =
+      utc.year();
+
+    int m =
+      month;
+
+    if (m < 3) {
+      y--;
+      m += 12;
+    }
+
+    // Zeller:
+    // 0 = sábado
+    // 1 = domingo
+    int weekday_last_day =
+      (
+        days_in_month +
+        (13 * (m + 1)) / 5 +
+        y +
+        y / 4 -
+        y / 100 +
+        y / 400
+      ) % 7;
+
+    int sunday_offset =
+      (
+        weekday_last_day +
+        6
+      ) % 7;
+
+    int last_sunday =
+      days_in_month -
+      sunday_offset;
+
+    if (month == 3) {
+
+      return
+        utc.day() >
+          last_sunday ||
+        (
+          utc.day() ==
+            last_sunday &&
+          utc.hour() >= 1
+        );
+    }
+
+    // Outubro:
+    // horário de verão termina às
+    // 01:00 UTC do último domingo.
+    return
+      utc.day() <
+        last_sunday ||
+      (
+        utc.day() ==
+          last_sunday &&
+        utc.hour() < 1
+      );
+  }
+
+
+  void formatHiveHeaderTime(
+    char* dest,
+    size_t dest_len
+  ) const {
+
+    if (
+      dest == NULL ||
+      dest_len == 0
+    ) {
+      return;
+    }
+
+    uint32_t now =
+      _rtc->getCurrentTime();
+
+    // RTC claramente não inicializado.
+    if (
+      now <
+      946684800UL
+    ) {
+
+      snprintf(
+        dest,
+        dest_len,
+        "--:--"
+      );
+
+      return;
+    }
+
+    uint32_t local_now =
+      now +
+      (
+        isLisbonSummerTime(now)
+          ? 3600UL
+          : 0UL
+      );
+
+    DateTime local_time(
+      local_now
+    );
+
+    snprintf(
+      dest,
+      dest_len,
+      "%02d:%02d",
+      local_time.hour(),
+      local_time.minute()
+    );
+  }
+
+
+  uint8_t getHeaderTopLevelPage()
+    const {
+
+    switch (_page) {
+
+      case HomePage::INTERNAL_HOME_ASSISTANT:
+      case HomePage::INTERNAL_CLOCK:
+      case HomePage::INTERNAL_GPS:
+      case HomePage::INTERNAL_SENSORS:
+
+        return
+          HomePage::APPS;
+
+      default:
+        break;
+    }
+
+    if (
+      _page <
+      HomePage::Count
+    ) {
+
+      return _page;
+    }
+
+    return
+      HomePage::FIRST;
+  }
+
+
+  void renderHiveHeader(
+    DisplayDriver& display
+  ) {
+
+    // Barra superior.
+    display.setColor(
+      UIColor::title_bkg
+    );
+
+    display.fillRect(
+      0,
+      0,
+      display.width(),
+      12
+    );
+
+    display.setTextSize(1);
+    display.setColor(
+      UIColor::title_txt
+    );
+
+    // ------------------------------------------------------
+    // ESQUERDA
+    //
+    // FIRST:
+    //   HiveFW
+    //
+    // restantes páginas:
+    //   01/08 ... 08/08
+    // ------------------------------------------------------
+
+    uint8_t page =
+      getHeaderTopLevelPage();
+
+    char page_text[12];
+
+    if (
+      page ==
+      HomePage::FIRST
+    ) {
+
+      snprintf(
+        page_text,
+        sizeof(page_text),
+        "HiveFW"
+      );
+
+    } else {
+
+      snprintf(
+        page_text,
+        sizeof(page_text),
+        "%02u/%02u",
+        (unsigned)page,
+        (unsigned)(
+          HomePage::Count - 1
+        )
+      );
+    }
+
+    display.setCursor(
+      1,
+      2
+    );
+
+    display.print(
+      page_text
+    );
+
+    // ------------------------------------------------------
+    // CENTRO — HORA
+    // ------------------------------------------------------
+
+    char time_text[8];
+
+    formatHiveHeaderTime(
+      time_text,
+      sizeof(time_text)
+    );
+
+    display.drawTextCentered(
+      display.width() / 2,
+      2,
+      time_text
+    );
+
+    // ------------------------------------------------------
+    // DIREITA — BATERIA
+    // ------------------------------------------------------
+
+    renderBatteryIndicator(
+      display,
+      _task->getBattMilliVolts()
+    );
+  }
+
+
+  void drawCenteredClippedText(
+    DisplayDriver& display,
+    int y,
+    const char* text
+  ) {
+
+    if (text == NULL)
+      return;
+
+    char filtered[64];
+
+    display.translateUTF8ToBlocks(
+      filtered,
+      text,
+      sizeof(filtered)
+    );
+
+    display.setTextSize(1);
+
+    size_t len =
+      strlen(filtered);
+
+    while (
+      len > 0 &&
+      display.getTextWidth(
+        filtered
+      ) >
+      display.width() - 4
+    ) {
+
+      filtered[
+        --len
+      ] = '\0';
+    }
+
+    display.drawTextCentered(
+      display.width() / 2,
+      y,
+      filtered
+    );
+  }
+
+
+  void drawDashboardStatusItem(
+    DisplayDriver& display,
+    int center_x,
+    int y,
+    const uint8_t* icon,
+    const char* label
+  ) {
+
+    display.setTextSize(1);
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    const int icon_width = 8;
+    const int gap = 2;
+
+    int label_width =
+      display.getTextWidth(
+        label
+      );
+
+    int total_width =
+      icon_width +
+      gap +
+      label_width;
+
+    int x =
+      center_x -
+      total_width / 2;
+
+    display.drawXbm(
+      x,
+      y,
+      icon,
+      8,
+      8
+    );
+
+    display.setCursor(
+      x +
+      icon_width +
+      gap,
+      y
+    );
+
+    display.print(
+      label
+    );
+  }
+
+
+  void renderFirstDashboard(
+    DisplayDriver& display
+  ) {
+
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    display.setTextSize(1);
+
+    // ------------------------------------------------------
+    // LINHA 1:
+    //
+    // mensagem   BLE   GPS
+    // ------------------------------------------------------
+
+    int msg_count =
+      _task->getMsgCount();
+
+    char msg_text[8];
+
+    if (msg_count > 99) {
+
+      snprintf(
+        msg_text,
+        sizeof(msg_text),
+        "99+"
+      );
+
+    } else {
+
+      snprintf(
+        msg_text,
+        sizeof(msg_text),
+        "%d",
+        msg_count
+      );
+    }
+
+    const int status_y = 19;
+
+    drawDashboardStatusItem(
+      display,
+      display.width() / 6,
+      status_y,
+      hivefw_status_message_icon,
+      msg_text
+    );
+
+    drawDashboardStatusItem(
+      display,
+      display.width() / 2,
+      status_y,
+      hivefw_status_ble_icon,
+      "BLE"
+    );
+
+    drawDashboardStatusItem(
+      display,
+      (
+        display.width() *
+        5
+      ) / 6,
+      status_y,
+      hivefw_status_gps_icon,
+      "GPS"
+    );
+
+    // ------------------------------------------------------
+    // LINHA 2:
+    //
+    // nome real do smartphone BLE
+    // ou "Desligado"
+    // ------------------------------------------------------
+
+    char peer_name[48];
+
+    getCompanionPeerName(
+      peer_name,
+      sizeof(peer_name)
+    );
+
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    drawCenteredClippedText(
+      display,
+      36,
+      peer_name
+    );
+
+    // ------------------------------------------------------
+    // LINHA 3:
+    //
+    // nickname / nome do nó
+    // ------------------------------------------------------
+
+    display.setColor(
+      UIColor::secondary_txt
+    );
+
+    drawCenteredClippedText(
+      display,
+      52,
+      _node_prefs->node_name
+    );
+  }
+
 
   CayenneLPP sensors_lpp;
   int sensors_nb = 0;
@@ -2321,50 +2920,16 @@ public:
 
 
   int render(DisplayDriver& display) override {
-    display.setColor(UIColor::title_bkg);
-    display.fillRect(0, 0, display.width(), 12);
     char tmp[80];
-    // node name
-    display.setTextSize(1);
-    display.setColor(UIColor::title_txt);
-    char filtered_name[sizeof(_node_prefs->node_name)];
-    display.translateUTF8ToBlocks(filtered_name, _node_prefs->node_name, sizeof(filtered_name));
-    display.setCursor(0, 2);
-    display.print(filtered_name);
 
-    // battery voltage
-    renderBatteryIndicator(display, _task->getBattMilliVolts());
-
-    // curr page indicator
-    if (UIColor::title_bkg == UIColor::window_bkg) {
-      display.setColor(UIColor::title_txt);
-    } else {
-      display.setColor(UIColor::title_bkg);
-    }
-    int y = 14;
-
-    // ====================================================================
-    // INDICADOR DO MENU PRINCIPAL
+    // Header único HiveFW:
     //
-    // FIRST / RECENTES / MENSAGENS / COMPANION
-    // RÁDIO / REPETIDOR / SOS / APLICAÇÕES / DEFINIÇÕES
+    // FIRST  -> HiveFW | hora | bateria
+    // OUTRAS -> XX/08  | hora | bateria
     //
-    // HomePage::Count é a fonte única do número de páginas visíveis.
-    // ====================================================================
-
-    const int visible_pages = HomePage::Count;
-    int x = display.width() / 2 - 5 * (visible_pages - 1);
-
-    for (uint8_t i = 0; i < HomePage::Count; i++) {
-
-      if (i == _page) {
-        display.fillRect(x-1, y-1, 4, 4);
-      } else {
-        display.fillRect(x, y, 2, 2);
-      }
-
-      x += 10;
-    }
+    // Os antigos pontos de páginas deixaram
+    // de existir.
+    renderHiveHeader(display);
 
     // ======================================================
     // MP-03 — COMPANION
@@ -2426,28 +2991,11 @@ public:
     }
 
     if (_page == HomePage::FIRST) {
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(2);
-      sprintf(tmp, "Mensagens: %d", _task->getMsgCount());
-      display.drawTextCentered(display.width() / 2, 22, tmp);
 
-      #ifdef WIFI_SSID
-        IPAddress ip = WiFi.localIP();
-        snprintf(tmp, sizeof(tmp), "IP: %d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-        display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 54, tmp);
-      #endif
-      if (_task->hasConnection()) {
-        display.setColor(UIColor::warning_txt);
-        display.setTextSize(1);
-        display.drawTextCentered(display.width() / 2, 43, "< Ligado >");
+      renderFirstDashboard(
+        display
+      );
 
-      } else if (the_mesh.getBLEPin() != 0) { // BT pin
-        display.setColor(UIColor::warning_txt);
-        display.setTextSize(1);
-        sprintf(tmp, "Pin:%d", the_mesh.getBLEPin());
-        display.drawTextCentered(display.width() / 2, 43, tmp);
-      }
     } else if (_page == HomePage::RECENT) {
       the_mesh.getRecentlyHeard(recent, UI_RECENT_LIST_SIZE);
       display.setColor(UIColor::primary_txt);
