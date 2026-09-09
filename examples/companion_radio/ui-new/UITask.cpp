@@ -3656,7 +3656,7 @@ public:
     DisplayDriver& display,
     const char* text,
     int y = 38,
-    int text_offset_x = 8
+    int text_offset_x = 0
   ) {
     const int centerX = display.width() / 2;
 
@@ -5630,7 +5630,7 @@ public:
           settings_icon,
           64, 32,
           "DEFINIÇÕES",
-          7
+          0
         );
 
 #ifdef HELTEC_T114_WITH_DISPLAY
@@ -6482,7 +6482,7 @@ public:
           apps_icon,
           64, 32,
           "APLICAÇÕES",
-          7
+          0
         );
 
       }
