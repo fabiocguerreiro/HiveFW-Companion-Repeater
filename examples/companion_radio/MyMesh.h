@@ -80,7 +80,14 @@
 #define REQ_TYPE_GET_TELEMETRY_DATA     0x03
 
 struct AdvertPath {
+  // Mantido para CMD_GET_ADVERT_PATH.
   uint8_t pubkey_prefix[7];
+
+  // HiveFW CONTACTOS:
+  // identidade exata do nó ouvido.
+  uint8_t pub_key[PUB_KEY_SIZE];
+  uint8_t node_type;
+
   uint8_t path_len;
   char    name[32];
   uint32_t recv_timestamp;
@@ -249,6 +256,15 @@ public:
 
   bool sendContactTraceByUiIndex(
     uint32_t index
+  );
+
+  int findContactUiIndexByPubKey(
+    const uint8_t* pub_key
+  );
+
+  bool addRecentContact(
+    const AdvertPath& recent,
+    uint32_t& ui_index
   );
 
 

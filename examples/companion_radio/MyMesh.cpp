@@ -440,7 +440,7 @@ void MyMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path
     AdvertPath* p = advert_paths;
     uint32_t oldest = 0xFFFFFFFF;
     for (int i = 0; i < ADVERT_PATH_TABLE_SIZE; i++) {   // check if already in table, otherwise evict oldest
-      if (memcmp(advert_paths[i].pubkey_prefix, contact.id.pub_key, sizeof(AdvertPath::pubkey_prefix)) == 0) {
+      if (memcmp(advert_paths[i].pub_key, contact.id.pub_key, PUB_KEY_SIZE) == 0) {
         p = &advert_paths[i];   // found
         break;
       }
@@ -450,10 +450,35 @@ void MyMesh::onDiscoveredContact(ContactInfo &contact, bool is_new, uint8_t path
       }
     }
 
-    memcpy(p->pubkey_prefix, contact.id.pub_key, sizeof(p->pubkey_prefix));
-    strcpy(p->name, contact.name);
-    p->recv_timestamp = getRTCClock()->getCurrentTime();
-    p->path_len = mesh::Packet::copyPath(p->path, path, path_len);
+    memcpy(
+      p->pubkey_prefix,
+      contact.id.pub_key,
+      sizeof(p->pubkey_prefix)
+    );
+
+    memcpy(
+      p->pub_key,
+      contact.id.pub_key,
+      PUB_KEY_SIZE
+    );
+
+    p->node_type =
+      contact.type;
+
+    strcpy(
+      p->name,
+      contact.name
+    );
+
+    p->recv_timestamp =
+      getRTCClock()->getCurrentTime();
+
+    p->path_len =
+      mesh::Packet::copyPath(
+        p->path,
+        path,
+        path_len
+      );
   }
 
   if (!is_new) dirty_contacts_expiry = futureMillis(LAZY_CONTACTS_WRITE_DELAY); // only schedule lazy write for contacts that are in contacts[]
@@ -3115,6 +3140,171 @@ bool MyMesh::sendContactTraceByUiIndex(
     contact.out_path,
     raw_path_len
   );
+
+  return true;
+}
+
+
+
+
+// ========================================================================
+// HIVEFW — RECENTES -> CONTACTOS
+// ========================================================================
+
+int MyMesh::findContactUiIndexByPubKey(
+  const uint8_t* pub_key
+) {
+
+  if (pub_key == NULL) {
+    return -1;
+  }
+
+
+  const int count =
+    getNumContacts();
+
+
+  for (int i = 0; i < count; i++) {
+
+    ContactInfo contact;
+
+    if (
+      !getContactByIdx(
+        i + MAX_ANON_CONTACTS,
+        contact
+      )
+    ) {
+
+      continue;
+    }
+
+
+    if (
+      memcmp(
+        contact.id.pub_key,
+        pub_key,
+        PUB_KEY_SIZE
+      ) == 0
+    ) {
+
+      return i;
+    }
+  }
+
+
+  return -1;
+}
+
+
+bool MyMesh::addRecentContact(
+  const AdvertPath& recent,
+  uint32_t& ui_index
+) {
+
+  ui_index = 0;
+
+
+  int existing =
+    findContactUiIndexByPubKey(
+      recent.pub_key
+    );
+
+
+  if (existing >= 0) {
+
+    ui_index =
+      (uint32_t)existing;
+
+    return true;
+  }
+
+
+  if (
+    recent.name[0] == '\0' ||
+    recent.node_type == ADV_TYPE_NONE
+  ) {
+
+    return false;
+  }
+
+
+  ContactInfo contact;
+
+  memset(
+    &contact,
+    0,
+    sizeof(contact)
+  );
+
+
+  memcpy(
+    contact.id.pub_key,
+    recent.pub_key,
+    PUB_KEY_SIZE
+  );
+
+
+  strncpy(
+    contact.name,
+    recent.name,
+    sizeof(contact.name) - 1
+  );
+
+  contact.name[
+    sizeof(contact.name) - 1
+  ] = '\0';
+
+
+  contact.type =
+    recent.node_type;
+
+  contact.flags = 0;
+
+
+  // O caminho de entrada de um Advert não é assumido
+  // automaticamente como caminho de saída.
+  //
+  // Até existir uma rota recíproca confirmada,
+  // o contacto novo usa FLOOD.
+  contact.out_path_len =
+    OUT_PATH_UNKNOWN;
+
+
+  contact.last_advert_timestamp =
+    0;
+
+  contact.lastmod =
+    getRTCClock()->getCurrentTime();
+
+  contact.sync_since =
+    0;
+
+
+  if (!addContact(contact)) {
+
+    onContactsFull();
+
+    return false;
+  }
+
+
+  saveContacts();
+
+
+  int added =
+    findContactUiIndexByPubKey(
+      recent.pub_key
+    );
+
+
+  if (added < 0) {
+    return false;
+  }
+
+
+  ui_index =
+    (uint32_t)added;
+
 
   return true;
 }
