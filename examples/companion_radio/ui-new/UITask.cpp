@@ -673,7 +673,6 @@ class HomeScreen : public UIScreen {
 #endif
     COMP_MENU_DISCOVERY,
     COMP_MENU_DISCOVERED,
-    COMP_MENU_EXIT,
     COMP_MENU_COUNT
   };
 
@@ -888,7 +887,6 @@ class HomeScreen : public UIScreen {
     APPS_SENSORS,
 #endif
     APPS_CLOCK,
-    APPS_EXIT,
     APPS_MENU_COUNT
   };
 
@@ -1039,7 +1037,7 @@ class HomeScreen : public UIScreen {
 
     return
       _ha_command_count +
-      2 +
+      1 +
       (_ha_command_count > 0 ? 1 : 0);
   }
 
@@ -1058,15 +1056,6 @@ class HomeScreen : public UIScreen {
   }
 
 
-  int haExitIndex() const {
-
-    return
-      _ha_command_count +
-      1 +
-      (_ha_command_count > 0 ? 1 : 0);
-  }
-
-
   const char* haMainLabel() {
 
     if (_ha_menu < _ha_command_count)
@@ -1081,7 +1070,7 @@ class HomeScreen : public UIScreen {
     )
       return "GERIR COMANDOS";
 
-    return "[ SAIR ]";
+    return "ADICIONAR COMANDO";
   }
 
 
@@ -7125,8 +7114,7 @@ public:
         "SINCRONIZAR VIA GPS",
 #endif
         "DESCOBRIR REPETIDORES",
-        "REPETIDORES DESCOBERTOS",
-        "[ SAIR ]"
+        "REPETIDORES DESCOBERTOS"
       };
 
       // Selector oficial HiveFW:
@@ -7248,7 +7236,7 @@ public:
 
         drawMenuSelection(
           display,
-          "[ SAIR ]",
+          "SEM CONTACTOS",
           40,
           0
         );
@@ -7440,7 +7428,7 @@ public:
 
         drawMenuSelection(
           display,
-          "[ SAIR ]",
+          "SEM CANAIS",
           40
         );
       }
@@ -7494,7 +7482,10 @@ public:
         }
       #endif
 
-      int total_items = channel_count + 1;
+      int total_items =
+        channel_count > 0
+          ? channel_count
+          : 1;
 
       // Mostrar apenas a opção atualmente selecionada.
       // A navegação continua a ser feita com NEXT/PREV.
@@ -7542,12 +7533,11 @@ public:
 
       } else {
 
-        // Última opção: avançar para a página seguinte
-        display.setColor(UIColor::primary_txt);
+        display.setColor(UIColor::secondary_txt);
         display.drawTextCentered(
           display.width() / 2,
           34,
-          "[ SAIR ]"
+          "SEM CANAIS"
         );
       }
 
@@ -10090,11 +10080,6 @@ public:
           );
         }
 
-        display.drawTextCentered(
-          display.width() / 2,
-          63,
-          "[ SAIR ]"
-        );
       }
 
       // ------------------------------------------------------
@@ -10127,8 +10112,7 @@ public:
 #if UI_SENSORS_PAGE == 1
           "SENSORES",
 #endif
-          "RELÓGIO",
-          "[ SAIR ]"
+          "RELÓGIO"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -10355,18 +10339,15 @@ public:
         } else {
 
           int total =
-            _ha_command_count + 1;
+            _ha_command_count;
 
           if (_ha_manage_menu >= total)
             _ha_manage_menu = 0;
 
           const char* text =
-            (_ha_manage_menu <
-             _ha_command_count)
-              ? _ha_commands[
-                  _ha_manage_menu
-                ].name
-              : "[ SAIR ]";
+            _ha_commands[
+              _ha_manage_menu
+            ].name;
 
           display.setColor(
             UIColor::primary_txt
@@ -10426,21 +10407,19 @@ public:
         const char* items[] = {
           "ALTERAR",
           location_item,
-          "APAGAR",
-          "[ VOLTAR ]"
+          "APAGAR"
         };
 
-        const uint8_t action_count = 4;
+        const uint8_t action_count = 3;
 
 #else
 
         const char* items[] = {
           "ALTERAR",
-          "APAGAR",
-          "[ VOLTAR ]"
+          "APAGAR"
         };
 
-        const uint8_t action_count = 3;
+        const uint8_t action_count = 2;
 
 #endif
 
@@ -10661,7 +10640,10 @@ public:
         }
       #endif
 
-      int total_items = channel_count + 1;
+      int total_items =
+        channel_count > 0
+          ? channel_count
+          : 1;
 
       if (c == KEY_NEXT) {
         if (total_items > 0) {
@@ -10721,11 +10703,7 @@ public:
           return true;
         }
 
-      // [ SAIR ]
-      if (_sms_messages_menu == channel_count) {
-        _sms_messages_submenu = false;
         return true;
-        }
       }
     }
 
@@ -10873,7 +10851,10 @@ public:
       if (_sms_new_stage == 2) {
 
         int count = the_mesh.getNumContacts();
-        int total = count + 1;
+        int total =
+          count > 0
+            ? count
+            : 1;
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
@@ -10898,13 +10879,6 @@ public:
         }
 
         if (c == KEY_ENTER) {
-
-          // SAIR
-          if (_sms_contact_menu == count) {
-
-            _sms_new_stage = 1;
-            return true;
-          }
 
           if (count <= 0) {
 
@@ -11185,7 +11159,10 @@ public:
         }
 #endif
 
-        int total = count + 1;
+        int total =
+          count > 0
+            ? count
+            : 1;
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
@@ -11212,10 +11189,7 @@ public:
 
         if (c == KEY_ENTER) {
 
-          // SAIR
-          if (_sms_channel_menu == count) {
-
-            _sms_new_stage = 1;
+          if (count <= 0) {
             return true;
           }
 
@@ -13268,13 +13242,6 @@ public:
             _page = HomePage::INTERNAL_CLOCK;
             return true;
 
-          case APPS_EXIT:
-            _apps_submenu = false;
-            _apps_menu = 0;
-            _apps_view = APPS_VIEW_NONE;
-            _apps_return = false;
-            return true;
-
           default:
             return true;
         }
@@ -13842,7 +13809,7 @@ public:
         }
 
         int total =
-          _ha_command_count + 1;
+          _ha_command_count;
 
         if (
           c == KEY_NEXT ||
@@ -13887,21 +13854,6 @@ public:
 
         if (c == KEY_ENTER) {
 
-          // [ SAIR ]
-          if (
-            _ha_manage_menu >=
-            _ha_command_count
-          ) {
-
-            _ha_stage =
-              HA_STAGE_MAIN;
-
-            _ha_menu =
-              haManageIndex();
-
-            return true;
-          }
-
           _ha_edit_index =
             _ha_manage_menu;
 
@@ -13927,9 +13879,9 @@ public:
       ) {
 
 #if ENV_INCLUDE_GPS == 1
-        const uint8_t action_count = 4;
-#else
         const uint8_t action_count = 3;
+#else
+        const uint8_t action_count = 2;
 #endif
 
         if (
@@ -14012,11 +13964,6 @@ public:
             return true;
           }
 
-          // VOLTAR
-          _ha_stage =
-            HA_STAGE_MANAGE_LIST;
-
-          return true;
         }
 
         return true;
@@ -14090,7 +14037,7 @@ public:
         haMainCount();
 
       if (total <= 0)
-        total = 2;
+        total = 1;
 
       if (_ha_menu >= total)
         _ha_menu = 0;
@@ -14184,15 +14131,6 @@ public:
           return true;
         }
 
-        // [ SAIR ]
-        if (
-          _ha_menu ==
-          haExitIndex()
-        ) {
-
-          exitHomeAssistant();
-          return true;
-        }
       }
 
       return true;
@@ -14590,17 +14528,6 @@ public:
           return true;
         }
 
-        // SAIR
-        if (_companion_menu == COMP_MENU_EXIT) {
-
-          _companion_menu = 0;
-          _companion_submenu = false;
-          _companion_info_submenu = false;
-
-          _page = HomePage::MESSAGES;
-
-          return true;
-        }
       }
 
       return true;
