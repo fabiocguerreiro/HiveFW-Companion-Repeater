@@ -47,6 +47,16 @@ public:
   // 4=magenta, 5=amarelo, 6=laranja, 7=branco.
   uint8_t header_color = 0;
 
+  // HiveFW — BOOT LOGO.
+  //
+  // Cores independentes da barra superior.
+  // 0=vermelho, 1=verde, 2=azul, 3=ciano,
+  // 4=magenta, 5=amarelo, 6=laranja, 7=branco.
+  //
+  // Default branco para preservar o boot atual.
+  uint8_t boot_logo_color = 7;
+  uint8_t boot_text_color = 7;
+
 
   // HiveFW — timeout automático do ecrã.
   //
@@ -154,6 +164,8 @@ private:
       def("apps_ch", (void *) _parent->apps_channel_hash,
           sizeof(_parent->apps_channel_hash));
       def("hdr_col", _parent->header_color);
+      def("boot_lcol", _parent->boot_logo_color);
+      def("boot_tcol", _parent->boot_text_color);
       def("disp_to", _parent->display_timeout);
       def("disp_rot", _parent->display_rotation);
       def("clk24", _parent->clock_24h);

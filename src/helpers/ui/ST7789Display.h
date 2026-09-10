@@ -14,6 +14,15 @@ class ST7789Display : public DisplayDriver {
   // HiveFW — RGB565 real da barra superior.
   uint16_t _headerAccent = ST77XX_RED;
 
+  // HiveFW — a barra superior só é aplicada ao frame
+  // quando setHeaderAccent() for chamado explicitamente.
+  bool _headerAccentEnabled = false;
+
+  // HiveFW — cores exclusivas do bitmap do BOOT LOGO.
+  bool _bootLogoAccentEnabled = false;
+  uint16_t _bootLogoAccent = ST77XX_WHITE;
+  uint16_t _bootTextAccent = ST77XX_WHITE;
+
 
   // 0 = orientação HiveFW atual
   // 1 = invertido 180 graus
@@ -42,6 +51,10 @@ public:
   void setTextSize(int sz) override;
   void setColor(ColorVal c) override;
   void setHeaderAccent(uint8_t colorIndex) override;
+  void setBootLogoAccent(
+    uint8_t logoColorIndex,
+    uint8_t textColorIndex
+  ) override;
   void setDisplayRotation(uint8_t rotation) override;
   void setCursor(int x, int y) override;
   void print(const char* str) override;

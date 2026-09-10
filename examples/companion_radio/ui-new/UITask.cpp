@@ -127,6 +127,10 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   │   ├── TEMPO ECRÃ
 //   │   ├── ROTAÇÃO (T114)
 //   │   ├── COR DA BARRA (T114)
+//   │   ├── BOOT LOGO (T114)
+//   │   │   ├── LOGO
+//   │   │   ├── TEXTO
+//   │   │   └── [ SAIR ]
 //   │   ├── FORMATO HORA
 //   │   └── [ SAIR ]
 //   ├── NOTIFICAÇÕES
@@ -147,11 +151,17 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 
 class SplashScreen : public UIScreen {
   UITask* _task;
+  NodePrefs* _node_prefs;
   unsigned long dismiss_after;
   char _version_info[32];
 
 public:
-  SplashScreen(UITask* task) : _task(task) {
+  SplashScreen(
+    UITask* task,
+    NodePrefs* node_prefs
+  ) :
+    _task(task),
+    _node_prefs(node_prefs) {
     // Custom firmware version shown on the boot screen.
     // build.sh appends the Git commit hash to FIRMWARE_VERSION.
     // Example: V1.01-368c97d
@@ -184,6 +194,38 @@ public:
   }
 
   int render(DisplayDriver& display) override {
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+    uint8_t boot_logo_color = 7;
+    uint8_t boot_text_color = 7;
+
+    if (_node_prefs != nullptr) {
+
+      boot_logo_color =
+        _node_prefs->boot_logo_color;
+
+      boot_text_color =
+        _node_prefs->boot_text_color;
+    }
+
+    if (boot_logo_color > 7) {
+      boot_logo_color = 7;
+    }
+
+    if (boot_text_color > 7) {
+      boot_text_color = 7;
+    }
+
+    // Não altera o bitmap.
+    // Apenas informa o writer RGB das duas zonas.
+    display.setBootLogoAccent(
+      boot_logo_color,
+      boot_text_color
+    );
+
+#endif
+
     // meshcore logo
     display.setColor(UIColor::corp_blue);
     int logoWidth = 128;
@@ -391,9 +433,27 @@ static const uint8_t HIVEFW_HEADER_COLOR_COUNT =
 
 #define HIVEFW_DISPLAY_COLOR_OFFSET 1
 
+static const char* hivefw_boot_color_names[] = {
+  "VERMELHO",
+  "VERDE",
+  "AZUL",
+  "CIANO",
+  "MAGENTA",
+  "AMARELO",
+  "LARANJA",
+  "BRANCO"
+};
+
+static const uint8_t HIVEFW_BOOT_COLOR_COUNT =
+  sizeof(hivefw_boot_color_names) /
+  sizeof(hivefw_boot_color_names[0]);
+
+#define HIVEFW_DISPLAY_BOOT_OFFSET 1
+
 #else
 
 #define HIVEFW_DISPLAY_COLOR_OFFSET 0
+#define HIVEFW_DISPLAY_BOOT_OFFSET 0
 
 #endif
 
@@ -719,6 +779,16 @@ class HomeScreen : public UIScreen {
 
   bool _settings_color_submenu;
   uint8_t _settings_color_menu;
+
+  // HiveFW — BOOT LOGO
+  bool _settings_boot_submenu;
+  uint8_t _settings_boot_menu;
+
+  bool _settings_boot_logo_color_submenu;
+  uint8_t _settings_boot_logo_color_menu;
+
+  bool _settings_boot_text_color_submenu;
+  uint8_t _settings_boot_text_color_menu;
 
 
   // HiveFW — DEFINIÇÕES -> ECRÃ
@@ -3335,6 +3405,12 @@ public:
        _settings_channel_menu(0),
        _settings_color_submenu(false),
        _settings_color_menu(0),
+       _settings_boot_submenu(false),
+       _settings_boot_menu(0),
+       _settings_boot_logo_color_submenu(false),
+       _settings_boot_logo_color_menu(7),
+       _settings_boot_text_color_submenu(false),
+       _settings_boot_text_color_menu(7),
        _settings_display_submenu(false),
        _settings_display_menu(0),
        _settings_timeout_submenu(false),
@@ -8070,7 +8146,101 @@ public:
         // TEMPO ECRÃ
         // ----------------------------------------------------
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+        // ----------------------------------------------------
+        // BOOT LOGO -> LOGO -> COR
+        // ----------------------------------------------------
+
+        if (_settings_boot_logo_color_submenu) {
+
+          uint8_t index =
+            _settings_boot_logo_color_menu;
+
+          if (index >= HIVEFW_BOOT_COLOR_COUNT) {
+            index = 7;
+          }
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            27,
+            "COR DO LOGO"
+          );
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            hivefw_boot_color_names[index],
+            38
+          );
+        }
+
+
+        // ----------------------------------------------------
+        // BOOT LOGO -> TEXTO -> COR
+        // ----------------------------------------------------
+
+        else if (_settings_boot_text_color_submenu) {
+
+          uint8_t index =
+            _settings_boot_text_color_menu;
+
+          if (index >= HIVEFW_BOOT_COLOR_COUNT) {
+            index = 7;
+          }
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            27,
+            "COR DO TEXTO"
+          );
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            hivefw_boot_color_names[index],
+            38
+          );
+        }
+
+
+        // ----------------------------------------------------
+        // MENU BOOT LOGO
+        // ----------------------------------------------------
+
+        else if (_settings_boot_submenu) {
+
+          const char* boot_items[] = {
+            "LOGO",
+            "TEXTO",
+            "[ SAIR ]"
+          };
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            boot_items[
+              _settings_boot_menu
+            ],
+            18
+          );
+        }
+
+
+        else if (_settings_timeout_submenu) {
+
+#else
+
         if (_settings_timeout_submenu) {
+
+#endif
 
           display.setTextSize(1);
 
@@ -8180,6 +8350,7 @@ public:
 #ifdef HELTEC_T114_WITH_DISPLAY
             "ROTAÇÃO",
             "COR DA BARRA",
+            "BOOT LOGO",
 #endif
             clock_item,
             "[ SAIR ]"
@@ -10217,6 +10388,281 @@ public:
     if (_page == HomePage::SETTINGS && _settings_submenu) {
 
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+      // ======================================================
+      // BOOT LOGO -> COR DO LOGO
+      // ======================================================
+
+      if (_settings_boot_logo_color_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_boot_logo_color_menu =
+            (
+              _settings_boot_logo_color_menu +
+              1
+            ) %
+            HIVEFW_BOOT_COLOR_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_boot_logo_color_menu =
+            (
+              _settings_boot_logo_color_menu +
+              HIVEFW_BOOT_COLOR_COUNT -
+              1
+            ) %
+            HIVEFW_BOOT_COLOR_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_boot_logo_color_submenu =
+            false;
+
+          _settings_boot_logo_color_menu =
+            _node_prefs->boot_logo_color;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (
+            _settings_boot_logo_color_menu >=
+            HIVEFW_BOOT_COLOR_COUNT
+          ) {
+            _settings_boot_logo_color_menu = 7;
+          }
+
+          _node_prefs->boot_logo_color =
+            _settings_boot_logo_color_menu;
+
+          the_mesh.savePrefs();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            "Cor logo guardada",
+            1000
+          );
+
+          _settings_boot_logo_color_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ======================================================
+      // BOOT LOGO -> COR DO TEXTO
+      // ======================================================
+
+      if (_settings_boot_text_color_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_boot_text_color_menu =
+            (
+              _settings_boot_text_color_menu +
+              1
+            ) %
+            HIVEFW_BOOT_COLOR_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_boot_text_color_menu =
+            (
+              _settings_boot_text_color_menu +
+              HIVEFW_BOOT_COLOR_COUNT -
+              1
+            ) %
+            HIVEFW_BOOT_COLOR_COUNT;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_boot_text_color_submenu =
+            false;
+
+          _settings_boot_text_color_menu =
+            _node_prefs->boot_text_color;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          if (
+            _settings_boot_text_color_menu >=
+            HIVEFW_BOOT_COLOR_COUNT
+          ) {
+            _settings_boot_text_color_menu = 7;
+          }
+
+          _node_prefs->boot_text_color =
+            _settings_boot_text_color_menu;
+
+          the_mesh.savePrefs();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          _task->showAlert(
+            "Cor texto guardada",
+            1000
+          );
+
+          _settings_boot_text_color_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+
+      // ======================================================
+      // MENU BOOT LOGO
+      // ======================================================
+
+      if (_settings_boot_submenu) {
+
+        const uint8_t boot_menu_count = 3;
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_boot_menu =
+            (
+              _settings_boot_menu +
+              1
+            ) %
+            boot_menu_count;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_boot_menu =
+            (
+              _settings_boot_menu +
+              boot_menu_count -
+              1
+            ) %
+            boot_menu_count;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_boot_submenu = false;
+          _settings_boot_menu = 0;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // LOGO
+          if (_settings_boot_menu == 0) {
+
+            _settings_boot_logo_color_menu =
+              _node_prefs->boot_logo_color;
+
+            if (
+              _settings_boot_logo_color_menu >=
+              HIVEFW_BOOT_COLOR_COUNT
+            ) {
+              _settings_boot_logo_color_menu = 7;
+            }
+
+            _settings_boot_logo_color_submenu =
+              true;
+
+            return true;
+          }
+
+
+          // TEXTO
+          if (_settings_boot_menu == 1) {
+
+            _settings_boot_text_color_menu =
+              _node_prefs->boot_text_color;
+
+            if (
+              _settings_boot_text_color_menu >=
+              HIVEFW_BOOT_COLOR_COUNT
+            ) {
+              _settings_boot_text_color_menu = 7;
+            }
+
+            _settings_boot_text_color_submenu =
+              true;
+
+            return true;
+          }
+
+
+          // [ SAIR ]
+          _settings_boot_submenu = false;
+          _settings_boot_menu = 0;
+
+          return true;
+        }
+
+        return true;
+      }
+
+#endif
+
+
       // ======================================================
       // HIVEFW — HANDLER TEMPO ECRÃ
       // ======================================================
@@ -10450,7 +10896,8 @@ public:
         const uint8_t display_menu_count =
           3 +
           HIVEFW_DISPLAY_ROTATION_OFFSET +
-          HIVEFW_DISPLAY_COLOR_OFFSET;
+          HIVEFW_DISPLAY_COLOR_OFFSET +
+          HIVEFW_DISPLAY_BOOT_OFFSET;
 
 
         if (
@@ -10581,6 +11028,37 @@ public:
           }
 #endif
 
+
+          // --------------------------------------------------
+          // BOOT LOGO
+          // --------------------------------------------------
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+          if (
+            _settings_display_menu ==
+            1 +
+            HIVEFW_DISPLAY_ROTATION_OFFSET +
+            HIVEFW_DISPLAY_COLOR_OFFSET
+          ) {
+
+            _settings_boot_menu = 0;
+
+            _settings_boot_logo_color_submenu =
+              false;
+
+            _settings_boot_text_color_submenu =
+              false;
+
+            _settings_boot_submenu =
+              true;
+
+            return true;
+          }
+
+#endif
+
+
           // --------------------------------------------------
           // FORMATO HORA
           // --------------------------------------------------
@@ -10589,7 +11067,8 @@ public:
             _settings_display_menu ==
             1 +
             HIVEFW_DISPLAY_ROTATION_OFFSET +
-            HIVEFW_DISPLAY_COLOR_OFFSET
+            HIVEFW_DISPLAY_COLOR_OFFSET +
+            HIVEFW_DISPLAY_BOOT_OFFSET
           ) {
 
             _node_prefs->clock_24h =
@@ -10622,7 +11101,8 @@ public:
             _settings_display_menu ==
             2 +
             HIVEFW_DISPLAY_ROTATION_OFFSET +
-            HIVEFW_DISPLAY_COLOR_OFFSET
+            HIVEFW_DISPLAY_COLOR_OFFSET +
+            HIVEFW_DISPLAY_BOOT_OFFSET
           ) {
 
             _settings_display_submenu =
@@ -14874,7 +15354,10 @@ void UITask::begin(DisplayDriver* display, SensorManager* sensors, NodePrefs* no
   ui_started_at = millis();
   _alert_expiry = 0;
 
-  splash = new SplashScreen(this);
+  splash = new SplashScreen(
+    this,
+    node_prefs
+  );
   home = new HomeScreen(this, &rtc_clock, sensors, node_prefs);
   msg_preview = new MsgPreviewScreen(this, &rtc_clock);
   channel_messages = msg_preview;

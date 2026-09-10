@@ -144,6 +144,14 @@ void ST7789Display::clear() {
 
 void ST7789Display::startFrame(ColorVal bkg) {
   display.clear();  // TODO: use bkg
+
+  // HiveFW:
+  // cada frame começa sem faixa colorida.
+  // Os ecrãs normais ativam-na explicitamente
+  // através de setHeaderAccent().
+  _headerAccentEnabled = false;
+  _bootLogoAccentEnabled = false;
+
   setColor(UIColor::primary_txt);
   display.setFont(ArialMT_Plain_16);
 }
@@ -171,6 +179,9 @@ void ST7789Display::setColor(ColorVal c) {
 void ST7789Display::setHeaderAccent(
   uint8_t colorIndex
 ) {
+
+  // Este frame pediu explicitamente a barra superior.
+  _headerAccentEnabled = true;
 
   switch (colorIndex) {
 
@@ -212,6 +223,58 @@ void ST7789Display::setHeaderAccent(
   }
 }
 
+
+
+
+void ST7789Display::setBootLogoAccent(
+  uint8_t logoColorIndex,
+  uint8_t textColorIndex
+) {
+
+  auto colorFromIndex =
+    [](uint8_t index) -> uint16_t {
+
+      switch (index) {
+
+        case 0:
+          return ST77XX_RED;
+
+        case 1:
+          return ST77XX_GREEN;
+
+        case 2:
+          return ST77XX_BLUE;
+
+        case 3:
+          return ST77XX_CYAN;
+
+        case 4:
+          return ST77XX_MAGENTA;
+
+        case 5:
+          return ST77XX_YELLOW;
+
+        case 6:
+          return ST77XX_ORANGE;
+
+        case 7:
+        default:
+          return ST77XX_WHITE;
+      }
+    };
+
+  _bootLogoAccent =
+    colorFromIndex(
+      logoColorIndex
+    );
+
+  _bootTextAccent =
+    colorFromIndex(
+      textColorIndex
+    );
+
+  _bootLogoAccentEnabled = true;
+}
 
 
 void ST7789Display::setDisplayRotation(
@@ -335,10 +398,22 @@ void ST7789Display::endFrame() {
     header_height = 1;
   }
 
-  display.setTopBand(
-    (uint16_t)header_height,
-    _headerAccent
-  );
+  if (_headerAccentEnabled) {
+
+    display.setTopBand(
+      (uint16_t)header_height,
+      _headerAccent
+    );
+
+  } else {
+
+    // SplashScreen e qualquer outro frame sem barra:
+    // não recolorir as linhas superiores.
+    display.setTopBand(
+      0,
+      ST77XX_WHITE
+    );
+  }
 
 #else
 
@@ -348,6 +423,67 @@ void ST7789Display::endFrame() {
   );
 
 #endif
+
+  // ----------------------------------------------------------
+  // HiveFW — BOOT LOGO
+  //
+  // O bitmap continua monocromático e inalterado.
+  // Aqui apenas escolhemos a cor RGB dos pixels ATIVOS
+  // pertencentes às duas zonas do bitmap:
+  //
+  //   LOGO  = x 0..15
+  //   TEXTO = x 16..127
+  //
+  // O bitmap é desenhado em y=3 com altura 13.
+  // ----------------------------------------------------------
+
+  if (_bootLogoAccentEnabled) {
+
+    const uint16_t boot_x1 =
+      X_OFFSET;
+
+    const uint16_t boot_split_x =
+      X_OFFSET +
+      (uint16_t)(
+        16.0f *
+        SCALE_X
+      );
+
+    const uint16_t boot_x2 =
+      X_OFFSET +
+      (uint16_t)(
+        128.0f *
+        SCALE_X
+      );
+
+    const uint16_t boot_y1 =
+      Y_OFFSET +
+      (uint16_t)(
+        3.0f *
+        SCALE_Y
+      );
+
+    const uint16_t boot_y2 =
+      Y_OFFSET +
+      (uint16_t)(
+        16.0f *
+        SCALE_Y
+      );
+
+    display.setBootLogoBands(
+      boot_x1,
+      boot_split_x,
+      boot_x2,
+      boot_y1,
+      boot_y2,
+      _bootLogoAccent,
+      _bootTextAccent
+    );
+
+  } else {
+
+    display.clearBootLogoBands();
+  }
 
   display.display();
 }

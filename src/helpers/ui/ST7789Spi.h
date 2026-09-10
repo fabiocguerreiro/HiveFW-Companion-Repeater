@@ -112,6 +112,16 @@ class ST7789Spi : public OLEDDisplay {
       uint16_t            _hiveTopRGB=0xFFFF;
       uint16_t            _hiveTopHeight=0;
 
+      // HiveFW — duas zonas RGB exclusivas do BOOT LOGO.
+      bool                _hiveBootEnabled=false;
+      uint16_t            _hiveBootX1=0;
+      uint16_t            _hiveBootSplitX=0;
+      uint16_t            _hiveBootX2=0;
+      uint16_t            _hiveBootY1=0;
+      uint16_t            _hiveBootY2=0;
+      uint16_t            _hiveBootLogoRGB=0xFFFF;
+      uint16_t            _hiveBootTextRGB=0xFFFF;
+
       uint8_t             _buffheight;
   public:
     /* pass _cs as -1 to indicate "do not use CS pin", for cases where it is hard wired low */
@@ -202,18 +212,41 @@ class ST7789Spi : public OLEDDisplay {
               //setAddrWindow(y*8+temp,minBoundX,1,maxBoundX-minBoundX+1);
               uint32_t const pixbufcount = maxBoundX-minBoundX+1;
               uint16_t *pixbuf = (uint16_t *)rtos_malloc(2 * pixbufcount);
-              uint16_t row_rgb =
-                (
-                  (uint16_t)(
-                    y * 8 + temp
-                  ) <
-                  _hiveTopHeight
-                )
-                  ? _hiveTopRGB
-                  : _RGB;
+              uint16_t pixel_y =
+                (uint16_t)(
+                  y * 8 + temp
+                );
+
               for (x = minBoundX; x <= maxBoundX; x++)
               {
-                pixbuf[x-minBoundX] = ((buffer[x + y * displayWidth]>>temp)&0x01)==1?row_rgb:0;
+                uint16_t pixel_rgb = _RGB;
+
+                if (
+                  _hiveBootEnabled &&
+                  pixel_y >= _hiveBootY1 &&
+                  pixel_y <  _hiveBootY2 &&
+                  x >= _hiveBootX1 &&
+                  x <  _hiveBootX2
+                ) {
+
+                  pixel_rgb =
+                    x < _hiveBootSplitX
+                      ? _hiveBootLogoRGB
+                      : _hiveBootTextRGB;
+
+                } else if (
+                  pixel_y <
+                  _hiveTopHeight
+                ) {
+
+                  pixel_rgb =
+                    _hiveTopRGB;
+                }
+
+                pixbuf[x-minBoundX] =
+                  ((buffer[x + y * displayWidth] >> temp) & 0x01) == 1
+                    ? pixel_rgb
+                    : 0;
               }
 #ifdef ESP_PLATFORM
               _spi->transferBytes((uint8_t *)pixbuf, NULL, 2 * pixbufcount);
@@ -239,18 +272,41 @@ class ST7789Spi : public OLEDDisplay {
               setAddrWindow(y*8+temp,0,1,displayWidth);
               uint32_t const pixbufcount = displayWidth;
               uint16_t *pixbuf = (uint16_t *)rtos_malloc(2 * pixbufcount);
-              uint16_t row_rgb =
-                (
-                  (uint16_t)(
-                    y * 8 + temp
-                  ) <
-                  _hiveTopHeight
-                )
-                  ? _hiveTopRGB
-                  : _RGB;
+              uint16_t pixel_y =
+                (uint16_t)(
+                  y * 8 + temp
+                );
+
               for (x = 0; x < displayWidth; x++)
               {
-                pixbuf[x] = ((buffer[x + y * displayWidth]>>temp)&0x01)==1?row_rgb:0;
+                uint16_t pixel_rgb = _RGB;
+
+                if (
+                  _hiveBootEnabled &&
+                  pixel_y >= _hiveBootY1 &&
+                  pixel_y <  _hiveBootY2 &&
+                  x >= _hiveBootX1 &&
+                  x <  _hiveBootX2
+                ) {
+
+                  pixel_rgb =
+                    x < _hiveBootSplitX
+                      ? _hiveBootLogoRGB
+                      : _hiveBootTextRGB;
+
+                } else if (
+                  pixel_y <
+                  _hiveTopHeight
+                ) {
+
+                  pixel_rgb =
+                    _hiveTopRGB;
+                }
+
+                pixbuf[x] =
+                  ((buffer[x + y * displayWidth] >> temp) & 0x01) == 1
+                    ? pixel_rgb
+                    : 0;
               }
 #ifdef ESP_PLATFORM
               _spi->transferBytes((uint8_t *)pixbuf, NULL, 2 * pixbufcount);
@@ -332,6 +388,53 @@ class ST7789Spi : public OLEDDisplay {
       );
   }
 
+
+
+
+
+  // ==========================================================
+  // HiveFW — duas zonas RGB do BOOT LOGO
+  //
+  // As cores são aplicadas apenas aos pixels ATIVOS do
+  // framebuffer. O bitmap não é modificado.
+  // ==========================================================
+
+  void setBootLogoBands(
+    uint16_t x1,
+    uint16_t splitX,
+    uint16_t x2,
+    uint16_t y1,
+    uint16_t y2,
+    uint16_t logoColor,
+    uint16_t textColor
+  ) {
+
+    _hiveBootX1 = x1;
+    _hiveBootSplitX = splitX;
+    _hiveBootX2 = x2;
+    _hiveBootY1 = y1;
+    _hiveBootY2 = y2;
+
+    _hiveBootLogoRGB =
+      (uint16_t)(
+        (logoColor >> 8) |
+        ((logoColor << 8) & 0xFF00)
+      );
+
+    _hiveBootTextRGB =
+      (uint16_t)(
+        (textColor >> 8) |
+        ((textColor << 8) & 0xFF00)
+      );
+
+    _hiveBootEnabled = true;
+  }
+
+
+  void clearBootLogoBands() {
+
+    _hiveBootEnabled = false;
+  }
 
 
   void displayOn(void) {

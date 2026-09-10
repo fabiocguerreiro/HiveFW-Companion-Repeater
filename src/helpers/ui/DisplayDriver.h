@@ -30,6 +30,16 @@ public:
     (void)colorIndex;
   }
 
+  // HiveFW — cores exclusivas do bitmap no BOOT LOGO.
+  // Drivers sem TFT a cores podem ignorar.
+  virtual void setBootLogoAccent(
+    uint8_t logoColorIndex,
+    uint8_t textColorIndex
+  ) {
+    (void)logoColorIndex;
+    (void)textColorIndex;
+  }
+
 
   // HiveFW — orientação física do display.
   // Drivers sem suporte podem ignorar.
