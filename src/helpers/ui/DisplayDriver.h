@@ -40,6 +40,12 @@ public:
     (void)textColorIndex;
   }
 
+  // HiveFW — família tipográfica da UI.
+  // Drivers sem suporte podem ignorar.
+  virtual void setUIFont(uint8_t fontIndex) {
+    (void)fontIndex;
+  }
+
 
   // HiveFW — orientação física do display.
   // Drivers sem suporte podem ignorar.

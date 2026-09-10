@@ -23,6 +23,12 @@ class ST7789Display : public DisplayDriver {
   uint16_t _bootLogoAccent = ST77XX_WHITE;
   uint16_t _bootTextAccent = ST77XX_WHITE;
 
+  // HiveFW — família e tamanho lógico atuais.
+  // 0 = ArialMT
+  // 1 = Geist Sans
+  uint8_t _uiFont = 0;
+  uint8_t _uiTextSize = 1;
+
 
   // 0 = orientação HiveFW atual
   // 1 = invertido 180 graus
@@ -49,6 +55,17 @@ public:
   void clear() override;
   void startFrame(ColorVal bkg = UIColor::window_bkg) override;
   void setTextSize(int sz) override;
+  void setUIFont(uint8_t fontIndex) override;
+
+  // HiveFW T114:
+  // manter UTF-8 intacto para o renderer OLEDDisplay,
+  // que já converte corretamente UTF-8 -> Latin-1.
+  void translateUTF8ToBlocks(
+    char* dest,
+    const char* src,
+    size_t dest_size
+  ) override;
+
   void setColor(ColorVal c) override;
   void setHeaderAccent(uint8_t colorIndex) override;
   void setBootLogoAccent(

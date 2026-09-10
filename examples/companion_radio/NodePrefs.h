@@ -57,6 +57,14 @@ public:
   uint8_t boot_logo_color = 7;
   uint8_t boot_text_color = 7;
 
+  // HiveFW — família tipográfica do T114.
+  //
+  // 0 = ArialMT
+  // 1 = Geist Sans
+  //
+  // Default: Arial.
+  uint8_t display_font = 0;
+
 
   // HiveFW — timeout automático do ecrã.
   //
@@ -166,6 +174,7 @@ private:
       def("hdr_col", _parent->header_color);
       def("boot_lcol", _parent->boot_logo_color);
       def("boot_tcol", _parent->boot_text_color);
+      def("disp_font", _parent->display_font);
       def("disp_to", _parent->display_timeout);
       def("disp_rot", _parent->display_rotation);
       def("clk24", _parent->clock_24h);

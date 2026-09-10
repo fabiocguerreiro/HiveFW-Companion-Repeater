@@ -2,6 +2,10 @@
 
 #include "ST7789Display.h"
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+#include "GeistDisplayFonts.h"
+#endif
+
 #ifndef X_OFFSET
 #define X_OFFSET 0  // No offset needed for landscape
 #endif
@@ -153,21 +157,170 @@ void ST7789Display::startFrame(ColorVal bkg) {
   _bootLogoAccentEnabled = false;
 
   setColor(UIColor::primary_txt);
-  display.setFont(ArialMT_Plain_16);
+  setTextSize(1);
 }
 
 void ST7789Display::setTextSize(int sz) {
-  switch(sz) {
-    case 1 :
-      display.setFont(ArialMT_Plain_16);
-      break;
-    case 2 :
-      display.setFont(ArialMT_Plain_24);
-      break;
-    default:
-      display.setFont(ArialMT_Plain_16);
+
+  _uiTextSize =
+    sz == 2
+      ? 2
+      : 1;
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+  if (_uiFont == 1) {
+
+    display.setFont(
+      _uiTextSize == 2
+        ? GeistSans_Plain_24
+        : GeistSans_Plain_16
+    );
+
+    return;
   }
+
+#endif
+
+  display.setFont(
+    _uiTextSize == 2
+      ? ArialMT_Plain_24
+      : ArialMT_Plain_16
+  );
 }
+
+
+void ST7789Display::setUIFont(
+  uint8_t fontIndex
+) {
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+  _uiFont =
+    fontIndex == 1
+      ? 1
+      : 0;
+
+#else
+
+  (void)fontIndex;
+
+  _uiFont = 0;
+
+#endif
+
+  // Aplicar imediatamente,
+  // mantendo o tamanho selecionado.
+  setTextSize(
+    _uiTextSize
+  );
+}
+
+void ST7789Display::translateUTF8ToBlocks(
+  char* dest,
+  const char* src,
+  size_t dest_size
+) {
+
+  if (
+    dest == nullptr ||
+    dest_size == 0
+  ) {
+    return;
+  }
+
+  dest[0] = '\0';
+
+  if (src == nullptr) {
+    return;
+  }
+
+  size_t i = 0;
+  size_t j = 0;
+
+  while (
+    src[i] != '\0' &&
+    j < dest_size - 1
+  ) {
+
+    uint8_t first =
+      (uint8_t)src[i];
+
+    size_t sequence_length = 1;
+
+    if (
+      (first & 0xE0) ==
+      0xC0
+    ) {
+
+      sequence_length = 2;
+
+    } else if (
+      (first & 0xF0) ==
+      0xE0
+    ) {
+
+      sequence_length = 3;
+
+    } else if (
+      (first & 0xF8) ==
+      0xF0
+    ) {
+
+      sequence_length = 4;
+    }
+
+
+    // Confirmar que a sequência UTF-8 está completa.
+    bool valid_sequence = true;
+
+    for (
+      size_t k = 1;
+      k < sequence_length;
+      k++
+    ) {
+
+      if (
+        src[i + k] == '\0' ||
+        (
+          ((uint8_t)src[i + k] & 0xC0) !=
+          0x80
+        )
+      ) {
+
+        valid_sequence = false;
+        break;
+      }
+    }
+
+    if (!valid_sequence) {
+      sequence_length = 1;
+    }
+
+
+    // Nunca cortar uma sequência UTF-8 a meio.
+    if (
+      j + sequence_length >=
+      dest_size
+    ) {
+      break;
+    }
+
+
+    for (
+      size_t k = 0;
+      k < sequence_length;
+      k++
+    ) {
+
+      dest[j++] =
+        src[i++];
+    }
+  }
+
+  dest[j] = '\0';
+}
+
 
 void ST7789Display::setColor(ColorVal c) {
   _color = c;
@@ -363,7 +516,21 @@ void ST7789Display::drawXbm(int x, int y, const uint8_t* bits, int w, int h) {
 }
 
 uint16_t ST7789Display::getTextWidth(const char* str) {
-  return display.getStringWidth(str) / SCALE_X;
+
+  if (str == nullptr) {
+    return 0;
+  }
+
+  // HiveFW T114:
+  // calcular também a largura usando o conversor UTF-8
+  // da própria biblioteca OLEDDisplay.
+  return
+    display.getStringWidth(
+      str,
+      strlen(str),
+      true
+    ) /
+    SCALE_X;
 }
 
 void ST7789Display::endFrame() {

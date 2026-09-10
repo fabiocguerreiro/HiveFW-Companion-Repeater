@@ -131,6 +131,7 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   │   │   ├── LOGO
 //   │   │   ├── TEXTO
 //   │   │   └── [ SAIR ]
+//   │   ├── FONTE (T114)
 //   │   ├── FORMATO HORA
 //   │   └── [ SAIR ]
 //   ├── NOTIFICAÇÕES
@@ -199,6 +200,7 @@ public:
 
     uint8_t boot_logo_color = 7;
     uint8_t boot_text_color = 7;
+    uint8_t boot_ui_font = 0;
 
     if (_node_prefs != nullptr) {
 
@@ -207,6 +209,9 @@ public:
 
       boot_text_color =
         _node_prefs->boot_text_color;
+
+      boot_ui_font =
+        _node_prefs->display_font;
     }
 
     if (boot_logo_color > 7) {
@@ -216,6 +221,14 @@ public:
     if (boot_text_color > 7) {
       boot_text_color = 7;
     }
+
+    if (boot_ui_font > 1) {
+      boot_ui_font = 0;
+    }
+
+    display.setUIFont(
+      boot_ui_font
+    );
 
     // Não altera o bitmap.
     // Apenas informa o writer RGB das duas zonas.
@@ -450,10 +463,26 @@ static const uint8_t HIVEFW_BOOT_COLOR_COUNT =
 
 #define HIVEFW_DISPLAY_BOOT_OFFSET 1
 
+
+static const char*
+hivefw_display_font_names[] = {
+  "ARIAL",
+  "GEIST"
+};
+
+static const uint8_t
+HIVEFW_DISPLAY_FONT_COUNT =
+  sizeof(hivefw_display_font_names) /
+  sizeof(hivefw_display_font_names[0]);
+
+#define HIVEFW_DISPLAY_FONT_OFFSET 1
+
+
 #else
 
 #define HIVEFW_DISPLAY_COLOR_OFFSET 0
 #define HIVEFW_DISPLAY_BOOT_OFFSET 0
+#define HIVEFW_DISPLAY_FONT_OFFSET 0
 
 #endif
 
@@ -789,6 +818,10 @@ class HomeScreen : public UIScreen {
 
   bool _settings_boot_text_color_submenu;
   uint8_t _settings_boot_text_color_menu;
+
+  // HiveFW — FONTE
+  bool _settings_font_submenu;
+  uint8_t _settings_font_menu;
 
 
   // HiveFW — DEFINIÇÕES -> ECRÃ
@@ -2664,6 +2697,32 @@ class HomeScreen : public UIScreen {
 
 #ifdef HELTEC_T114_WITH_DISPLAY
 
+    uint8_t ui_font =
+      _node_prefs->display_font;
+
+    if (
+      ui_font >=
+      HIVEFW_DISPLAY_FONT_COUNT
+    ) {
+      ui_font = 0;
+    }
+
+    // Preview imediato.
+    if (
+      _page == HomePage::SETTINGS &&
+      _settings_submenu &&
+      _settings_font_submenu
+    ) {
+
+      ui_font =
+        _settings_font_menu;
+    }
+
+    display.setUIFont(
+      ui_font
+    );
+
+
     uint8_t header_color =
       _node_prefs->header_color;
 
@@ -3411,6 +3470,8 @@ public:
        _settings_boot_logo_color_menu(7),
        _settings_boot_text_color_submenu(false),
        _settings_boot_text_color_menu(7),
+       _settings_font_submenu(false),
+       _settings_font_menu(0),
        _settings_display_submenu(false),
        _settings_display_menu(0),
        _settings_timeout_submenu(false),
@@ -8234,6 +8295,42 @@ public:
         }
 
 
+        // ----------------------------------------------------
+        // FONTE
+        // ----------------------------------------------------
+
+        else if (_settings_font_submenu) {
+
+          uint8_t font_index =
+            _settings_font_menu;
+
+          if (
+            font_index >=
+            HIVEFW_DISPLAY_FONT_COUNT
+          ) {
+            font_index = 0;
+          }
+
+          display.setTextSize(1);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            27,
+            "FONTE"
+          );
+
+          display.setTextSize(2);
+
+          display.drawTextCentered(
+            display.width() / 2,
+            45,
+            hivefw_display_font_names[
+              font_index
+            ]
+          );
+        }
+
+
         else if (_settings_timeout_submenu) {
 
 #else
@@ -8351,6 +8448,7 @@ public:
             "ROTAÇÃO",
             "COR DA BARRA",
             "BOOT LOGO",
+            "FONTE",
 #endif
             clock_item,
             "[ SAIR ]"
@@ -10663,6 +10761,115 @@ public:
 #endif
 
 
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+      // ======================================================
+      // HIVEFW — HANDLER FONTE
+      // ======================================================
+
+      if (_settings_font_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_font_menu =
+            (
+              _settings_font_menu +
+              1
+            ) %
+            HIVEFW_DISPLAY_FONT_COUNT;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_font_menu =
+            (
+              _settings_font_menu +
+              HIVEFW_DISPLAY_FONT_COUNT -
+              1
+            ) %
+            HIVEFW_DISPLAY_FONT_COUNT;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_font_menu =
+            _node_prefs->display_font;
+
+          if (
+            _settings_font_menu >=
+            HIVEFW_DISPLAY_FONT_COUNT
+          ) {
+            _settings_font_menu = 0;
+          }
+
+          _settings_font_submenu =
+            false;
+
+          return true;
+        }
+
+
+        if (c == KEY_ENTER) {
+
+          if (
+            _settings_font_menu >=
+            HIVEFW_DISPLAY_FONT_COUNT
+          ) {
+            _settings_font_menu = 0;
+          }
+
+          _node_prefs->display_font =
+            _settings_font_menu;
+
+          the_mesh.savePrefs();
+
+          _task->notify(
+            UIEventType::ack
+          );
+
+          char font_alert[32];
+
+          snprintf(
+            font_alert,
+            sizeof(font_alert),
+            "Fonte: %s",
+            hivefw_display_font_names[
+              _settings_font_menu
+            ]
+          );
+
+          _task->showAlert(
+            font_alert,
+            1000
+          );
+
+          _settings_font_submenu =
+            false;
+
+          return true;
+        }
+
+        return true;
+      }
+
+#endif
+
+
       // ======================================================
       // HIVEFW — HANDLER TEMPO ECRÃ
       // ======================================================
@@ -10897,7 +11104,8 @@ public:
           3 +
           HIVEFW_DISPLAY_ROTATION_OFFSET +
           HIVEFW_DISPLAY_COLOR_OFFSET +
-          HIVEFW_DISPLAY_BOOT_OFFSET;
+          HIVEFW_DISPLAY_BOOT_OFFSET +
+          HIVEFW_DISPLAY_FONT_OFFSET;
 
 
         if (
@@ -10947,6 +11155,9 @@ public:
             false;
 
           _settings_rotation_submenu =
+            false;
+
+          _settings_font_submenu =
             false;
 
           return true;
@@ -11060,6 +11271,39 @@ public:
 
 
           // --------------------------------------------------
+          // FONTE
+          // --------------------------------------------------
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+
+          if (
+            _settings_display_menu ==
+            1 +
+            HIVEFW_DISPLAY_ROTATION_OFFSET +
+            HIVEFW_DISPLAY_COLOR_OFFSET +
+            HIVEFW_DISPLAY_BOOT_OFFSET
+          ) {
+
+            _settings_font_menu =
+              _node_prefs->display_font;
+
+            if (
+              _settings_font_menu >=
+              HIVEFW_DISPLAY_FONT_COUNT
+            ) {
+              _settings_font_menu = 0;
+            }
+
+            _settings_font_submenu =
+              true;
+
+            return true;
+          }
+
+#endif
+
+
+          // --------------------------------------------------
           // FORMATO HORA
           // --------------------------------------------------
 
@@ -11068,7 +11312,8 @@ public:
             1 +
             HIVEFW_DISPLAY_ROTATION_OFFSET +
             HIVEFW_DISPLAY_COLOR_OFFSET +
-            HIVEFW_DISPLAY_BOOT_OFFSET
+            HIVEFW_DISPLAY_BOOT_OFFSET +
+            HIVEFW_DISPLAY_FONT_OFFSET
           ) {
 
             _node_prefs->clock_24h =
@@ -11102,7 +11347,8 @@ public:
             2 +
             HIVEFW_DISPLAY_ROTATION_OFFSET +
             HIVEFW_DISPLAY_COLOR_OFFSET +
-            HIVEFW_DISPLAY_BOOT_OFFSET
+            HIVEFW_DISPLAY_BOOT_OFFSET +
+            HIVEFW_DISPLAY_FONT_OFFSET
           ) {
 
             _settings_display_submenu =
