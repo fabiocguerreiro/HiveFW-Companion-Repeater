@@ -94,8 +94,17 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 5;
 //   ├── AUTOADVERT
 //   ├── DUTY CYCLE
 //   ├── VIZINHOS
-//   ├── INFO REPETIDOR
-//   └── [ SAIR ]
+//   ├── REGIÕES
+//   │   ├── *
+//   │   ├── <REGIÕES CONFIGURADAS>
+//   │   │   ├── FLOOD: ALLOW / DENY
+//   │   │   ├── HOME
+//   │   │   ├── DEFAULT
+//   │   │   └── REMOVER
+//   │   └── + ADICIONAR
+//   │       ├── NOME
+//   │       └── PARENT
+//   └── INFO REPETIDOR
 //
 // MP-04 — SOS
 //   └── ENTER -> confirmação e envio SOS
@@ -159,33 +168,17 @@ public:
   ) :
     _task(task),
     _node_prefs(node_prefs) {
-    // Custom firmware version shown on the boot screen.
-    // build.sh appends the Git commit hash to FIRMWARE_VERSION.
-    // Example: V1.01-368c97d
-    // Only the human-readable version is shown here: V1.01.
-    const char *ver = FIRMWARE_VERSION;
-
-    snprintf(_version_info, sizeof(_version_info), "%s", ver);
-
-    char *hash_sep = strrchr(_version_info, '-');
-    if (hash_sep) {
-      const char *hash = hash_sep + 1;
-      size_t hash_len = strlen(hash);
-      bool is_hex = hash_len >= 7 && hash_len <= 40;
-
-      for (size_t i = 0; i < hash_len && is_hex; i++) {
-        char c = hash[i];
-        if (!((c >= '0' && c <= '9') ||
-              (c >= 'a' && c <= 'f') ||
-              (c >= 'A' && c <= 'F'))) {
-          is_hex = false;
-        }
-      }
-
-      if (is_hex) {
-        *hash_sep = '\0';
-      }
-    }
+    // HiveFW:
+    // usar exatamente a mesma fonte de versão apresentada em
+    // INFO COMPANION -> VERSÃO.
+    //
+    // Não cortar hash, suffix ou qualquer parte da string.
+    snprintf(
+      _version_info,
+      sizeof(_version_info),
+      "%s",
+      FIRMWARE_VERSION
+    );
 
     dismiss_after = millis() + BOOT_SCREEN_MILLIS;
   }
@@ -705,8 +698,8 @@ class HomeScreen : public UIScreen {
     REPEATER_MENU_AUTOADVERT,
     REPEATER_MENU_DUTY_CYCLE,
     REPEATER_MENU_NEIGHBOURS,
+    REPEATER_MENU_REGIONS,
     REPEATER_MENU_INFO,
-    REPEATER_MENU_EXIT,
     REPEATER_MENU_COUNT
   };
 
@@ -956,9 +949,25 @@ class HomeScreen : public UIScreen {
   bool _repeater_info_submenu;
   bool _repeater_neighbours_submenu;
   bool _repeater_duty_submenu;
+
+  // HiveFW V1.09beta — REGIÕES / SCOPES
+  bool _repeater_regions_submenu;
+  bool _repeater_region_actions_submenu;
+
+  // V1.09beta — criação de Regions/Scopes
+  bool _repeater_region_add_submenu;
+  bool _repeater_region_parent_submenu;
+
   uint8_t _repeater_menu;
   uint8_t _repeater_neighbour_menu;
   uint8_t _repeater_duty_value;
+
+  uint8_t _repeater_region_menu;
+  uint8_t _repeater_region_action_menu;
+  uint8_t _repeater_region_char_menu;
+  uint8_t _repeater_region_parent_menu;
+
+  char _repeater_region_name[31];
 
   // ========================================================================
   // MP-04 — RÁDIO
@@ -3780,9 +3789,17 @@ public:
        _repeater_info_submenu(false),
        _repeater_neighbours_submenu(false),
        _repeater_duty_submenu(false),
+       _repeater_regions_submenu(false),
+       _repeater_region_actions_submenu(false),
+       _repeater_region_add_submenu(false),
+       _repeater_region_parent_submenu(false),
        _repeater_menu(0),
        _repeater_neighbour_menu(0),
        _repeater_duty_value(50),
+       _repeater_region_menu(0),
+       _repeater_region_action_menu(0),
+       _repeater_region_char_menu(0),
+       _repeater_region_parent_menu(0),
        _radio_submenu(false),
        _radio_menu(0),
        _radio_freq_edit(false),
@@ -7986,15 +8003,16 @@ public:
       else if (_repeater_submenu &&
                !_repeater_info_submenu &&
                !_repeater_neighbours_submenu &&
-               !_repeater_duty_submenu) {
+               !_repeater_duty_submenu &&
+               !_repeater_regions_submenu) {
 
         const char* repeater_items[] = {
           "REPETIDOR",
           "AUTOADVERT",
           "DUTY CYCLE",
           "VIZINHOS",
-          "INFO REPETIDOR",
-          "[ SAIR ]"
+          "REGIÕES",
+          "INFO REPETIDOR"
         };
 
 
@@ -8135,6 +8153,386 @@ public:
       //  SNR
       //  Tempo desde o ultimo advert
       // ======================================================
+
+      // ======================================================
+      // HIVEFW V1.09beta — REGIÕES / SCOPES
+      // ======================================================
+
+      else if (_repeater_regions_submenu) {
+
+        static const char REGION_NAME_CHARS[] =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+          "abcdefghijklmnopqrstuvwxyz"
+          "0123456789-#$";
+
+
+        int regular_count =
+          the_mesh.getRepeaterRegionCount();
+
+        // UI:
+        //
+        // 0                  = wildcard *
+        // 1..regular_count   = RegionMap entries
+        // regular_count + 1  = + ADICIONAR
+        int list_count =
+          regular_count + 2;
+
+        int add_index =
+          regular_count + 1;
+
+
+        if (
+          _repeater_region_menu >=
+          list_count
+        ) {
+          _repeater_region_menu = 0;
+        }
+
+
+        // ----------------------------------------------------
+        // ESCOLHER PARENT
+        // ----------------------------------------------------
+
+        if (_repeater_region_parent_submenu) {
+
+          int parent_count =
+            regular_count + 1;
+
+          if (
+            _repeater_region_parent_menu >=
+            parent_count
+          ) {
+            _repeater_region_parent_menu = 0;
+          }
+
+
+          const RegionEntry* parent = nullptr;
+
+
+          if (
+            _repeater_region_parent_menu == 0
+          ) {
+
+            parent =
+              the_mesh.findRepeaterRegion("*");
+
+          } else {
+
+            parent =
+              the_mesh.getRepeaterRegionByIndex(
+                _repeater_region_parent_menu - 1
+              );
+          }
+
+
+          drawConfigItem(
+            display,
+            "PARENT",
+            parent != nullptr
+              ? parent->name
+              : "*"
+          );
+        }
+
+
+        // ----------------------------------------------------
+        // EDITOR DO NOME
+        // ----------------------------------------------------
+
+        else if (_repeater_region_add_submenu) {
+
+          const uint8_t char_count =
+            strlen(REGION_NAME_CHARS);
+
+          const uint8_t selector_count =
+            char_count + 2;
+
+
+          if (
+            _repeater_region_char_menu >=
+            selector_count
+          ) {
+            _repeater_region_char_menu = 0;
+          }
+
+
+          char selector[16];
+
+
+          if (
+            _repeater_region_char_menu <
+            char_count
+          ) {
+
+            selector[0] =
+              REGION_NAME_CHARS[
+                _repeater_region_char_menu
+              ];
+
+            selector[1] = '\0';
+
+          } else if (
+            _repeater_region_char_menu ==
+            char_count
+          ) {
+
+            snprintf(
+              selector,
+              sizeof(selector),
+              "OK"
+            );
+
+          } else {
+
+            snprintf(
+              selector,
+              sizeof(selector),
+              "APAGAR"
+            );
+          }
+
+
+          drawConfigItem(
+            display,
+            _repeater_region_name[0] != '\0'
+              ? _repeater_region_name
+              : "NOME REGIÃO",
+            selector
+          );
+        }
+
+
+        // ----------------------------------------------------
+        // + ADICIONAR
+        // ----------------------------------------------------
+
+        else if (
+          _repeater_region_menu ==
+          add_index
+        ) {
+
+          drawConfigItem(
+            display,
+            "ADICIONAR REGIÃO",
+            "ENTER"
+          );
+        }
+
+
+        // ----------------------------------------------------
+        // WILDCARD / REGIÃO EXISTENTE
+        // ----------------------------------------------------
+
+        else {
+
+          const RegionEntry* region = nullptr;
+
+
+          if (_repeater_region_menu == 0) {
+
+            region =
+              the_mesh.findRepeaterRegion("*");
+
+          } else {
+
+            region =
+              the_mesh.getRepeaterRegionByIndex(
+                _repeater_region_menu - 1
+              );
+          }
+
+
+          if (region == nullptr) {
+
+            display.setColor(
+              UIColor::secondary_txt
+            );
+
+            display.setTextSize(1);
+
+            drawMenuItemText(
+              display,
+              "REGIÃO INVÁLIDA",
+              32
+            );
+          }
+
+
+          // --------------------------------------------------
+          // INFO DA REGIÃO
+          // --------------------------------------------------
+
+          else if (
+            !_repeater_region_actions_submenu
+          ) {
+
+            char region_status[48];
+
+            bool allowed =
+              (
+                region->flags &
+                REGION_DENY_FLOOD
+              ) == 0;
+
+
+            RegionEntry* home =
+              the_mesh.getRepeaterHomeRegion();
+
+            RegionEntry* def =
+              the_mesh.getRepeaterDefaultRegion();
+
+
+            snprintf(
+              region_status,
+              sizeof(region_status),
+              "%s%s%s",
+              allowed
+                ? "ALLOW"
+                : "DENY",
+              home == region
+                ? " HOME"
+                : "",
+              def == region
+                ? " DEF"
+                : ""
+            );
+
+
+            drawConfigItem(
+              display,
+              region->name,
+              region_status
+            );
+          }
+
+
+          // --------------------------------------------------
+          // AÇÕES
+          // --------------------------------------------------
+
+          else {
+
+            const uint8_t
+              REGION_ACTION_COUNT = 4;
+
+
+            if (
+              _repeater_region_action_menu >=
+              REGION_ACTION_COUNT
+            ) {
+              _repeater_region_action_menu = 0;
+            }
+
+
+            const char* actions[] = {
+              "FLOOD",
+              "HOME",
+              "DEFAULT",
+              "REMOVER"
+            };
+
+
+            char action_value[32];
+
+            action_value[0] = '\0';
+
+
+            RegionEntry* home =
+              the_mesh.getRepeaterHomeRegion();
+
+            RegionEntry* def =
+              the_mesh.getRepeaterDefaultRegion();
+
+
+            switch (
+              _repeater_region_action_menu
+            ) {
+
+              case 0:
+
+                snprintf(
+                  action_value,
+                  sizeof(action_value),
+                  "%s",
+                  (
+                    region->flags &
+                    REGION_DENY_FLOOD
+                  )
+                    ? "DENY"
+                    : "ALLOW"
+                );
+
+                break;
+
+
+              case 1:
+
+                snprintf(
+                  action_value,
+                  sizeof(action_value),
+                  "%s",
+                  home == region
+                    ? "ATUAL"
+                    : "DEFINIR"
+                );
+
+                break;
+
+
+              case 2:
+
+                if (region->isWildcard()) {
+
+                  snprintf(
+                    action_value,
+                    sizeof(action_value),
+                    "%s",
+                    def == nullptr
+                      ? "<null>"
+                      : "LIMPAR"
+                  );
+
+                } else {
+
+                  snprintf(
+                    action_value,
+                    sizeof(action_value),
+                    "%s",
+                    def == region
+                      ? "ATUAL"
+                      : "DEFINIR"
+                  );
+                }
+
+                break;
+
+
+              case 3:
+
+                snprintf(
+                  action_value,
+                  sizeof(action_value),
+                  "%s",
+                  region->isWildcard()
+                    ? "N/D"
+                    : "ENTER"
+                );
+
+                break;
+            }
+
+
+            drawConfigItem(
+              display,
+              actions[
+                _repeater_region_action_menu
+              ],
+              action_value
+            );
+          }
+        }
+      }
+
 
       else if (_repeater_neighbours_submenu) {
 
@@ -15103,6 +15501,675 @@ public:
       // SELECT/CANCEL -> voltar ao menu REPETIDOR
       // ======================================================
 
+      // ======================================================
+      // HIVEFW V1.09beta — HANDLER REGIÕES
+      // ======================================================
+
+      if (_repeater_regions_submenu) {
+
+        static const char REGION_NAME_CHARS[] =
+          "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+          "abcdefghijklmnopqrstuvwxyz"
+          "0123456789-#$";
+
+
+        int regular_count =
+          the_mesh.getRepeaterRegionCount();
+
+        int list_count =
+          regular_count + 2;
+
+        int add_index =
+          regular_count + 1;
+
+
+        if (
+          _repeater_region_menu >=
+          list_count
+        ) {
+          _repeater_region_menu = 0;
+        }
+
+
+        // ====================================================
+        // PARENT SELECTOR
+        // ====================================================
+
+        if (_repeater_region_parent_submenu) {
+
+          int parent_count =
+            regular_count + 1;
+
+
+          if (
+            _repeater_region_parent_menu >=
+            parent_count
+          ) {
+            _repeater_region_parent_menu = 0;
+          }
+
+
+          if (
+            c == KEY_NEXT ||
+            c == KEY_RIGHT
+          ) {
+
+            _repeater_region_parent_menu =
+              (
+                _repeater_region_parent_menu + 1
+              ) % parent_count;
+
+            return true;
+          }
+
+
+          if (
+            c == KEY_PREV ||
+            c == KEY_LEFT
+          ) {
+
+            _repeater_region_parent_menu =
+              (
+                _repeater_region_parent_menu +
+                parent_count -
+                1
+              ) % parent_count;
+
+            return true;
+          }
+
+
+          if (
+            c == KEY_CANCEL ||
+            c == KEY_SELECT
+          ) {
+
+            _repeater_region_parent_submenu =
+              false;
+
+            return true;
+          }
+
+
+          if (c == KEY_ENTER) {
+
+            const RegionEntry* parent = nullptr;
+
+
+            if (
+              _repeater_region_parent_menu == 0
+            ) {
+
+              parent =
+                the_mesh.findRepeaterRegion("*");
+
+            } else {
+
+              parent =
+                the_mesh.getRepeaterRegionByIndex(
+                  _repeater_region_parent_menu - 1
+                );
+            }
+
+
+            if (
+              parent != nullptr &&
+              _repeater_region_name[0] != '\0'
+            ) {
+
+              bool created =
+                the_mesh.putRepeaterRegion(
+                  _repeater_region_name,
+                  parent->name
+                );
+
+
+              if (
+                created &&
+                the_mesh.saveRepeaterRegions()
+              ) {
+
+                // Região nova é acrescentada ao final
+                // do array oficial RegionMap.
+                _repeater_region_menu =
+                  the_mesh.getRepeaterRegionCount();
+
+                _repeater_region_parent_submenu =
+                  false;
+
+                _repeater_region_add_submenu =
+                  false;
+
+                _repeater_region_actions_submenu =
+                  false;
+
+                _repeater_region_parent_menu = 0;
+                _repeater_region_char_menu = 0;
+
+                _repeater_region_name[0] =
+                  '\0';
+
+
+                _task->notify(
+                  UIEventType::ack
+                );
+              }
+            }
+
+            return true;
+          }
+
+
+          return true;
+        }
+
+
+        // ====================================================
+        // EDITOR NOME
+        // ====================================================
+
+        if (_repeater_region_add_submenu) {
+
+          const uint8_t char_count =
+            strlen(REGION_NAME_CHARS);
+
+          const uint8_t selector_count =
+            char_count + 2;
+
+
+          if (
+            c == KEY_NEXT ||
+            c == KEY_RIGHT
+          ) {
+
+            _repeater_region_char_menu =
+              (
+                _repeater_region_char_menu + 1
+              ) % selector_count;
+
+            return true;
+          }
+
+
+          if (
+            c == KEY_PREV ||
+            c == KEY_LEFT
+          ) {
+
+            _repeater_region_char_menu =
+              (
+                _repeater_region_char_menu +
+                selector_count -
+                1
+              ) % selector_count;
+
+            return true;
+          }
+
+
+          if (
+            c == KEY_CANCEL ||
+            c == KEY_SELECT
+          ) {
+
+            _repeater_region_add_submenu =
+              false;
+
+            _repeater_region_parent_submenu =
+              false;
+
+            _repeater_region_char_menu = 0;
+
+            _repeater_region_name[0] =
+              '\0';
+
+            return true;
+          }
+
+
+          if (c == KEY_ENTER) {
+
+            size_t len =
+              strlen(
+                _repeater_region_name
+              );
+
+
+            // CHAR
+            if (
+              _repeater_region_char_menu <
+              char_count
+            ) {
+
+              if (
+                len <
+                sizeof(_repeater_region_name) - 1
+              ) {
+
+                _repeater_region_name[len] =
+                  REGION_NAME_CHARS[
+                    _repeater_region_char_menu
+                  ];
+
+                _repeater_region_name[
+                  len + 1
+                ] = '\0';
+              }
+
+              return true;
+            }
+
+
+            // OK
+            if (
+              _repeater_region_char_menu ==
+              char_count
+            ) {
+
+              if (
+                _repeater_region_name[0] !=
+                '\0'
+              ) {
+
+                _repeater_region_parent_menu =
+                  0;
+
+                _repeater_region_parent_submenu =
+                  true;
+              }
+
+              return true;
+            }
+
+
+            // APAGAR
+            if (len > 0) {
+
+              _repeater_region_name[
+                len - 1
+              ] = '\0';
+            }
+
+            return true;
+          }
+
+
+          return true;
+        }
+
+
+        // ====================================================
+        // LISTA
+        // ====================================================
+
+        if (
+          !_repeater_region_actions_submenu
+        ) {
+
+          if (
+            c == KEY_NEXT ||
+            c == KEY_RIGHT
+          ) {
+
+            _repeater_region_menu =
+              (
+                _repeater_region_menu + 1
+              ) % list_count;
+
+            return true;
+          }
+
+
+          if (
+            c == KEY_PREV ||
+            c == KEY_LEFT
+          ) {
+
+            _repeater_region_menu =
+              (
+                _repeater_region_menu +
+                list_count -
+                1
+              ) % list_count;
+
+            return true;
+          }
+
+
+          if (
+            c == KEY_CANCEL ||
+            c == KEY_SELECT
+          ) {
+
+            _repeater_regions_submenu =
+              false;
+
+            _repeater_region_actions_submenu =
+              false;
+
+            return true;
+          }
+
+
+          if (c == KEY_ENTER) {
+
+            // + ADICIONAR
+            if (
+              _repeater_region_menu ==
+              add_index
+            ) {
+
+              _repeater_region_name[0] =
+                '\0';
+
+              _repeater_region_char_menu =
+                0;
+
+              _repeater_region_parent_menu =
+                0;
+
+              _repeater_region_add_submenu =
+                true;
+
+              return true;
+            }
+
+
+            _repeater_region_action_menu =
+              0;
+
+            _repeater_region_actions_submenu =
+              true;
+
+            return true;
+          }
+
+
+          return true;
+        }
+
+
+        // ====================================================
+        // REGIÃO SELECIONADA
+        // ====================================================
+
+        const RegionEntry* region = nullptr;
+
+
+        if (_repeater_region_menu == 0) {
+
+          region =
+            the_mesh.findRepeaterRegion("*");
+
+        } else if (
+          _repeater_region_menu <=
+          regular_count
+        ) {
+
+          region =
+            the_mesh.getRepeaterRegionByIndex(
+              _repeater_region_menu - 1
+            );
+        }
+
+
+        if (region == nullptr) {
+
+          _repeater_region_actions_submenu =
+            false;
+
+          return true;
+        }
+
+
+        const uint8_t
+          REGION_ACTION_COUNT = 4;
+
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _repeater_region_action_menu =
+            (
+              _repeater_region_action_menu + 1
+            ) % REGION_ACTION_COUNT;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _repeater_region_action_menu =
+            (
+              _repeater_region_action_menu +
+              REGION_ACTION_COUNT -
+              1
+            ) % REGION_ACTION_COUNT;
+
+          return true;
+        }
+
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _repeater_region_action_menu = 0;
+
+          _repeater_region_actions_submenu =
+            false;
+
+          return true;
+        }
+
+
+        if (c != KEY_ENTER) {
+          return true;
+        }
+
+
+        // ====================================================
+        // FLOOD
+        // ====================================================
+
+        if (
+          _repeater_region_action_menu == 0
+        ) {
+
+          bool currently_allowed =
+            (
+              region->flags &
+              REGION_DENY_FLOOD
+            ) == 0;
+
+
+          if (
+            the_mesh.setRepeaterRegionFloodAllowed(
+              region->name,
+              !currently_allowed
+            )
+          ) {
+
+            the_mesh.saveRepeaterRegions();
+
+            _task->notify(
+              UIEventType::ack
+            );
+          }
+
+          return true;
+        }
+
+
+        // ====================================================
+        // HOME
+        // ====================================================
+
+        if (
+          _repeater_region_action_menu == 1
+        ) {
+
+          if (
+            the_mesh.setRepeaterHomeRegion(
+              region->name
+            )
+          ) {
+
+            the_mesh.saveRepeaterRegions();
+
+            _task->notify(
+              UIEventType::ack
+            );
+          }
+
+          return true;
+        }
+
+
+        // ====================================================
+        // DEFAULT
+        // ====================================================
+
+        if (
+          _repeater_region_action_menu == 2
+        ) {
+
+          bool ok = false;
+
+
+          if (region->isWildcard()) {
+
+            ok =
+              the_mesh.clearRepeaterDefaultRegion();
+
+          } else {
+
+            ok =
+              the_mesh.setRepeaterDefaultRegion(
+                region->name
+              );
+          }
+
+
+          if (ok) {
+
+            _task->notify(
+              UIEventType::ack
+            );
+          }
+
+          return true;
+        }
+
+
+        // ====================================================
+        // REMOVER
+        // ====================================================
+
+        if (
+          _repeater_region_action_menu == 3
+        ) {
+
+          if (region->isWildcard()) {
+            return true;
+          }
+
+
+          char region_name[31];
+
+          strncpy(
+            region_name,
+            region->name,
+            sizeof(region_name) - 1
+          );
+
+          region_name[
+            sizeof(region_name) - 1
+          ] = '\0';
+
+
+          RegionEntry* home =
+            the_mesh.getRepeaterHomeRegion();
+
+          RegionEntry* def =
+            the_mesh.getRepeaterDefaultRegion();
+
+
+          bool was_home =
+            home == region;
+
+          bool was_default =
+            def == region;
+
+
+          // Primeiro remover.
+          // Assim uma region com children não altera
+          // HOME/DEFAULT por acidente.
+          if (
+            the_mesh.removeRepeaterRegion(
+              region_name
+            )
+          ) {
+
+            if (was_home) {
+
+              the_mesh.setRepeaterHomeRegion(
+                "*"
+              );
+            }
+
+
+            if (was_default) {
+
+              the_mesh.clearRepeaterDefaultRegion();
+            }
+
+
+            the_mesh.saveRepeaterRegions();
+
+
+            regular_count =
+              the_mesh.getRepeaterRegionCount();
+
+            list_count =
+              regular_count + 2;
+
+
+            if (
+              _repeater_region_menu >=
+              list_count
+            ) {
+              _repeater_region_menu = 0;
+            }
+
+
+            _repeater_region_action_menu = 0;
+
+            _repeater_region_actions_submenu =
+              false;
+
+
+            _task->notify(
+              UIEventType::ack
+            );
+          }
+
+
+          return true;
+        }
+
+
+        return true;
+      }
+
+
       if (_repeater_neighbours_submenu) {
 
         int neighbour_count =
@@ -15148,7 +16215,8 @@ public:
       if (_repeater_submenu &&
           !_repeater_info_submenu &&
           !_repeater_neighbours_submenu &&
-          !_repeater_duty_submenu) {
+          !_repeater_duty_submenu &&
+          !_repeater_regions_submenu) {
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
           _repeater_menu =
@@ -15259,6 +16327,29 @@ public:
           // 5. INFO REPETIDOR
           // ------------------------------------------------
 
+          // ------------------------------------------------
+          // REGIÕES
+          // ------------------------------------------------
+
+          if (
+            _repeater_menu ==
+            REPEATER_MENU_REGIONS
+          ) {
+
+            _repeater_region_menu = 0;
+
+            _repeater_region_action_menu = 0;
+
+            _repeater_region_actions_submenu =
+              false;
+
+            _repeater_regions_submenu =
+              true;
+
+            return true;
+          }
+
+
           if (_repeater_menu == REPEATER_MENU_INFO) {
 
             _repeater_info_submenu = true;
@@ -15271,16 +16362,7 @@ public:
           // 6. SAIR
           // ------------------------------------------------
 
-          if (_repeater_menu == REPEATER_MENU_EXIT) {
 
-            _repeater_menu = 0;
-            _repeater_info_submenu = false;
-            _repeater_duty_submenu = false;
-            _repeater_submenu = false;
-            _page = HomePage::COMPANION;
-
-            return true;
-          }
         }
 
         return true;

@@ -15,7 +15,7 @@
 // Keep a compile-time fallback only for direct PlatformIO builds,
 // but do not hardcode a project release version here.
 #ifndef FIRMWARE_VERSION
-#define FIRMWARE_VERSION "V1.04test"
+#define FIRMWARE_VERSION "UNVERSIONED"
 #endif
 
 #if defined(NRF52_PLATFORM) || defined(STM32_PLATFORM)
@@ -72,6 +72,7 @@
 
 #include <helpers/BaseChatMesh.h>
 #include <helpers/TransportKeyStore.h>
+#include <helpers/RegionMap.h>
 
 /* -------------------------------------------------------------------------------------- */
 
@@ -164,6 +165,67 @@ public:
   int8_t getRepeaterNeighbourSNR(int index) const;
   uint32_t getRepeaterNeighbourHeardAgo(int index) const;
 
+
+  // ========================================================
+  // HiveFW V1.09beta — REGIÕES / SCOPES
+  //
+  // Backend baseado diretamente no RegionMap usado pelo
+  // firmware simple_repeater oficial do MeshCore.
+  //
+  // índice 0 = wildcard "*"
+  // índice 1..N = regiões guardadas no RegionMap
+  // ========================================================
+
+  int getRepeaterRegionCount() const;
+
+  const RegionEntry* getRepeaterRegionByIndex(
+    int index
+  ) const;
+
+  RegionEntry* findRepeaterRegion(
+    const char* name
+  );
+
+  RegionEntry* getRepeaterHomeRegion();
+
+  RegionEntry* getRepeaterDefaultRegion();
+
+  bool putRepeaterRegion(
+    const char* name,
+    const char* parent_name = "*"
+  );
+
+  bool removeRepeaterRegion(
+    const char* name
+  );
+
+  bool setRepeaterRegionFloodAllowed(
+    const char* name,
+    bool allowed
+  );
+
+  bool setRepeaterHomeRegion(
+    const char* name
+  );
+
+  bool setRepeaterDefaultRegion(
+    const char* name
+  );
+
+  bool clearRepeaterDefaultRegion();
+
+  bool saveRepeaterRegions();
+
+  size_t exportRepeaterRegions(
+    char* dest,
+    size_t max_len
+  );
+
+  bool isRepeaterRegionPolicyConfigured() const {
+    return region_policy_configured;
+  }
+
+
 protected:
   float getAirtimeBudgetFactor() const override;
   int getInterferenceThreshold() const override;
@@ -172,8 +234,21 @@ protected:
   uint32_t getRetransmitDelay(const mesh::Packet *packet) override;
   uint32_t getDirectRetransmitDelay(const mesh::Packet *packet) override;
   uint8_t getExtraAckTransmitCount() const override;
-  bool filterRecvFloodPacket(mesh::Packet* packet) override;
-  bool allowPacketForward(const mesh::Packet* packet) override;
+
+  // HiveFW V1.09beta:
+  // classificação oficial RegionMap antes do processamento
+  // normal do Companion.
+  mesh::DispatcherAction onRecvPacket(
+    mesh::Packet* packet
+  ) override;
+
+  bool filterRecvFloodPacket(
+    mesh::Packet* packet
+  ) override;
+
+  bool allowPacketForward(
+    const mesh::Packet* packet
+  ) override;
 
   void sendFloodScoped(const TransportKey& scope, mesh::Packet* pkt, uint32_t delay_millis);
   void sendFloodScoped(const ContactInfo& recipient, mesh::Packet* pkt, uint32_t delay_millis=0) override;
@@ -321,6 +396,10 @@ private:
     return _store->putBlobByKey(key, key_len, src_buf, len);
   }
 
+  bool handleCLIRegionCommand(
+    char* command
+  );
+
   void checkCLIRescueCmd();
   void checkSerialInterface();
   bool isValidClientRepeatFreq(uint32_t f) const;
@@ -364,13 +443,41 @@ private:
   bool _iter_started;
   bool _cli_rescue;
   bool send_unscoped;   // force un-scoped flood (instead of using send_scope)
-  char cli_command[80];
+  // MeshCore Repeater CLI:
+  // region def suporta uma linha de até 160 caracteres.
+  char cli_command[161];
   uint8_t app_target_ver;
   uint8_t *sign_data;
   uint32_t sign_data_len;
   unsigned long dirty_contacts_expiry;
 
   TransportKey send_scope;
+
+
+  // ========================================================
+  // MeshCore simple_repeater — REGION MAP
+  //
+  // Mantém o mesmo formato persistente /regions2.
+  // ========================================================
+
+  TransportKeyStore region_key_store;
+  RegionMap region_map;
+
+  // Região correspondente ao flood atualmente em processamento.
+  RegionEntry* recv_pkt_region;
+
+  // false = nenhuma configuração regional foi ainda carregada/
+  // guardada; nesse estado preservamos o forwarding histórico
+  // do HiveFW.
+  //
+  // Assim a primeira V1.09beta não corta a rede simplesmente
+  // por ainda não existir /regions2.
+  bool region_policy_configured;
+
+  bool syncDefaultScopeFromRegionMap(
+    bool persist
+  );
+
 
   uint8_t cmd_frame[MAX_FRAME_SIZE + 1];
   uint8_t out_frame[MAX_FRAME_SIZE + 1];

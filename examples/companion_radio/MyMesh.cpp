@@ -844,14 +844,125 @@ void MyMesh::queueMessage(const ContactInfo &from, uint8_t txt_type, mesh::Packe
 #endif
 }
 
-bool MyMesh::filterRecvFloodPacket(mesh::Packet* packet) {
-  // REVISIT: try to determine which Region (from transport_codes[1]) that Sender is indicating for replies/responses
-  //    if unknown, fallback to finding Region from transport_codes[0], the 'scope' used by Sender
+// ========================================================================
+// HiveFW V1.09beta — MeshCore RegionMap / Flood Scopes
+//
+// A classificação abaixo é portada do simple_repeater oficial.
+//
+// DIFERENÇA INTENCIONAL:
+// O HiveFW continua a ser Companion primeiro.
+// Uma região bloqueada impede a REPETIÇÃO do pacote, mas não impede
+// que BaseChatMesh processe o pacote localmente.
+// ========================================================================
+
+mesh::DispatcherAction MyMesh::onRecvPacket(
+  mesh::Packet* packet
+) {
+
+  recv_pkt_region = NULL;
+
+
+  // TRANSPORT_FLOOD:
+  // procurar uma Region permitida cuja TransportKey corresponda
+  // ao transport code do pacote.
+  if (
+    packet->getRouteType() ==
+      ROUTE_TYPE_TRANSPORT_FLOOD
+  ) {
+
+    recv_pkt_region =
+      region_map.findMatch(
+        packet,
+        REGION_DENY_FLOOD
+      );
+  }
+
+
+  // FLOOD clássico / sem scope:
+  // o wildcard "*" controla se é permitido repetir.
+  else if (
+    packet->getRouteType() ==
+      ROUTE_TYPE_FLOOD
+  ) {
+
+    if (
+      region_map.getWildcard().flags &
+        REGION_DENY_FLOOD
+    ) {
+
+      recv_pkt_region = NULL;
+
+    } else {
+
+      recv_pkt_region =
+        &region_map.getWildcard();
+    }
+  }
+
+
+  // IMPORTANTE:
+  // continuar sempre pelo Companion.
+  //
+  // A decisão de retransmitir é feita exclusivamente em
+  // allowPacketForward().
+  return BaseChatMesh::onRecvPacket(
+    packet
+  );
+}
+
+
+bool MyMesh::filterRecvFloodPacket(
+  mesh::Packet* packet
+) {
+
+  // Não filtrar a receção local.
+  //
+  // No HiveFW, ALLOW/DENY é política do lado Repeater,
+  // não do lado Companion.
+  (void)packet;
+
   return false;
 }
 
-bool MyMesh::allowPacketForward(const mesh::Packet* packet) {
-  return _prefs.isRepeatEn();
+
+bool MyMesh::allowPacketForward(
+  const mesh::Packet* packet
+) {
+
+  // Companion sem modo Repeater:
+  // nunca retransmitir como repetidor.
+  if (!_prefs.isRepeatEn()) {
+    return false;
+  }
+
+
+  // Compatibilidade V1.08 -> V1.09:
+  //
+  // enquanto ainda não existir uma configuração RegionMap
+  // explícita, preservar o comportamento anterior.
+  if (!region_policy_configured) {
+    return true;
+  }
+
+
+  // Mesmo comportamento regional do Repeater oficial:
+  //
+  // - TRANSPORT_FLOOD desconhecido/bloqueado -> não repetir
+  // - FLOOD sem scope com wildcard DENY -> não repetir
+  if (
+    packet->isRouteFlood() &&
+    recv_pkt_region == NULL
+  ) {
+
+    MESH_DEBUG_PRINTLN(
+      "HiveFW RegionMap: flood denied/unknown"
+    );
+
+    return false;
+  }
+
+
+  return true;
 }
 
 void MyMesh::sendFloodScoped(const TransportKey& scope, mesh::Packet* pkt, uint32_t delay_millis) {
@@ -1641,8 +1752,421 @@ uint32_t MyMesh::getRepeaterMessagesIn() const
   return radio_driver.getPacketsRecv();
 }
 
+
+
+// ========================================================================
+// HiveFW V1.09beta — REGIÕES / SCOPES
+//
+// Implementação baseada no RegionMap do simple_repeater oficial.
+// Persistência:
+//   /regions2
+//
+// Convenções oficiais:
+//   * = wildcard
+//   REGION_DENY_FLOOD = flood bloqueado
+//   sem flag           = flood permitido
+// ========================================================================
+
+int MyMesh::getRepeaterRegionCount() const {
+
+  // incluir sempre o wildcard "*"
+  return region_map.getCount() + 1;
+}
+
+
+const RegionEntry*
+MyMesh::getRepeaterRegionByIndex(
+  int index
+) const {
+
+  if (index == 0) {
+    return region_map.getRoot();
+  }
+
+  index--;
+
+  if (
+    index < 0 ||
+    index >= region_map.getCount()
+  ) {
+    return NULL;
+  }
+
+  return region_map.getByIdx(index);
+}
+
+
+RegionEntry*
+MyMesh::findRepeaterRegion(
+  const char* name
+) {
+
+  if (
+    name == NULL ||
+    name[0] == '\0'
+  ) {
+    return NULL;
+  }
+
+  // O CommonCLI oficial aceita prefixos nos comandos
+  // region get/remove/home/default/allowf/denyf.
+  return region_map.findByNamePrefix(
+    name
+  );
+}
+
+
+RegionEntry*
+MyMesh::getRepeaterHomeRegion() {
+
+  return region_map.getHomeRegion();
+}
+
+
+RegionEntry*
+MyMesh::getRepeaterDefaultRegion() {
+
+  return region_map.getDefaultRegion();
+}
+
+
+bool MyMesh::putRepeaterRegion(
+  const char* name,
+  const char* parent_name
+) {
+
+  if (
+    name == NULL ||
+    name[0] == '\0'
+  ) {
+    return false;
+  }
+
+
+  RegionEntry* parent =
+    &region_map.getWildcard();
+
+
+  if (
+    parent_name != NULL &&
+    parent_name[0] != '\0' &&
+    strcmp(parent_name, "*") != 0
+  ) {
+
+    parent =
+      region_map.findByNamePrefix(
+        parent_name
+      );
+
+    if (parent == NULL) {
+      return false;
+    }
+  }
+
+
+  RegionEntry* region =
+    region_map.putRegion(
+      name,
+      parent->id
+    );
+
+  if (region == NULL) {
+    return false;
+  }
+
+
+  // Mesmo comportamento do CommonCLI oficial:
+  //
+  // "region put" repõe as flags e ativa FLOOD.
+  region->flags = 0;
+
+
+  region_policy_configured = true;
+
+  return true;
+}
+
+
+bool MyMesh::removeRepeaterRegion(
+  const char* name
+) {
+
+  // MeshCore oficial:
+  // region remove usa findByName(), não prefixo.
+  RegionEntry* region =
+    region_map.findByName(name);
+
+  if (
+    region == NULL ||
+    region->isWildcard()
+  ) {
+    return false;
+  }
+
+
+  bool ok =
+    region_map.removeRegion(
+      *region
+    );
+
+  if (ok) {
+    region_policy_configured = true;
+  }
+
+  return ok;
+}
+
+
+bool MyMesh::setRepeaterRegionFloodAllowed(
+  const char* name,
+  bool allowed
+) {
+
+  RegionEntry* region =
+    findRepeaterRegion(name);
+
+  if (region == NULL) {
+    return false;
+  }
+
+
+  if (allowed) {
+
+    // region allowf <name>
+    region->flags &=
+      ~REGION_DENY_FLOOD;
+
+  } else {
+
+    // region denyf <name>
+    region->flags |=
+      REGION_DENY_FLOOD;
+  }
+
+
+  region_policy_configured = true;
+
+  return true;
+}
+
+
+bool MyMesh::setRepeaterHomeRegion(
+  const char* name
+) {
+
+  RegionEntry* region =
+    findRepeaterRegion(name);
+
+  if (region == NULL) {
+    return false;
+  }
+
+
+  // Mesmo comportamento:
+  // region home <name>
+  region_map.setHomeRegion(
+    region
+  );
+
+  region_policy_configured = true;
+
+  return true;
+}
+
+
+bool MyMesh::syncDefaultScopeFromRegionMap(
+  bool persist
+) {
+
+  RegionEntry* region =
+    region_map.getDefaultRegion();
+
+
+  // region default <null>
+  if (region == NULL) {
+
+    memset(
+      _prefs.default_scope_name,
+      0,
+      sizeof(_prefs.default_scope_name)
+    );
+
+    memset(
+      _prefs.default_scope_key,
+      0,
+      sizeof(_prefs.default_scope_key)
+    );
+
+
+    if (persist) {
+      savePrefs();
+    }
+
+    return true;
+  }
+
+
+  TransportKey key;
+
+  memset(
+    key.key,
+    0,
+    sizeof(key.key)
+  );
+
+
+  if (
+    region_map.getTransportKeysFor(
+      *region,
+      &key,
+      1
+    ) <= 0
+  ) {
+
+    return false;
+  }
+
+
+  strncpy(
+    _prefs.default_scope_name,
+    region->name,
+    sizeof(_prefs.default_scope_name) - 1
+  );
+
+  _prefs.default_scope_name[
+    sizeof(_prefs.default_scope_name) - 1
+  ] = '\0';
+
+
+  memcpy(
+    _prefs.default_scope_key,
+    key.key,
+    sizeof(_prefs.default_scope_key)
+  );
+
+
+  if (persist) {
+    savePrefs();
+  }
+
+
+  return true;
+}
+
+
+bool MyMesh::setRepeaterDefaultRegion(
+  const char* name
+) {
+
+  if (
+    name == NULL ||
+    name[0] == '\0' ||
+    strcmp(name, "<null>") == 0
+  ) {
+
+    return clearRepeaterDefaultRegion();
+  }
+
+
+  RegionEntry* region =
+    region_map.findByNamePrefix(
+      name
+    );
+
+
+  // Mesmo comportamento do Repeater oficial:
+  //
+  // "region default foo"
+  // cria automaticamente "foo" na raiz se ainda não existir.
+  if (region == NULL) {
+
+    region =
+      region_map.putRegion(
+        name,
+        0
+      );
+
+    if (region == NULL) {
+      return false;
+    }
+  }
+
+
+  // CommonCLI oficial:
+  // default repõe as flags da Region.
+  region->flags = 0;
+
+
+  region_map.setDefaultRegion(
+    region
+  );
+
+  region_policy_configured = true;
+
+
+  // CommonCLI oficial persiste DEFAULT de forma atómica.
+  return saveRepeaterRegions();
+}
+
+
+bool MyMesh::clearRepeaterDefaultRegion() {
+
+  region_map.setDefaultRegion(
+    NULL
+  );
+
+  region_policy_configured = true;
+
+  return saveRepeaterRegions();
+}
+
+
+bool MyMesh::saveRepeaterRegions() {
+
+  if (
+    !_store ||
+    !_store->getPrimaryFS()
+  ) {
+    return false;
+  }
+
+
+  // Mesmo RegionMap / mesma localização do Repeater oficial.
+  if (
+    !region_map.save(
+      _store->getPrimaryFS()
+    )
+  ) {
+    return false;
+  }
+
+
+  region_policy_configured = true;
+
+
+  // Manter CMD_GET_DEFAULT_FLOOD_SCOPE e a app Companion
+  // sincronizados com o DEFAULT oficial de /regions2.
+  return syncDefaultScopeFromRegionMap(
+    true
+  );
+}
+
+
+size_t MyMesh::exportRepeaterRegions(
+  char* dest,
+  size_t max_len
+) {
+
+  return region_map.exportTo(
+    dest,
+    max_len
+  );
+}
+
+
 MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMeshTables &tables, DataStore& store, AbstractUITask* ui)
     : BaseChatMesh(radio, *new ArduinoMillis(), rng, rtc, *new StaticPoolPacketManager(16), tables),
+      region_map(region_key_store),
       _serial(NULL), telemetry(MAX_PACKET_PAYLOAD - 4), _store(&store), _ui(ui), _iter(0) {
   _iter_started = false;
   _cli_rescue = false;
@@ -1662,6 +2186,9 @@ MyMesh::MyMesh(mesh::Radio &radio, mesh::RNG &rng, mesh::RTCClock &rtc, SimpleMe
   memset(repeater_neighbours, 0, sizeof(repeater_neighbours));
   memset(send_scope.key, 0, sizeof(send_scope.key));
   send_unscoped = false;
+
+  recv_pkt_region = NULL;
+  region_policy_configured = false;
 
   // defaults
   _prefs.airtime_factor = 1.0;
@@ -1724,6 +2251,39 @@ void MyMesh::begin(bool has_display) {
   _store->loadPrefs(_prefs);
   sensors.node_lat = _prefs.node_lat;
   sensors.node_lon = _prefs.node_lon;
+
+
+  // ========================================================
+  // MeshCore simple_repeater — /regions2
+  // ========================================================
+
+  region_policy_configured =
+    region_map.load(
+      _store->getPrimaryFS()
+    );
+
+  if (region_policy_configured) {
+
+    // Se /regions2 tiver DEFAULT, ele passa a ser também
+    // o default scope apresentado/usado pelo Companion.
+    //
+    // Não gravamos prefs durante cada boot.
+    syncDefaultScopeFromRegionMap(
+      false
+    );
+
+    MESH_DEBUG_PRINTLN(
+      "HiveFW RegionMap: %d regions loaded",
+      region_map.getCount()
+    );
+
+  } else {
+
+    MESH_DEBUG_PRINTLN(
+      "HiveFW RegionMap: no /regions2; legacy forwarding"
+    );
+  }
+
 
   // sanitise bad pref values
   _prefs.rx_delay_base = constrain(_prefs.rx_delay_base, 0, 20.0f);
@@ -3316,6 +3876,924 @@ void MyMesh::enterCLIRescue() {
   Serial.println("========= CLI Rescue =========");
 }
 
+
+// ========================================================================
+// HiveFW V1.09beta
+// MeshCore simple_repeater — REGION CLI
+//
+// Sintaxe compatível com o Region Management oficial:
+//
+//   region
+//   region get <name>
+//   region list allowed
+//   region list denied
+//   region put <name> [parent]
+//   region remove <name>
+//   region home
+//   region home <name>
+//   region default
+//   region default <name>
+//   region default <null>
+//   region allowf <name>
+//   region denyf <name>
+//   region save
+//   region def <token> [token ...]
+//
+// As alterações put/remove/home/allowf/denyf ficam em RAM até
+// "region save", tal como no fluxo normal do Repeater.
+// "region default" é persistido imediatamente, reproduzindo o
+// comportamento atual do CommonCLI oficial.
+// ========================================================================
+
+bool MyMesh::handleCLIRegionCommand(
+  char* command
+) {
+
+  if (command == NULL) {
+    return false;
+  }
+
+
+  // Só capturar:
+  //
+  //   region
+  //   region ...
+  //
+  // Não capturar palavras começadas por "region".
+  if (
+    strcmp(command, "region") != 0 &&
+    strncmp(command, "region ", 7) != 0
+  ) {
+    return false;
+  }
+
+
+  // --------------------------------------------------------
+  // remover espaços finais
+  // --------------------------------------------------------
+
+  size_t command_len =
+    strlen(command);
+
+  while (
+    command_len > 0 &&
+    (
+      command[command_len - 1] == ' ' ||
+      command[command_len - 1] == '\t'
+    )
+  ) {
+
+    command[
+      --command_len
+    ] = '\0';
+  }
+
+
+  // --------------------------------------------------------
+  // region
+  //
+  // Mostrar árvore completa.
+  // --------------------------------------------------------
+
+  if (
+    strcmp(command, "region") == 0
+  ) {
+
+    region_map.exportTo(
+      Serial
+    );
+
+    return true;
+  }
+
+
+  char* args =
+    command + 7;
+
+  while (
+    *args == ' ' ||
+    *args == '\t'
+  ) {
+    args++;
+  }
+
+
+  // ========================================================
+  // region def
+  //
+  // Port do mecanismo de cursor do CommonCLI:
+  //
+  //   region def a b c
+  //
+  // cria:
+  //
+  //   *
+  //   └ a
+  //     └ b
+  //       └ c
+  //
+  // "nome|jump" ou "nome,jump":
+  // cria nome e depois move o cursor para jump.
+  // ========================================================
+
+  if (
+    strncmp(args, "def ", 4) == 0
+  ) {
+
+    char* payload =
+      args + 4;
+
+    while (
+      *payload == ' ' ||
+      *payload == '\t'
+    ) {
+      payload++;
+    }
+
+
+    if (*payload == '\0') {
+
+      Serial.println(
+        "Err - empty def"
+      );
+
+      return true;
+    }
+
+
+    RegionEntry* cursor =
+      &region_map.getWildcard();
+
+    char* saveptr = NULL;
+
+    char* token =
+      strtok_r(
+        payload,
+        " \t",
+        &saveptr
+      );
+
+
+    while (token != NULL) {
+
+      // -----------------------------------------------
+      // separar:
+      //
+      //   nome|jump
+      //   nome,jump
+      // -----------------------------------------------
+
+      char* pipe =
+        strchr(token, '|');
+
+      char* comma =
+        strchr(token, ',');
+
+      char* split = NULL;
+
+
+      if (
+        pipe != NULL &&
+        comma != NULL
+      ) {
+
+        split =
+          pipe < comma
+            ? pipe
+            : comma;
+
+      } else if (pipe != NULL) {
+
+        split = pipe;
+
+      } else {
+
+        split = comma;
+      }
+
+
+      char* jump = NULL;
+
+      if (split != NULL) {
+
+        *split = '\0';
+
+        jump =
+          split + 1;
+      }
+
+
+      if (token[0] == '\0') {
+
+        Serial.println(
+          "Err - empty region name"
+        );
+
+        return true;
+      }
+
+
+      // -----------------------------------------------
+      // Mesmo RegionMap oficial.
+      //
+      // Region criada/atualizada debaixo do cursor.
+      // -----------------------------------------------
+
+      RegionEntry* region =
+        region_map.putRegion(
+          token,
+          cursor->id
+        );
+
+
+      if (region == NULL) {
+
+        Serial.print(
+          "Err - put failed: "
+        );
+
+        Serial.println(
+          token
+        );
+
+        return true;
+      }
+
+
+      // CommonCLI oficial:
+      // region def repõe flags e ativa FLOOD.
+      region->flags = 0;
+
+
+      cursor =
+        region;
+
+
+      // -----------------------------------------------
+      // jump opcional
+      // -----------------------------------------------
+
+      if (jump != NULL) {
+
+        if (jump[0] == '\0') {
+
+          Serial.println(
+            "Err - empty jump"
+          );
+
+          return true;
+        }
+
+
+        RegionEntry* target =
+          region_map.findByNamePrefix(
+            jump
+          );
+
+
+        if (target == NULL) {
+
+          Serial.print(
+            "Err - unknown jump: "
+          );
+
+          Serial.println(
+            jump
+          );
+
+          return true;
+        }
+
+
+        cursor =
+          target;
+      }
+
+
+      token =
+        strtok_r(
+          NULL,
+          " \t",
+          &saveptr
+        );
+    }
+
+
+    region_policy_configured =
+      true;
+
+
+    region_map.exportTo(
+      Serial
+    );
+
+    return true;
+  }
+
+
+  // ========================================================
+  // Parse normal:
+  //
+  // subcommand arg1 arg2
+  // ========================================================
+
+  char* saveptr = NULL;
+
+  char* sub =
+    strtok_r(
+      args,
+      " \t",
+      &saveptr
+    );
+
+  char* arg1 =
+    strtok_r(
+      NULL,
+      " \t",
+      &saveptr
+    );
+
+  char* arg2 =
+    strtok_r(
+      NULL,
+      " \t",
+      &saveptr
+    );
+
+
+  if (sub == NULL) {
+
+    region_map.exportTo(
+      Serial
+    );
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region save
+  // ========================================================
+
+  if (
+    strcmp(sub, "save") == 0
+  ) {
+
+    // HiveFW Companion:
+    // o NodePrefs do Companion não possui
+    // discovery_mod_timestamp.
+    //
+    // A persistência regional continua a usar exatamente
+    // o RegionMap oficial e o ficheiro /regions2.
+    if (saveRepeaterRegions()) {
+
+      Serial.println(
+        "OK"
+      );
+
+    } else {
+
+      Serial.println(
+        "Err - save failed"
+      );
+    }
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region get <name>
+  // ========================================================
+
+  if (
+    strcmp(sub, "get") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      Serial.println(
+        "Err - unknown region"
+      );
+
+      return true;
+    }
+
+
+    RegionEntry* region =
+      region_map.findByNamePrefix(
+        arg1
+      );
+
+
+    if (region == NULL) {
+
+      Serial.println(
+        "Err - unknown region"
+      );
+
+      return true;
+    }
+
+
+    RegionEntry* parent =
+      region_map.findById(
+        region->parent
+      );
+
+
+    // Formato idêntico ao CommonCLI oficial:
+    //
+    //   REGION (PARENT) F
+    //
+    // F = flood permitido.
+    if (
+      parent != NULL &&
+      parent->id != 0
+    ) {
+
+      Serial.print(" ");
+      Serial.print(region->name);
+      Serial.print(" (");
+      Serial.print(parent->name);
+      Serial.print(") ");
+
+    } else {
+
+      Serial.print(" ");
+      Serial.print(region->name);
+      Serial.print(" ");
+    }
+
+
+    if (
+      (
+        region->flags &
+        REGION_DENY_FLOOD
+      ) == 0
+    ) {
+
+      Serial.print("F");
+    }
+
+
+    Serial.println();
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region list allowed
+  // region list denied
+  // ========================================================
+
+  if (
+    strcmp(sub, "list") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      Serial.println(
+        "Err - use 'allowed' or 'denied'"
+      );
+
+      return true;
+    }
+
+
+    uint8_t mask =
+      REGION_DENY_FLOOD;
+
+    bool invert =
+      false;
+
+
+    if (
+      strcmp(arg1, "allowed") == 0
+    ) {
+
+      invert = false;
+
+    } else if (
+      strcmp(arg1, "denied") == 0
+    ) {
+
+      // Igual ao CommonCLI oficial:
+      // listar as regiões que TÊM a flag DENY.
+      invert = true;
+
+    } else {
+
+      Serial.println(
+        "Err - use 'allowed' or 'denied'"
+      );
+
+      return true;
+    }
+
+
+    char names[1024];
+
+    names[0] =
+      '\0';
+
+
+    int names_len =
+      region_map.exportNamesTo(
+        names,
+        sizeof(names),
+        mask,
+        invert
+      );
+
+
+    if (names_len == 0) {
+
+      Serial.println(
+        "-none-"
+      );
+
+    } else {
+
+      Serial.println(
+        names
+      );
+    }
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region put <name> [parent]
+  // ========================================================
+
+  if (
+    strcmp(sub, "put") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      Serial.println(
+        "Err - unable to put"
+      );
+
+      return true;
+    }
+
+
+    RegionEntry* parent =
+      arg2 != NULL
+        ? region_map.findByNamePrefix(arg2)
+        : &region_map.getWildcard();
+
+
+    if (parent == NULL) {
+
+      Serial.println(
+        "Err - unknown parent"
+      );
+
+      return true;
+    }
+
+
+    RegionEntry* region =
+      region_map.putRegion(
+        arg1,
+        parent->id
+      );
+
+
+    if (region == NULL) {
+
+      Serial.println(
+        "Err - unable to put"
+      );
+
+      return true;
+    }
+
+
+    // CommonCLI oficial.
+    region->flags = 0;
+
+    region_policy_configured =
+      true;
+
+
+    Serial.println(
+      "OK - (flood allowed)"
+    );
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region remove <name>
+  // ========================================================
+
+  if (
+    strcmp(sub, "remove") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      Serial.println(
+        "Err - not found"
+      );
+
+      return true;
+    }
+
+
+    // Oficial: remoção exige nome exato.
+    RegionEntry* region =
+      region_map.findByName(
+        arg1
+      );
+
+
+    if (region == NULL) {
+
+      Serial.println(
+        "Err - not found"
+      );
+
+      return true;
+    }
+
+
+    if (
+      region_map.removeRegion(
+        *region
+      )
+    ) {
+
+      region_policy_configured =
+        true;
+
+      Serial.println(
+        "OK"
+      );
+
+    } else {
+
+      Serial.println(
+        "Err - not empty"
+      );
+    }
+
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region home
+  // region home <name>
+  // ========================================================
+
+  if (
+    strcmp(sub, "home") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      RegionEntry* home =
+        region_map.getHomeRegion();
+
+
+      Serial.print(
+        " home is "
+      );
+
+      Serial.println(
+        home != NULL
+          ? home->name
+          : "*"
+      );
+
+      return true;
+    }
+
+
+    RegionEntry* home =
+      region_map.findByNamePrefix(
+        arg1
+      );
+
+
+    if (home == NULL) {
+
+      Serial.println(
+        "Err - unknown region"
+      );
+
+      return true;
+    }
+
+
+    region_map.setHomeRegion(
+      home
+    );
+
+    region_policy_configured =
+      true;
+
+
+    Serial.print(
+      " home is now "
+    );
+
+    Serial.println(
+      home->name
+    );
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region default
+  // region default <name>
+  // region default <null>
+  //
+  // O firmware oficial persiste DEFAULT imediatamente.
+  // ========================================================
+
+  if (
+    strcmp(sub, "default") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      RegionEntry* def =
+        region_map.getDefaultRegion();
+
+
+      Serial.print(
+        " default scope is "
+      );
+
+      Serial.println(
+        def != NULL
+          ? def->name
+          : "<null>"
+      );
+
+      return true;
+    }
+
+
+    if (
+      strcmp(arg1, "<null>") == 0
+    ) {
+
+      if (
+        clearRepeaterDefaultRegion()
+      ) {
+
+        Serial.println(
+          " default scope is now <null>"
+        );
+
+      } else {
+
+        Serial.println(
+          "Err - save failed"
+        );
+      }
+
+
+      return true;
+    }
+
+
+    if (
+      setRepeaterDefaultRegion(
+        arg1
+      )
+    ) {
+
+      RegionEntry* def =
+        region_map.getDefaultRegion();
+
+
+      Serial.print(
+        " default scope is now "
+      );
+
+      Serial.println(
+        def != NULL
+          ? def->name
+          : "<null>"
+      );
+
+    } else {
+
+      Serial.println(
+        "Err - region table full"
+      );
+    }
+
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region allowf <name>
+  // ========================================================
+
+  if (
+    strcmp(sub, "allowf") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      Serial.println(
+        "Err - missing region"
+      );
+
+      return true;
+    }
+
+
+    if (
+      setRepeaterRegionFloodAllowed(
+        arg1,
+        true
+      )
+    ) {
+
+      Serial.println(
+        "OK"
+      );
+
+    } else {
+
+      Serial.println(
+        "Err - unknown region"
+      );
+    }
+
+
+    return true;
+  }
+
+
+  // ========================================================
+  // region denyf <name>
+  // ========================================================
+
+  if (
+    strcmp(sub, "denyf") == 0
+  ) {
+
+    if (arg1 == NULL) {
+
+      Serial.println(
+        "Err - missing region"
+      );
+
+      return true;
+    }
+
+
+    if (
+      setRepeaterRegionFloodAllowed(
+        arg1,
+        false
+      )
+    ) {
+
+      Serial.println(
+        "OK"
+      );
+
+    } else {
+
+      Serial.println(
+        "Err - unknown region"
+      );
+    }
+
+
+    return true;
+  }
+
+
+  Serial.println(
+    "Err - ??"
+  );
+
+  return true;
+}
+
+
 void MyMesh::checkCLIRescueCmd() {
   int len = strlen(cli_command);
   while (Serial.available() && len < sizeof(cli_command)-1) {
@@ -3333,7 +4811,14 @@ void MyMesh::checkCLIRescueCmd() {
   if (len > 0 && cli_command[len - 1] == '\r') {  // received complete line
     cli_command[len - 1] = 0;  // replace newline with C string null terminator
 
-    if (memcmp(cli_command, "set ", 4) == 0) {
+    if (
+      handleCLIRegionCommand(
+        cli_command
+      )
+    ) {
+      // handled by MeshCore-compatible Region CLI
+
+    } else if (memcmp(cli_command, "set ", 4) == 0) {
       const char* config = &cli_command[4];
       if (memcmp(config, "pin ", 4) == 0) {
         _prefs.ble_pin = atoi(&config[4]);
