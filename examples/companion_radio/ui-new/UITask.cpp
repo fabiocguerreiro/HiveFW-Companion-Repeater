@@ -40,9 +40,8 @@ static const uint8_t HIVEFW_CONTACTS_USERS      = 1;
 static const uint8_t HIVEFW_CONTACTS_REPEATERS  = 2;
 static const uint8_t HIVEFW_CONTACTS_CHANNELS   = 3;
 static const uint8_t HIVEFW_CONTACTS_ALL        = 4;
-static const uint8_t HIVEFW_CONTACTS_EXIT       = 5;
 
-static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
+static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 5;
 
 #ifndef UI_RECENT_LIST_SIZE
   #define UI_RECENT_LIST_SIZE 4
@@ -65,26 +64,24 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── MENSAGENS / BLE / GPS
 //   ├── SMARTPHONE BLE: nome do dispositivo ou Desligado
 //   └── NICKNAME: nome do nó
-// MP-01 — CONTACTOS
-//   ├── RECENTES
-//   │   └── selecionar nó -> adicionar / abrir contacto
-//   ├── UTILIZADORES
-//   ├── REPETIDORES
-//   ├── CANAIS
-//   ├── TODOS
-//   └── [ SAIR ]
-//
-// MP-02 — MENSAGENS
+// MP-01 — MENSAGENS
 //   ├── NOVA MENSAGEM
 //   ├── CAIXA DE ENTRADA
-//   └── [ SAIR ]
+//   └── CONTACTOS
+//       ├── RECENTES
+//       │   └── selecionar nó -> adicionar / abrir contacto
+//       ├── UTILIZADORES
+//       ├── REPETIDORES
+//       ├── CANAIS
+//       └── TODOS
 //
-// MP-03 — COMPANION
+// MP-02 — COMPANION
 //   ├── INFO COMPANION
 //   │   ├── BLE / BATERIA / VOLTAGEM / UPTIME
 //   │   ├── ADVERT TX / ADVERT RX
 //   │   ├── NOME BLE / SMARTPHONE / NOME DO NO
 //   │   └── MODO / FIRMWARE / VERSAO
+//   ├── ANUNCIAR NÓ
 //   ├── ESTADO RELÓGIO (estado / origem / idade do último acerto)
 //   ├── SINCRONIZAR RELÓGIO
 //   ├── SINCRONIZAR VIA GPS (quando disponível)
@@ -92,7 +89,7 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── REPETIDORES DESCOBERTOS
 //   └── [ SAIR ]
 //
-// MP-04 — REPETIDOR
+// MP-03 — REPETIDOR
 //   ├── REPETIDOR
 //   ├── AUTOADVERT
 //   ├── DUTY CYCLE
@@ -100,10 +97,10 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── INFO REPETIDOR
 //   └── [ SAIR ]
 //
-// MP-05 — SOS
+// MP-04 — SOS
 //   └── ENTER -> confirmação e envio SOS
 //
-// MP-06 — APLICAÇÕES
+// MP-05 — APLICAÇÕES
 //   ├── HOME ASSISTANT
 //   │   ├── <COMANDOS CONFIGURADOS PELO UTILIZADOR>
 //   │   ├── ADICIONAR COMANDO
@@ -113,9 +110,8 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── RELÓGIO
 //   └── [ SAIR ]
 //
-// MP-07 — DEFINIÇÕES
+// MP-06 — DEFINIÇÕES
 //   ├── BLUETOOTH
-//   ├── ANUNCIAR NÓ
 //   ├── CANAL APPS/SOS
 //   ├── RÁDIO
 //   │   ├── FREQUÊNCIA
@@ -142,8 +138,8 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   └── DESLIGAR
 //
 // NAVEGAÇÃO:
-// FIRST → CONTACTOS → MENSAGENS → COMPANION
-//       → REPETIDOR → SOS → APLICAÇÕES → DEFINIÇÕES → FIRST
+// FIRST → MENSAGENS → COMPANION → REPETIDOR
+//       → SOS → APLICAÇÕES → DEFINIÇÕES → FIRST
 //
 // ============================================================================
 // FIM DO MAPA OFICIAL DA ESTRUTURA DO MENU
@@ -651,7 +647,6 @@ static int findRadioPreset(
 class HomeScreen : public UIScreen {
   enum HomePage {
     FIRST,
-    CONTACTS,
     MESSAGES,
     COMPANION,
     REPETIDOR,
@@ -660,7 +655,8 @@ class HomeScreen : public UIScreen {
     SETTINGS,
     Count,    // fim das páginas do carrossel principal
 
-    // Página interna de DEFINIÇÕES.
+    // Páginas internas.
+    CONTACTS,
     RADIO,
 
     // Estados internos das APPS.
@@ -676,6 +672,7 @@ class HomeScreen : public UIScreen {
 
   enum CompanionMenu : uint8_t {
     COMP_MENU_INFO = 0,
+    COMP_MENU_ADVERT,
     COMP_MENU_CLOCK_STATUS,
     COMP_MENU_SYNC_CLOCK,
 #if ENV_INCLUDE_GPS == 1
@@ -749,7 +746,7 @@ class HomeScreen : public UIScreen {
   bool _contacts_delete_confirm;
   uint8_t _contacts_delete_choice;
 
-  // CONTACTOS standalone.
+  // CONTACTOS — página interna de MENSAGENS.
   uint8_t _contacts_root_menu;
 
   bool _contacts_list_submenu;
@@ -2668,6 +2665,18 @@ class HomeScreen : public UIScreen {
 
     switch (_page) {
 
+      case HomePage::CONTACTS:
+
+        return
+          HomePage::MESSAGES;
+
+
+      case HomePage::RADIO:
+
+        return
+          HomePage::SETTINGS;
+
+
       case HomePage::INTERNAL_HOME_ASSISTANT:
       case HomePage::INTERNAL_CLOCK:
       case HomePage::INTERNAL_GPS:
@@ -2862,6 +2871,153 @@ class HomeScreen : public UIScreen {
 
       default:
         break;
+    }
+
+
+    // ------------------------------------------------------
+    // CONTEXTO INTERNO — ANUNCIAR NÓ / COMPANION
+    // ------------------------------------------------------
+
+    if (
+      _page == HomePage::COMPANION &&
+      _settings_advert_submenu
+    ) {
+
+      header_context =
+        "ANUNCIAR";
+    }
+
+
+    // ------------------------------------------------------
+    // CONTEXTO INTERNO DE CONTACTOS
+    // ------------------------------------------------------
+
+    if (
+      _page == HomePage::CONTACTS &&
+      _contacts_submenu
+    ) {
+
+      if (_contacts_delete_confirm) {
+
+        header_context =
+          "APAGAR";
+
+      } else if (_contacts_info_submenu) {
+
+        header_context =
+          "INFO";
+
+      } else if (_contacts_action_submenu) {
+
+        header_context =
+          "AÇÕES";
+
+      } else if (_contacts_channel_info_submenu) {
+
+        header_context =
+          "INFO CANAL";
+
+      } else if (_contacts_channel_action_submenu) {
+
+        header_context =
+          "AÇÕES CANAL";
+
+      } else if (_contacts_recent_action_submenu) {
+
+        header_context =
+          "RECENTE";
+
+      } else if (_contacts_recent_submenu) {
+
+        header_context =
+          "RECENTES";
+
+      } else if (_contacts_list_submenu) {
+
+        switch (_contacts_view) {
+
+          case HIVEFW_CONTACTS_USERS:
+            header_context =
+              "UTILIZ.";
+            break;
+
+          case HIVEFW_CONTACTS_REPEATERS:
+            header_context =
+              "REPET.";
+            break;
+
+          case HIVEFW_CONTACTS_CHANNELS:
+            header_context =
+              "CANAIS";
+            break;
+
+          case HIVEFW_CONTACTS_ALL:
+            header_context =
+              "TODOS";
+            break;
+
+          default:
+            header_context =
+              "CONTACTOS";
+            break;
+        }
+      }
+    }
+
+
+    // ------------------------------------------------------
+    // CONTEXTO INTERNO DE MENSAGENS
+    // ------------------------------------------------------
+
+    if (
+      _page == HomePage::MESSAGES &&
+      _sms_submenu
+    ) {
+
+      if (_sms_new_submenu) {
+
+        switch (_sms_new_stage) {
+
+          case 0:
+            header_context = "NOVA MSG";
+            break;
+
+          case 1:
+            header_context = "ENVIAR PARA";
+            break;
+
+          case 2:
+            header_context = "CONTACTO";
+            break;
+
+          case 3:
+            header_context = "EDITOR";
+            break;
+
+          case 4:
+            header_context = "AÇÕES";
+            break;
+
+          case 5:
+            header_context = "CONFIRMAR";
+            break;
+
+          case 6:
+            header_context = "CANAL";
+            break;
+
+          case 7:
+            header_context = "PRESETS";
+            break;
+
+          default:
+            break;
+        }
+
+      } else if (_sms_messages_submenu) {
+
+        header_context = "ENTRADA";
+      }
     }
 
 
@@ -3834,7 +3990,7 @@ public:
       false;
 
 
-    // CONTACTOS é uma página principal independente.
+    // CONTACTOS é uma página interna de MENSAGENS.
     // A escrita continua no editor oficial de MENSAGENS.
     _contacts_list_submenu = false;
     _contacts_recent_submenu = false;
@@ -4148,7 +4304,7 @@ public:
   }
 
   // ==========================================================
-  // HIVEFW — CONTACTOS STANDALONE
+  // HIVEFW — CONTACTOS / MENSAGENS
   // ==========================================================
 
   void resetContactsDetailState() {
@@ -5035,8 +5191,7 @@ public:
           : "MENSAGEM",
         "TRACE ROUTE",
         favourite_item,
-        "APAGAR",
-        "[ VOLTAR ]"
+        "APAGAR"
       };
 
 
@@ -5053,7 +5208,7 @@ public:
         actions[
           _contacts_action_menu
         ],
-        22
+        32
       );
 
 
@@ -5181,8 +5336,7 @@ public:
 
       const char* actions[] = {
         "INFO",
-        "MENSAGEM",
-        "[ VOLTAR ]"
+        "MENSAGEM"
       };
 
 
@@ -5199,7 +5353,7 @@ public:
         actions[
           _contacts_channel_action_menu
         ],
-        22
+        32
       );
 
 
@@ -5259,24 +5413,10 @@ public:
       );
 
 
-      display.setColor(
-        UIColor::secondary_txt
-      );
-
-      display.drawTextCentered(
-        display.width() / 2,
-        35,
-        existing >= 0
-          ? "JÁ NOS CONTACTOS"
-          : "NÃO ADICIONADO"
-      );
-
-
       const char* actions[] = {
         existing >= 0
           ? "ABRIR CONTACTO"
-          : "ADICIONAR CONTACTO",
-        "[ VOLTAR ]"
+          : "ADICIONAR CONTACTO"
       };
 
 
@@ -5285,16 +5425,15 @@ public:
       );
 
       display.setTextSize(
-        1
+        2
       );
 
-      drawMenuSelection(
+      drawMenuItemText(
         display,
         actions[
           _contacts_recent_action_menu
         ],
-        51,
-        0
+        24
       );
 
 
@@ -5341,7 +5480,7 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           52,
-          "[ VOLTAR ]"
+          "3 CLIQUES = VOLTAR"
         );
 
 
@@ -5561,7 +5700,7 @@ public:
         display.drawTextCentered(
           display.width() / 2,
           52,
-          "[ VOLTAR ]"
+          "3 CLIQUES = VOLTAR"
         );
 
 
@@ -5710,8 +5849,7 @@ public:
       "UTILIZADORES",
       "REPETIDORES",
       "CANAIS",
-      "TODOS",
-      "[ SAIR ]"
+      "TODOS"
     };
 
 
@@ -5720,18 +5858,18 @@ public:
     );
 
     display.setTextSize(
-      1
+      2
     );
 
 
-    // Selector oficial HiveFW centrado.
-    drawMenuSelection(
+    // Selector oficial HiveFW:
+    // uma opção centrada de cada vez.
+    drawMenuItemText(
       display,
       root_items[
         _contacts_root_menu
       ],
-      38,
-      0
+      32
     );
 
 
@@ -5763,10 +5901,14 @@ public:
         KEY_ENTER
       ) {
 
+        uint8_t contacts_position =
+          _contacts_root_menu;
+
         resetContactsDetailState();
 
         _contacts_root_menu =
-          0;
+          contacts_position %
+          HIVEFW_CONTACTS_ROOT_COUNT;
 
         _contacts_submenu =
           true;
@@ -5775,9 +5917,27 @@ public:
       }
 
 
-      // NEXT/PREV ficam disponíveis para
-      // navegação das páginas principais.
-      return false;
+      if (
+        c == KEY_CANCEL ||
+        c == KEY_SELECT
+      ) {
+
+        _page =
+          HomePage::MESSAGES;
+
+        _sms_submenu =
+          true;
+
+        _sms_menu =
+          2;
+
+        return true;
+      }
+
+
+      // CONTACTOS é agora uma página interna.
+      // Não encaminhar NEXT/PREV para o carrossel.
+      return true;
     }
 
 
@@ -5968,7 +6128,7 @@ public:
           (
             _contacts_action_menu +
             1
-          ) % 6;
+          ) % 5;
 
         return true;
       }
@@ -5982,8 +6142,8 @@ public:
         _contacts_action_menu =
           (
             _contacts_action_menu +
-            5
-          ) % 6;
+            4
+          ) % 5;
 
         return true;
       }
@@ -6202,27 +6362,6 @@ public:
         }
 
 
-        // VOLTAR
-        _contacts_action_submenu =
-          false;
-
-        _contacts_action_menu =
-          0;
-
-
-        if (
-          _contacts_return_recent
-        ) {
-
-          _contacts_recent_submenu =
-            true;
-
-          _contacts_return_recent =
-            false;
-        }
-
-
-        return true;
       }
 
 
@@ -6275,7 +6414,7 @@ public:
           (
             _contacts_channel_action_menu +
             1
-          ) % 3;
+          ) % 2;
 
         return true;
       }
@@ -6289,8 +6428,8 @@ public:
         _contacts_channel_action_menu =
           (
             _contacts_channel_action_menu +
-            2
-          ) % 3;
+            1
+          ) % 2;
 
         return true;
       }
@@ -6363,14 +6502,6 @@ public:
         }
 
 
-        // VOLTAR
-        _contacts_channel_action_submenu =
-          false;
-
-        _contacts_channel_action_menu =
-          0;
-
-        return true;
       }
 
 
@@ -6410,9 +6541,7 @@ public:
       ) {
 
         _contacts_recent_action_menu =
-          _contacts_recent_action_menu
-            ? 0
-            : 1;
+          0;
 
         return true;
       }
@@ -6437,21 +6566,6 @@ public:
         c ==
         KEY_ENTER
       ) {
-
-        if (
-          _contacts_recent_action_menu ==
-          1
-        ) {
-
-          _contacts_recent_action_submenu =
-            false;
-
-          _contacts_recent_submenu =
-            true;
-
-          return true;
-        }
-
 
         AdvertPath* item =
           &recent[
@@ -6788,10 +6902,28 @@ public:
       c == KEY_SELECT
     ) {
 
+      uint8_t contacts_position =
+        _contacts_root_menu;
+
       resetContactsDetailState();
+
+      _contacts_root_menu =
+        contacts_position %
+        HIVEFW_CONTACTS_ROOT_COUNT;
 
       _contacts_submenu =
         false;
+
+      _page =
+        HomePage::MESSAGES;
+
+      _sms_submenu =
+        true;
+
+      // Voltar exatamente a:
+      // MENSAGENS -> CONTACTOS
+      _sms_menu =
+        2;
 
       return true;
     }
@@ -6874,18 +7006,6 @@ public:
       }
 
 
-      if (
-        _contacts_root_menu ==
-        HIVEFW_CONTACTS_EXIT
-      ) {
-
-        resetContactsDetailState();
-
-        _contacts_submenu =
-          false;
-
-        return true;
-      }
     }
 
 
@@ -6911,6 +7031,36 @@ public:
     // MP-03 — COMPANION
     // ======================================================
     if (_page == HomePage::COMPANION) {
+
+
+      // ======================================================
+      // COMPANION -> ANUNCIAR NÓ
+      // ======================================================
+
+      if (_settings_advert_submenu) {
+
+        const char* advert_items[] = {
+          "ZERO HOP",
+          "FLOOD"
+        };
+
+        display.setColor(
+          UIColor::primary_txt
+        );
+
+        display.setTextSize(2);
+
+        drawMenuItemText(
+          display,
+          advert_items[
+            _settings_advert_menu
+          ],
+          32
+        );
+
+        return 20000;
+      }
+
 
       // ======================================================
       // MP-03.1 — HOME COMPANION
@@ -6951,6 +7101,7 @@ public:
 
       const char* companion_items[] = {
         "INFO COMPANION",
+        "ANUNCIAR NÓ",
         "ESTADO RELÓGIO",
         "SINCRONIZAR RELÓGIO",
 #if ENV_INCLUDE_GPS == 1
@@ -7006,24 +7157,22 @@ public:
 
     if (_sms_new_stage == 0) {
 
-      display.drawTextCentered(
-        display.width() / 2,
-        18,
-        "Nova Mensagem"
-      );
-
       const char* items[] = {
-        "Escrever",
-        "Presets",
-        "Localização",
-        "[ SAIR ]"
+        "ESCREVER",
+        "PRESETS",
+        "LOCALIZAÇÃO"
       };
 
-      drawMenuSelection(
+      display.setColor(
+        UIColor::primary_txt
+      );
+
+      display.setTextSize(2);
+
+      drawMenuItemText(
         display,
         items[_sms_new_menu],
-        40,
-        0
+        32
       );
 
     // ========================================================
@@ -7032,23 +7181,21 @@ public:
 
     } else if (_sms_new_stage == 1) {
 
-      display.drawTextCentered(
-        display.width() / 2,
-        18,
-        "Enviar para"
-      );
-
       const char* items[] = {
-        "Contactos",
-        "Canais",
-        "[ SAIR ]"
+        "CONTACTOS",
+        "CANAIS"
       };
 
-      drawMenuSelection(
+      display.setColor(
+        UIColor::primary_txt
+      );
+
+      display.setTextSize(2);
+
+      drawMenuItemText(
         display,
         items[_sms_target_menu],
-        40,
-        0
+        32
       );
 
     // ========================================================
@@ -7164,22 +7311,21 @@ public:
       display.setColor(UIColor::primary_txt);
       display.setTextSize(1);
 
-      display.drawTextCentered(
-        display.width() / 2,
-        18,
-        "Ações"
-      );
-
       const char* actions[] = {
         "APAGAR",
-        "ENVIAR",
-        "SAIR"
+        "ENVIAR"
       };
 
-      drawMenuSelection(
+      display.setColor(
+        UIColor::primary_txt
+      );
+
+      display.setTextSize(2);
+
+      drawMenuItemText(
         display,
         actions[_sms_action_menu],
-        40
+        32
       );
 
     } else if (_sms_new_stage == 5) {
@@ -7294,22 +7440,22 @@ public:
         "A caminho",
         "Preciso de ajuda",
         "Estou no trabalho",
-        "Ja vou",
+        "Já vou",
         "OK",
         "Sim",
-        "Não",
-        "[ SAIR ]"
+        "Não"
       };
 
-      display.drawTextCentered(
-        display.width() / 2,
-        18,
-        "Presets"
+      display.setColor(
+        UIColor::primary_txt
       );
 
-      drawMenuListItem(
+      display.setTextSize(2);
+
+      drawMenuItemText(
         display,
-        presets[_sms_preset_menu]
+        presets[_sms_preset_menu],
+        32
       );
     }
     } else if (_sms_messages_submenu) {
@@ -7398,26 +7544,25 @@ public:
 
     } else {
 
-      display.setColor(UIColor::primary_txt);
-      display.setTextSize(1);
-
       const char* sms_items[] = {
-        "Nova Mensagem",
-        "Caixa de entrada",
-        "[ SAIR ]"
+        "NOVA MENSAGEM",
+        "CAIXA DE ENTRADA",
+        "CONTACTOS"
       };
 
-      for (int i = 0; i < 3; i++) {
-        int y = 19 + (i * 12);
+      // Selector oficial HiveFW:
+      // uma opção centrada de cada vez.
+      display.setColor(
+        UIColor::primary_txt
+      );
 
-        if (i == _sms_menu) {
-          display.setColor(UIColor::primary_txt);
-          drawMenuSelection(display, sms_items[i], y);
-        } else {
-          display.setColor(UIColor::secondary_txt);
-          display.drawTextCentered(display.width() / 2, y, sms_items[i]);
-        }
-      }
+      display.setTextSize(2);
+
+      drawMenuItemText(
+        display,
+        sms_items[_sms_menu],
+        32
+      );
     }
 
   } else if (_page == HomePage::RADIO) {
@@ -9012,101 +9157,10 @@ public:
 #endif
 
 
-      } else if (_settings_advert_submenu) {
-
-        const char* advert_items[] = {
-          "Anuncio ZeroHOP",
-          "Anuncio Flood"
-        };
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        display.drawTextCentered(
-          display.width() / 2,
-          38,
-          advert_items[_settings_advert_menu]
-        );
-
-      } else if (_settings_channel_submenu) {
-
-        int channel_count = getAppsChannelCount();
-
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(1);
-
-        if (channel_count == 0) {
-
-          display.drawTextCentered(
-            display.width() / 2,
-            38,
-            "SEM CANAIS"
-          );
-
-        } else {
-
-          int selected_index = _settings_channel_menu;
-
-          if (selected_index >= channel_count)
-            selected_index = 0;
-
-          int found = 0;
-          ChannelDetails channel;
-          bool valid = false;
-
-          for (int i = 0; i < MAX_GROUP_CHANNELS; i++) {
-
-            ChannelDetails candidate;
-
-            if (the_mesh.getChannel(i, candidate) &&
-                candidate.name[0] != '\0') {
-
-              if (found == selected_index) {
-                channel = candidate;
-                valid = true;
-                break;
-              }
-
-              found++;
-            }
-          }
-
-          if (valid) {
-
-            char channel_text[32];
-
-            snprintf(
-              channel_text,
-              sizeof(channel_text),
-              "%d/%d %s",
-              selected_index + 1,
-              channel_count,
-              channel.name
-            );
-
-            display.setTextSize(1);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              29,
-              "CANAL APPS"
-            );
-
-            display.setTextSize(2);
-
-            display.drawTextCentered(
-              display.width() / 2,
-              47,
-              channel_text
-            );
-          }
-        }
-
       } else {
 
         const char* settings_items[] = {
           "BLUETOOTH",
-          "ANUNCIAR NÓ",
           "CANAL APPS/SOS",
           "RÁDIO",
           "ECRÃ",
@@ -9145,7 +9199,7 @@ public:
 
 
         else if (
-          _settings_menu == 2
+          _settings_menu == 1
         ) {
 
           ChannelDetails selected_channel;
@@ -9177,7 +9231,7 @@ public:
 #if ENV_INCLUDE_GPS == 1
 
         else if (
-          _settings_menu == 6
+          _settings_menu == 5
         ) {
 
           snprintf(
@@ -10298,12 +10352,12 @@ public:
       if (_sms_new_stage == 0) {
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
-          _sms_new_menu = (_sms_new_menu + 1) % 4;
+          _sms_new_menu = (_sms_new_menu + 1) % 3;
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
-          _sms_new_menu = (_sms_new_menu + 3) % 4;
+          _sms_new_menu = (_sms_new_menu + 2) % 3;
           return true;
         }
 
@@ -10352,14 +10406,6 @@ public:
             return true;
           }
 
-          // SAIR
-          if (_sms_new_menu == 3) {
-
-            _sms_new_submenu = false;
-            _sms_submenu = true;
-
-            return true;
-          }
         }
 
         return true;
@@ -10374,7 +10420,7 @@ public:
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
           _sms_target_menu =
-            (_sms_target_menu + 1) % 3;
+            (_sms_target_menu + 1) % 2;
 
           return true;
         }
@@ -10382,7 +10428,7 @@ public:
         if (c == KEY_PREV || c == KEY_LEFT) {
 
           _sms_target_menu =
-            (_sms_target_menu + 2) % 3;
+            (_sms_target_menu + 1) % 2;
 
           return true;
         }
@@ -10417,12 +10463,6 @@ public:
             return true;
           }
 
-          // SAIR
-          if (_sms_target_menu == 2) {
-
-            _sms_new_stage = 0;
-            return true;
-          }
         }
 
         return true;
@@ -10594,7 +10634,7 @@ public:
 
       if (_sms_new_stage == 4) {
 
-        const int ACTION_COUNT = 3;
+        const int ACTION_COUNT = 2;
 
         // 1 clique -> próxima ação
         if (c == KEY_NEXT || c == KEY_RIGHT) {
@@ -10658,17 +10698,6 @@ public:
             return true;
           }
 
-          // SAIR
-          if (_sms_action_menu == 2) {
-
-            if (_sms_target_type == 0) {
-              _sms_new_stage = 2;
-            } else {
-              _sms_new_stage = 6;
-            }
-
-            return true;
-          }
         }
 
         return true;
@@ -10863,17 +10892,16 @@ public:
           "A caminho",
           "Preciso de ajuda",
           "Estou no trabalho",
-          "Ja vou",
+          "Já vou",
           "OK",
           "Sim",
-          "Não",
-          "[ SAIR ]"
+          "Não"
         };
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
 
           _sms_preset_menu =
-            (_sms_preset_menu + 1) % 10;
+            (_sms_preset_menu + 1) % 9;
 
           return true;
         }
@@ -10881,7 +10909,7 @@ public:
         if (c == KEY_PREV || c == KEY_LEFT) {
 
           _sms_preset_menu =
-            (_sms_preset_menu + 9) % 10;
+            (_sms_preset_menu + 8) % 9;
 
           return true;
         }
@@ -10895,12 +10923,6 @@ public:
 
         if (c == KEY_ENTER) {
 
-          // SAIR
-          if (_sms_preset_menu == 9) {
-
-            _sms_new_stage = 0;
-            return true;
-          }
 
           strncpy(
             _sms_text,
@@ -10983,13 +11005,33 @@ public:
         }
 
 
-        // SAIR
+        // Contactos
         if (_sms_menu == 2) {
 
-          _contacts_submenu = false;
-          _sms_submenu = false;
+          uint8_t contacts_position =
+            _contacts_root_menu;
 
-          _task->gotoHomeScreen();
+          resetContactsDetailState();
+
+          _contacts_root_menu =
+            contacts_position %
+            HIVEFW_CONTACTS_ROOT_COUNT;
+
+          _contacts_submenu =
+            true;
+
+          _sms_messages_submenu =
+            false;
+
+          _sms_new_submenu =
+            false;
+
+          // MENSAGENS continua logicamente aberto.
+          _sms_submenu =
+            true;
+
+          _page =
+            HomePage::CONTACTS;
 
           return true;
         }
@@ -12300,65 +12342,6 @@ public:
 #endif
 
       // ======================================================
-      // SUBMENU ANUNCIAR NÓ
-      // ======================================================
-
-      if (_settings_advert_submenu) {
-
-        if (c == KEY_NEXT || c == KEY_RIGHT) {
-          _settings_advert_menu =
-            (_settings_advert_menu + 1) % 2;
-          return true;
-        }
-
-        if (c == KEY_PREV || c == KEY_LEFT) {
-          _settings_advert_menu =
-            (_settings_advert_menu + 1) % 2;
-          return true;
-        }
-
-        if (c == KEY_CANCEL || c == KEY_SELECT) {
-          _settings_advert_submenu = false;
-          return true;
-        }
-
-        if (c == KEY_ENTER) {
-
-          if (_settings_advert_menu == 0) {
-            _task->notify(UIEventType::ack);
-
-            if (the_mesh.advert(false)) {
-              _task->showAlert("Advert ZeroHOP OK", 1000);
-            } else {
-              _task->showAlert("Advert failed..", 1000);
-            }
-
-            return true;
-          }
-
-          if (_settings_advert_menu == 1) {
-            _task->notify(UIEventType::ack);
-
-            if (the_mesh.advert(true)) {
-              _task->showAlert("Advert Flood OK", 1000);
-            } else {
-              _task->showAlert("Advert failed..", 1000);
-            }
-
-            return true;
-          }
-
-          if (_settings_advert_menu == 2) {
-            _settings_advert_submenu = false;
-            _settings_advert_menu = 0;
-            return true;
-          }
-        }
-
-        return true;
-      }
-
-      // ======================================================
       // SUBMENU CANAL APPS
       // ======================================================
 
@@ -12441,7 +12424,7 @@ public:
 #if ENV_INCLUDE_GPS == 1
 
         const uint8_t settings_count =
-          6 +
+          5 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
@@ -12449,7 +12432,7 @@ public:
 #else
 
         const uint8_t settings_count =
-          5 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
@@ -12472,7 +12455,7 @@ public:
 #if ENV_INCLUDE_GPS == 1
 
         const uint8_t settings_count =
-          6 +
+          5 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
@@ -12480,7 +12463,7 @@ public:
 #else
 
         const uint8_t settings_count =
-          5 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET;
@@ -12565,24 +12548,12 @@ public:
         }
 
 
-        // ----------------------------------------------------
-        // ANUNCIAR NÓ
-        // ----------------------------------------------------
-
-        if (_settings_menu == 1) {
-
-          _settings_advert_submenu =
-            true;
-
-          return true;
-        }
-
 
         // ----------------------------------------------------
         // CANAL APPS/SOS
         // ----------------------------------------------------
 
-        if (_settings_menu == 2) {
+        if (_settings_menu == 1) {
 
           int channel_count =
             getAppsChannelCount();
@@ -12623,7 +12594,7 @@ public:
         // ----------------------------------------------------
 
         if (
-          _settings_menu == 3
+          _settings_menu == 2
         ) {
 
           _radio_submenu =
@@ -12644,7 +12615,7 @@ public:
 
         if (
           _settings_menu ==
-          4 +
+          3 +
           HIVEFW_SETTINGS_COLOR_OFFSET
         ) {
 
@@ -12676,7 +12647,7 @@ public:
 
         if (
           _settings_menu ==
-          4 +
+          3 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET
         ) {
@@ -12696,7 +12667,7 @@ public:
 
         if (
           _settings_menu ==
-          4 +
+          3 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
@@ -12723,7 +12694,7 @@ public:
 
         if (
           _settings_menu ==
-          5 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
@@ -12755,7 +12726,7 @@ public:
 
         if (
           _settings_menu ==
-          4 +
+          3 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
@@ -12773,7 +12744,7 @@ public:
 
         if (
           _settings_menu ==
-          5 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
@@ -13852,6 +13823,106 @@ public:
 
     if (_page == HomePage::COMPANION) {
 
+
+      // ======================================================
+      // COMPANION -> ANUNCIAR NÓ
+      //
+      // Mantém exatamente a ação MeshCore existente.
+      // ======================================================
+
+      if (_settings_advert_submenu) {
+
+        if (
+          c == KEY_NEXT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_advert_menu =
+            (_settings_advert_menu + 1) % 2;
+
+          return true;
+        }
+
+        if (
+          c == KEY_PREV ||
+          c == KEY_LEFT
+        ) {
+
+          _settings_advert_menu =
+            (_settings_advert_menu + 1) % 2;
+
+          return true;
+        }
+
+        if (
+          c == KEY_CANCEL ||
+          c == KEY_SELECT
+        ) {
+
+          _settings_advert_submenu =
+            false;
+
+          return true;
+        }
+
+        if (c == KEY_ENTER) {
+
+          // ZERO HOP
+          if (_settings_advert_menu == 0) {
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            if (the_mesh.advert(false)) {
+
+              _task->showAlert(
+                "Advert ZeroHOP OK",
+                1000
+              );
+
+            } else {
+
+              _task->showAlert(
+                "Advert failed..",
+                1000
+              );
+            }
+
+            return true;
+          }
+
+
+          // FLOOD
+          if (_settings_advert_menu == 1) {
+
+            _task->notify(
+              UIEventType::ack
+            );
+
+            if (the_mesh.advert(true)) {
+
+              _task->showAlert(
+                "Advert Flood OK",
+                1000
+              );
+
+            } else {
+
+              _task->showAlert(
+                "Advert failed..",
+                1000
+              );
+            }
+
+            return true;
+          }
+        }
+
+        return true;
+      }
+
+
       if (_companion_clock_submenu) {
         if (c == KEY_CANCEL || c == KEY_SELECT || c == KEY_ENTER) {
           _companion_clock_submenu = false;
@@ -13912,7 +13983,13 @@ public:
           _companion_submenu = false;
           _companion_info_submenu = false;
 
-          _page = HomePage::MESSAGES;
+          // Primeira camada:
+          // triple-click / KEY_CANCEL -> FIRST.
+          // KEY_SELECT mantém o comportamento existente.
+          _page =
+            (c == KEY_CANCEL)
+              ? HomePage::FIRST
+              : HomePage::MESSAGES;
 
           return true;
         }
@@ -13973,6 +14050,16 @@ public:
       }
 
       if (c == KEY_ENTER) {
+
+        // ANUNCIAR NÓ
+        if (_companion_menu == COMP_MENU_ADVERT) {
+
+          _settings_advert_menu = 0;
+          _settings_advert_submenu = true;
+
+          return true;
+        }
+
 
         if (_companion_menu == COMP_MENU_CLOCK_STATUS) {
           _companion_clock_submenu = true;
@@ -14906,7 +14993,15 @@ public:
           _repeater_info_submenu = false;
           _repeater_duty_submenu = false;
           _repeater_submenu = false;
-          _page = HomePage::COMPANION;
+
+          // Primeira camada:
+          // triple-click / KEY_CANCEL -> FIRST.
+          // KEY_SELECT mantém o comportamento existente.
+          _page =
+            (c == KEY_CANCEL)
+              ? HomePage::FIRST
+              : HomePage::COMPANION;
+
           return true;
         }
 
@@ -15301,6 +15396,29 @@ public:
       return true;
     }
 #endif
+
+    // ========================================================
+    // HIVEFW — TRIPLE CLICK NA PRIMEIRA CAMADA
+    //
+    // KEY_CANCEL continua inalterado.
+    // Só quando o evento chega à navegação do carrossel
+    // principal regressamos diretamente a FIRST.
+    //
+    // Submenus já consumiram KEY_CANCEL antes de chegar aqui.
+    // CONTACTS/RADIO/INTERNAL_* estão depois de Count.
+    // ========================================================
+
+    if (
+      c == KEY_CANCEL &&
+      _page != HomePage::FIRST &&
+      _page < HomePage::Count
+    ) {
+
+      _page = HomePage::FIRST;
+
+      return true;
+    }
+
 
     // ========================================================
     // NORMAL PAGE NAVIGATION
