@@ -92,13 +92,7 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── REPETIDORES DESCOBERTOS
 //   └── [ SAIR ]
 //
-// MP-04 — RÁDIO
-//   ├── FREQUÊNCIA / BANDWIDTH / SPREADING FACTOR
-//   ├── CODING RATE / TX POWER / PATH / RX GAIN
-//   ├── PRESETS
-//   └── [ SAIR ]
-//
-// MP-05 — REPETIDOR
+// MP-04 — REPETIDOR
 //   ├── REPETIDOR
 //   ├── AUTOADVERT
 //   ├── DUTY CYCLE
@@ -106,10 +100,10 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── INFO REPETIDOR
 //   └── [ SAIR ]
 //
-// MP-06 — SOS
+// MP-05 — SOS
 //   └── ENTER -> confirmação e envio SOS
 //
-// MP-07 — APLICAÇÕES
+// MP-06 — APLICAÇÕES
 //   ├── HOME ASSISTANT
 //   │   ├── <COMANDOS CONFIGURADOS PELO UTILIZADOR>
 //   │   ├── ADICIONAR COMANDO
@@ -119,30 +113,36 @@ static const uint8_t HIVEFW_CONTACTS_ROOT_COUNT = 6;
 //   ├── RELÓGIO
 //   └── [ SAIR ]
 //
-// MP-08 — DEFINIÇÕES
+// MP-07 — DEFINIÇÕES
 //   ├── BLUETOOTH
 //   ├── ANUNCIAR NÓ
 //   ├── CANAL APPS/SOS
+//   ├── RÁDIO
+//   │   ├── FREQUÊNCIA
+//   │   ├── BANDWIDTH
+//   │   ├── SPREADING FACTOR
+//   │   ├── CODING RATE
+//   │   ├── TX POWER
+//   │   ├── PATH
+//   │   ├── RX GAIN
+//   │   └── PRESETS
 //   ├── ECRÃ
 //   │   ├── TEMPO ECRÃ
 //   │   ├── ROTAÇÃO (T114)
 //   │   ├── COR DA BARRA (T114)
 //   │   ├── BOOT LOGO (T114)
 //   │   │   ├── LOGO
-//   │   │   ├── TEXTO
-//   │   │   └── [ SAIR ]
+//   │   │   └── TEXTO
 //   │   ├── FONTE (T114)
-//   │   ├── FORMATO HORA
-//   │   └── [ SAIR ]
+//   │   └── FORMATO HORA
 //   ├── NOTIFICAÇÕES
 //   │   ├── MODO SILÊNCIO
-//   │   └── [ SAIR ]
+//   │   └── BUZZER (quando disponível)
 //   ├── GPS (quando disponível)
-//   ├── DESLIGAR
-//   └── [ SAIR ]
+//   └── DESLIGAR
 //
 // NAVEGAÇÃO:
-// FIRST → CONTACTOS → MENSAGENS → COMPANION → RÁDIO
+// FIRST → CONTACTOS → MENSAGENS → COMPANION
 //       → REPETIDOR → SOS → APLICAÇÕES → DEFINIÇÕES → FIRST
 //
 // ============================================================================
@@ -654,12 +654,14 @@ class HomeScreen : public UIScreen {
     CONTACTS,
     MESSAGES,
     COMPANION,
-    RADIO,
     REPETIDOR,
     SOS,
     APPS,
     SETTINGS,
-    Count,    // keep as last
+    Count,    // fim das páginas do carrossel principal
+
+    // Página interna de DEFINIÇÕES.
+    RADIO,
 
     // Estados internos das APPS.
     INTERNAL_HOME_ASSISTANT,
@@ -977,9 +979,9 @@ class HomeScreen : public UIScreen {
   //   5 = PATH
   //   6 = RX GAIN
   //   7 = PRESETS
-  //   8 = [ SAIR ]
   //
   // O MENU RÁDIO contém directamente a configuração.
+  // BACK / triple-click regressa a DEFINIÇÕES.
   // ========================================================================
   bool _radio_submenu;
   uint8_t _radio_menu;
@@ -2797,43 +2799,169 @@ class HomeScreen : public UIScreen {
     );
 
     // ------------------------------------------------------
-    // ESQUERDA
-    //
-    // FIRST:
-    //   HiveFW
-    //
-    // restantes páginas:
-    //   01/08 ... 08/08
+    // ESQUERDA — CONTEXTO ATUAL
     // ------------------------------------------------------
 
-    uint8_t page =
-      getHeaderTopLevelPage();
+    const char* header_context =
+      "HiveFW";
 
-    char page_text[12];
 
+    switch (_page) {
+
+      case HomePage::FIRST:
+        header_context = "HiveFW";
+        break;
+
+      case HomePage::CONTACTS:
+        header_context = "CONTACTOS";
+        break;
+
+      case HomePage::MESSAGES:
+        header_context = "MENSAGENS";
+        break;
+
+      case HomePage::COMPANION:
+        header_context = "COMPANION";
+        break;
+
+      case HomePage::RADIO:
+        header_context = "RÁDIO";
+        break;
+
+      case HomePage::REPETIDOR:
+        header_context = "REPETIDOR";
+        break;
+
+      case HomePage::SOS:
+        header_context = "SOS";
+        break;
+
+      case HomePage::APPS:
+        header_context = "APLICAÇÕES";
+        break;
+
+      case HomePage::SETTINGS:
+        header_context = "DEFINIÇÕES";
+        break;
+
+      case HomePage::INTERNAL_HOME_ASSISTANT:
+        header_context = "H.ASSIST";
+        break;
+
+      case HomePage::INTERNAL_CLOCK:
+        header_context = "RELÓGIO";
+        break;
+
+      case HomePage::INTERNAL_GPS:
+        header_context = "GPS";
+        break;
+
+      case HomePage::INTERNAL_SENSORS:
+        header_context = "SENSORES";
+        break;
+
+      default:
+        break;
+    }
+
+
+    // Contexto mais profundo dentro de DEFINIÇÕES.
     if (
-      page ==
-      HomePage::FIRST
+      _page == HomePage::SETTINGS &&
+      _settings_submenu
     ) {
 
-      snprintf(
-        page_text,
-        sizeof(page_text),
-        "HiveFW"
-      );
+#ifdef HELTEC_T114_WITH_DISPLAY
 
-    } else {
+      if (
+        _settings_boot_submenu ||
+        _settings_boot_logo_color_submenu ||
+        _settings_boot_text_color_submenu
+      ) {
 
-      snprintf(
-        page_text,
-        sizeof(page_text),
-        "%02u/%02u",
-        (unsigned)page,
-        (unsigned)(
-          HomePage::Count - 1
-        )
-      );
+        header_context =
+          "BOOT LOGO";
+
+      } else if (
+        _settings_font_submenu
+      ) {
+
+        header_context =
+          "FONTE";
+
+      } else if (
+        _settings_rotation_submenu
+      ) {
+
+        header_context =
+          "ROTAÇÃO";
+
+      } else if (
+        _settings_color_submenu
+      ) {
+
+        header_context =
+          "COR BARRA";
+
+      } else
+
+#endif
+
+      if (
+        _settings_timeout_submenu
+      ) {
+
+        header_context =
+          "TEMPO ECRÃ";
+
+      } else if (
+        _settings_display_submenu
+      ) {
+
+        header_context =
+          "ECRÃ";
+
+      } else if (
+        _settings_notifications_submenu
+      ) {
+
+        header_context =
+          "NOTIF.";
+
+#if ENV_INCLUDE_GPS == 1
+
+      } else if (
+        _settings_gps_interval_submenu
+      ) {
+
+        header_context =
+          "INT. GPS";
+
+      } else if (
+        _settings_gps_submenu
+      ) {
+
+        header_context =
+          "GPS";
+
+#endif
+
+      } else if (
+        _settings_advert_submenu
+      ) {
+
+        header_context =
+          "ANUNCIAR";
+
+      } else if (
+        _settings_channel_submenu
+      ) {
+
+        header_context =
+          "CANAL APPS";
+      }
     }
+
 
     display.setCursor(
       1,
@@ -2841,8 +2969,9 @@ class HomeScreen : public UIScreen {
     );
 
     display.print(
-      page_text
+      header_context
     );
+
 
     // ------------------------------------------------------
     // CENTRO — HORA
@@ -2855,8 +2984,15 @@ class HomeScreen : public UIScreen {
       sizeof(time_text)
     );
 
+    int hive_header_time_x =
+      (
+        _page == HomePage::FIRST
+      )
+        ? display.width() / 2
+        : (display.width() * 64) / 100;
+
     display.drawTextCentered(
-      display.width() / 2,
+      hive_header_time_x,
       2,
       time_text
     );
@@ -3881,6 +4017,57 @@ public:
       text
     );
   }
+
+  // ========================================================
+  // HIVEFW — ITEM CONFIGURÁVEL
+  // ========================================================
+
+  inline void drawConfigItem(
+    DisplayDriver& display,
+    const char* title,
+    const char* value
+  ) {
+
+    if (
+      title == NULL ||
+      value == NULL
+    ) {
+      return;
+    }
+
+    display.setColor(
+      UIColor::secondary_txt
+    );
+
+    display.setTextSize(1);
+
+    display.drawTextCentered(
+      display.width() / 2,
+      24,
+      title
+    );
+
+
+    display.setColor(
+      UIColor::primary_txt
+    );
+
+    display.setTextSize(2);
+
+    if (
+      display.getTextWidth(value) >
+      display.width() - 8
+    ) {
+      display.setTextSize(1);
+    }
+
+    display.drawTextCentered(
+      display.width() / 2,
+      43,
+      value
+    );
+  }
+
 
   inline void drawMenuItemText(
     DisplayDriver& display,
@@ -7276,8 +7463,7 @@ public:
           "TX POWER",
           "PATH",
           "RX GAIN",
-          "PRESETS",
-          "[ SAIR ]"
+          "PRESETS"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -7657,52 +7843,98 @@ public:
                !_repeater_neighbours_submenu &&
                !_repeater_duty_submenu) {
 
-        char repeater_state[32];
-        char autoadvert_state[32];
-        char duty_state[32];
-
-        snprintf(
-          repeater_state,
-          sizeof(repeater_state),
-          "REPETIDOR: %s",
-          the_mesh.getNodePrefs()->isRepeatEn() ? "ON" : "OFF"
-        );
-
-        snprintf(
-          autoadvert_state,
-          sizeof(autoadvert_state),
-          "AUTOADVERT: %s",
-          the_mesh.getNodePrefs()->isAutoAdvertEn() ? "ON" : "OFF"
-        );
-
-        uint8_t current_duty =
-          dutyCyclePercentFromAirtimeFactor(
-            the_mesh.getNodePrefs()->airtime_factor
-          );
-
-        snprintf(
-          duty_state,
-          sizeof(duty_state),
-          "DUTY CYCLE: %u%%",
-          (unsigned)current_duty
-        );
-
         const char* repeater_items[] = {
-          repeater_state,
-          autoadvert_state,
-          duty_state,
+          "REPETIDOR",
+          "AUTOADVERT",
+          "DUTY CYCLE",
           "VIZINHOS",
           "INFO REPETIDOR",
           "[ SAIR ]"
         };
 
-        // Selector oficial HiveFW:
-        // texto centrado, tamanho 2 e duas linhas quando necessário.
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
 
-        const char* text = repeater_items[_repeater_menu];
-        drawMenuItemText(display, text, 32);
+        const char* repeater_title =
+          repeater_items[
+            _repeater_menu
+          ];
+
+        char repeater_value[24];
+
+        repeater_value[0] =
+          '\0';
+
+
+        if (
+          _repeater_menu ==
+          REPEATER_MENU_TOGGLE
+        ) {
+
+          snprintf(
+            repeater_value,
+            sizeof(repeater_value),
+            "%s",
+            the_mesh.getNodePrefs()->isRepeatEn()
+              ? "ON"
+              : "OFF"
+          );
+
+        } else if (
+          _repeater_menu ==
+          REPEATER_MENU_AUTOADVERT
+        ) {
+
+          snprintf(
+            repeater_value,
+            sizeof(repeater_value),
+            "%s",
+            the_mesh.getNodePrefs()->isAutoAdvertEn()
+              ? "ON"
+              : "OFF"
+          );
+
+        } else if (
+          _repeater_menu ==
+          REPEATER_MENU_DUTY_CYCLE
+        ) {
+
+          uint8_t current_duty =
+            dutyCyclePercentFromAirtimeFactor(
+              the_mesh.getNodePrefs()->airtime_factor
+            );
+
+          snprintf(
+            repeater_value,
+            sizeof(repeater_value),
+            "%u%%",
+            (unsigned)current_duty
+          );
+        }
+
+
+        if (
+          repeater_value[0] != '\0'
+        ) {
+
+          drawConfigItem(
+            display,
+            repeater_title,
+            repeater_value
+          );
+
+        } else {
+
+          display.setColor(
+            UIColor::primary_txt
+          );
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            repeater_title,
+            32
+          );
+        }
 
       }
 
@@ -8277,20 +8509,29 @@ public:
 
         else if (_settings_boot_submenu) {
 
-          const char* boot_items[] = {
-            "LOGO",
-            "TEXTO",
-            "[ SAIR ]"
-          };
+          const char* boot_title =
+            _settings_boot_menu == 0
+              ? "LOGO"
+              : "TEXTO";
 
-          display.setTextSize(2);
+          uint8_t boot_value_index =
+            _settings_boot_menu == 0
+              ? _node_prefs->boot_logo_color
+              : _node_prefs->boot_text_color;
 
-          drawMenuItemText(
+          if (
+            boot_value_index >=
+            HIVEFW_BOOT_COLOR_COUNT
+          ) {
+            boot_value_index = 7;
+          }
+
+          drawConfigItem(
             display,
-            boot_items[
-              _settings_boot_menu
-            ],
-            18
+            boot_title,
+            hivefw_boot_color_names[
+              boot_value_index
+            ]
           );
         }
 
@@ -8431,37 +8672,202 @@ public:
 
         else {
 
-          char clock_item[32];
+          const char* display_title =
+            "TEMPO ECRÃ";
 
-          snprintf(
-            clock_item,
-            sizeof(clock_item),
-            "FORMATO HORA: %s",
-            _node_prefs->clock_24h
-              ? "24H"
-              : "12H"
-          );
+          char display_value[48];
 
-          const char* display_items[] = {
-            "TEMPO ECRÃ",
+          display_value[0] =
+            '\0';
+
+
+          if (
+            _settings_display_menu == 0
+          ) {
+
+            uint8_t index =
+              _node_prefs->display_timeout;
+
+            if (
+              index >=
+              HIVEFW_DISPLAY_TIMEOUT_COUNT
+            ) {
+              index =
+                HIVEFW_DISPLAY_TIMEOUT_DEFAULT;
+            }
+
+            display_title =
+              "TEMPO ECRÃ";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s",
+              hivefw_display_timeout_names[index]
+            );
+          }
+
+
 #ifdef HELTEC_T114_WITH_DISPLAY
-            "ROTAÇÃO",
-            "COR DA BARRA",
-            "BOOT LOGO",
-            "FONTE",
+
+          else if (
+            _settings_display_menu == 1
+          ) {
+
+            uint8_t index =
+              _node_prefs->display_rotation;
+
+            if (
+              index >=
+              HIVEFW_DISPLAY_ROTATION_COUNT
+            ) {
+              index = 0;
+            }
+
+            display_title =
+              "ROTAÇÃO";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s",
+              hivefw_display_rotation_names[index]
+            );
+          }
+
+
+          else if (
+            _settings_display_menu == 2
+          ) {
+
+            uint8_t index =
+              _node_prefs->header_color;
+
+            if (
+              index >=
+              HIVEFW_HEADER_COLOR_COUNT
+            ) {
+              index = 0;
+            }
+
+            display_title =
+              "COR DA BARRA";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s",
+              hivefw_header_color_names[index]
+            );
+          }
+
+
+          else if (
+            _settings_display_menu == 3
+          ) {
+
+            uint8_t logo_index =
+              _node_prefs->boot_logo_color;
+
+            uint8_t text_index =
+              _node_prefs->boot_text_color;
+
+            if (
+              logo_index >=
+              HIVEFW_BOOT_COLOR_COUNT
+            ) {
+              logo_index = 7;
+            }
+
+            if (
+              text_index >=
+              HIVEFW_BOOT_COLOR_COUNT
+            ) {
+              text_index = 7;
+            }
+
+            display_title =
+              "BOOT LOGO";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s / %s",
+              hivefw_boot_color_names[logo_index],
+              hivefw_boot_color_names[text_index]
+            );
+          }
+
+
+          else if (
+            _settings_display_menu == 4
+          ) {
+
+            uint8_t index =
+              _node_prefs->display_font;
+
+            if (
+              index >=
+              HIVEFW_DISPLAY_FONT_COUNT
+            ) {
+              index = 0;
+            }
+
+            display_title =
+              "FONTE";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s",
+              hivefw_display_font_names[index]
+            );
+          }
+
+
+          else if (
+            _settings_display_menu == 5
+          ) {
+
+            display_title =
+              "FORMATO HORA";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s",
+              _node_prefs->clock_24h
+                ? "24H"
+                : "12H"
+            );
+          }
+
+#else
+
+          else if (
+            _settings_display_menu == 1
+          ) {
+
+            display_title =
+              "FORMATO HORA";
+
+            snprintf(
+              display_value,
+              sizeof(display_value),
+              "%s",
+              _node_prefs->clock_24h
+                ? "24H"
+                : "12H"
+            );
+          }
+
 #endif
-            clock_item,
-            "[ SAIR ]"
-          };
 
-          display.setTextSize(2);
 
-          drawMenuItemText(
+          drawConfigItem(
             display,
-            display_items[
-              _settings_display_menu
-            ],
-            18
+            display_title,
+            display_value
           );
         }
 
@@ -8472,36 +8878,37 @@ public:
         // HIVEFW — RENDER NOTIFICAÇÕES
         // ====================================================
 
-        char silent_item[32];
+        const char* notification_title =
+          "MODO SILÊNCIO";
 
-        snprintf(
-          silent_item,
-          sizeof(silent_item),
-          "MODO SILÊNCIO: %s",
+        const char* notification_value =
           _task->isSilentMode()
             ? "ON"
-            : "OFF"
-        );
+            : "OFF";
 
-        const char* notification_items[] = {
-          silent_item,
-          "[ SAIR ]"
-        };
 
-        display.setColor(
-          UIColor::primary_txt
-        );
+#ifdef PIN_BUZZER
 
-        // O texto é propositadamente size 1:
-        // "MODO SILÊNCIO: OFF" cabe confortavelmente.
-        display.setTextSize(1);
+        if (
+          _settings_notifications_menu == 1
+        ) {
 
-        drawMenuItemText(
+          notification_title =
+            "BUZZER";
+
+          notification_value =
+            _node_prefs->buzzer_quiet
+              ? "OFF"
+              : "ON";
+        }
+
+#endif
+
+
+        drawConfigItem(
           display,
-          notification_items[
-            _settings_notifications_menu
-          ],
-          32
+          notification_title,
+          notification_value
         );
 
 
@@ -8547,31 +8954,58 @@ public:
 
         } else {
 
-          char gps_item[24];
+          const char* gps_title =
+            "GPS";
 
-          snprintf(
-            gps_item,
-            sizeof(gps_item),
-            "GPS: %s",
-            _task->getGPSState()
-              ? "ON"
-              : "OFF"
-          );
+          char gps_value[32];
 
-          const char* gps_items[] = {
-            gps_item,
-            "INTERVALO GPS",
-            "[ SAIR ]"
-          };
+          gps_value[0] =
+            '\0';
 
-          display.setTextSize(2);
 
-          drawMenuItemText(
+          if (
+            _settings_gps_menu == 0
+          ) {
+
+            snprintf(
+              gps_value,
+              sizeof(gps_value),
+              "%s",
+              _task->getGPSState()
+                ? "ON"
+                : "OFF"
+            );
+
+          } else {
+
+            gps_title =
+              "INTERVALO GPS";
+
+            uint8_t index =
+              hivefwGpsIntervalIndex(
+                _node_prefs->gps_interval
+              );
+
+            if (
+              index >=
+              HIVEFW_GPS_INTERVAL_COUNT
+            ) {
+              index = 0;
+            }
+
+            snprintf(
+              gps_value,
+              sizeof(gps_value),
+              "%s",
+              hivefw_gps_interval_names[index]
+            );
+          }
+
+
+          drawConfigItem(
             display,
-            gps_items[
-              _settings_gps_menu
-            ],
-            18
+            gps_title,
+            gps_value
           );
         }
 
@@ -8582,8 +9016,7 @@ public:
 
         const char* advert_items[] = {
           "Anuncio ZeroHOP",
-          "Anuncio Flood",
-          "[ SAIR ]"
+          "Anuncio Flood"
         };
 
         display.setColor(UIColor::primary_txt);
@@ -8671,33 +9104,119 @@ public:
 
       } else {
 
-        char bluetooth_item[32];
-
-        snprintf(
-          bluetooth_item,
-          sizeof(bluetooth_item),
-          "BLUETOOTH: %s",
-          _task->isBluetoothEnabled() ? "ON" : "OFF"
-        );
-
         const char* settings_items[] = {
-          bluetooth_item,
+          "BLUETOOTH",
           "ANUNCIAR NÓ",
           "CANAL APPS/SOS",
+          "RÁDIO",
           "ECRÃ",
           "NOTIFICAÇÕES",
 #if ENV_INCLUDE_GPS == 1
           "GPS",
 #endif
-          "DESLIGAR",
-          "[ SAIR ]"
+          "DESLIGAR"
         };
 
-        display.setColor(UIColor::primary_txt);
-        display.setTextSize(2);
 
-        const char* text = settings_items[_settings_menu];
-        drawMenuItemText(display, text, 10);
+        const char* settings_title =
+          settings_items[
+            _settings_menu
+          ];
+
+        char settings_value[48];
+
+        settings_value[0] =
+          '\0';
+
+
+        if (
+          _settings_menu == 0
+        ) {
+
+          snprintf(
+            settings_value,
+            sizeof(settings_value),
+            "%s",
+            _task->isBluetoothEnabled()
+              ? "ON"
+              : "OFF"
+          );
+        }
+
+
+        else if (
+          _settings_menu == 2
+        ) {
+
+          ChannelDetails selected_channel;
+
+          if (
+            getAppsChannel(
+              selected_channel
+            )
+          ) {
+
+            snprintf(
+              settings_value,
+              sizeof(settings_value),
+              "%s",
+              selected_channel.name
+            );
+
+          } else {
+
+            snprintf(
+              settings_value,
+              sizeof(settings_value),
+              "NÃO DEFINIDO"
+            );
+          }
+        }
+
+
+#if ENV_INCLUDE_GPS == 1
+
+        else if (
+          _settings_menu == 6
+        ) {
+
+          snprintf(
+            settings_value,
+            sizeof(settings_value),
+            "%s",
+            _task->getGPSState()
+              ? "ON"
+              : "OFF"
+          );
+        }
+
+#endif
+
+
+        if (
+          settings_value[0] != '\0'
+        ) {
+
+          drawConfigItem(
+            display,
+            settings_title,
+            settings_value
+          );
+
+        } else {
+
+          display.setColor(
+            UIColor::primary_txt
+          );
+
+          display.setTextSize(2);
+
+          drawMenuItemText(
+            display,
+            settings_title,
+            10
+          );
+        }
       }
 
 #if ENV_INCLUDE_GPS == 1
@@ -10662,7 +11181,7 @@ public:
 
       if (_settings_boot_submenu) {
 
-        const uint8_t boot_menu_count = 3;
+        const uint8_t boot_menu_count = 2;
 
         if (
           c == KEY_NEXT ||
@@ -10701,7 +11220,6 @@ public:
         ) {
 
           _settings_boot_submenu = false;
-          _settings_boot_menu = 0;
 
           return true;
         }
@@ -11101,7 +11619,7 @@ public:
       if (_settings_display_submenu && !_settings_color_submenu) {
 
         const uint8_t display_menu_count =
-          3 +
+          2 +
           HIVEFW_DISPLAY_ROTATION_OFFSET +
           HIVEFW_DISPLAY_COLOR_OFFSET +
           HIVEFW_DISPLAY_BOOT_OFFSET +
@@ -11148,8 +11666,6 @@ public:
 
           _settings_display_submenu =
             false;
-
-          _settings_display_menu = 0;
 
           _settings_timeout_submenu =
             false;
@@ -11252,8 +11768,6 @@ public:
             HIVEFW_DISPLAY_ROTATION_OFFSET +
             HIVEFW_DISPLAY_COLOR_OFFSET
           ) {
-
-            _settings_boot_menu = 0;
 
             _settings_boot_logo_color_submenu =
               false;
@@ -11478,7 +11992,7 @@ public:
 
       if (_settings_gps_submenu) {
 
-        const uint8_t count = 3;
+        const uint8_t count = 2;
 
 
         if (
@@ -11521,8 +12035,6 @@ public:
 
           _settings_gps_submenu =
             false;
-
-          _settings_gps_menu = 0;
 
           _settings_gps_interval_submenu =
             false;
@@ -11581,9 +12093,32 @@ public:
 
       if (_settings_notifications_submenu) {
 
+#ifdef PIN_BUZZER
+        const uint8_t notification_menu_count = 2;
+#else
+        const uint8_t notification_menu_count = 1;
+#endif
+
+
+        // Próxima opção.
         if (
           c == KEY_NEXT ||
-          c == KEY_RIGHT ||
+          c == KEY_RIGHT
+        ) {
+
+          _settings_notifications_menu =
+            (
+              _settings_notifications_menu +
+              1
+            ) %
+            notification_menu_count;
+
+          return true;
+        }
+
+
+        // Opção anterior.
+        if (
           c == KEY_PREV ||
           c == KEY_LEFT
         ) {
@@ -11591,13 +12126,16 @@ public:
           _settings_notifications_menu =
             (
               _settings_notifications_menu +
+              notification_menu_count -
               1
-            ) % 2;
+            ) %
+            notification_menu_count;
 
           return true;
         }
 
 
+        // Voltar um nível.
         if (
           c == KEY_CANCEL ||
           c == KEY_SELECT
@@ -11605,8 +12143,6 @@ public:
 
           _settings_notifications_submenu =
             false;
-
-          _settings_notifications_menu = 0;
 
           return true;
         }
@@ -11635,6 +12171,21 @@ public:
 
             return true;
           }
+
+
+#ifdef PIN_BUZZER
+
+          // BUZZER
+          if (
+            _settings_notifications_menu == 1
+          ) {
+
+            _task->toggleBuzzer();
+
+            return true;
+          }
+
+#endif
 
 
           // [ SAIR ]
@@ -11756,19 +12307,18 @@ public:
 
         if (c == KEY_NEXT || c == KEY_RIGHT) {
           _settings_advert_menu =
-            (_settings_advert_menu + 1) % 3;
+            (_settings_advert_menu + 1) % 2;
           return true;
         }
 
         if (c == KEY_PREV || c == KEY_LEFT) {
           _settings_advert_menu =
-            (_settings_advert_menu + 2) % 3;
+            (_settings_advert_menu + 1) % 2;
           return true;
         }
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
           _settings_advert_submenu = false;
-          _settings_advert_menu = 0;
           return true;
         }
 
@@ -11851,7 +12401,6 @@ public:
             c == KEY_SELECT) {
 
           _settings_channel_submenu = false;
-          _settings_channel_menu = 0;
 
           return true;
         }
@@ -11862,7 +12411,6 @@ public:
                 _settings_channel_menu)) {
 
             _settings_channel_submenu = false;
-            _settings_channel_menu = 0;
 
             _task->notify(UIEventType::ack);
             _task->showAlert(
@@ -11957,28 +12505,26 @@ public:
       ) {
 
         _settings_submenu = false;
-        _settings_menu = 0;
 
         _settings_advert_submenu = false;
-        _settings_advert_menu = 0;
-
         _settings_channel_submenu = false;
-        _settings_channel_menu = 0;
-
         _settings_color_submenu = false;
-        _settings_color_menu = 0;
-
         _settings_display_submenu = false;
-        _settings_display_menu = 0;
-
         _settings_timeout_submenu = false;
-        _settings_timeout_menu = 0;
-
         _settings_rotation_submenu = false;
-        _settings_rotation_menu = 0;
-
         _settings_notifications_submenu = false;
-        _settings_notifications_menu = 0;
+
+#ifdef HELTEC_T114_WITH_DISPLAY
+        _settings_boot_submenu = false;
+        _settings_boot_logo_color_submenu = false;
+        _settings_boot_text_color_submenu = false;
+        _settings_font_submenu = false;
+#endif
+
+#if ENV_INCLUDE_GPS == 1
+        _settings_gps_submenu = false;
+        _settings_gps_interval_submenu = false;
+#endif
 
         return true;
       }
@@ -12028,8 +12574,6 @@ public:
           _settings_advert_submenu =
             true;
 
-          _settings_advert_menu = 0;
-
           return true;
         }
 
@@ -12072,21 +12616,40 @@ public:
 
 
         // ----------------------------------------------------
+        // RÁDIO
+        //
+        // Página interna de DEFINIÇÕES.
+        // Entra diretamente no menu de configuração.
+        // ----------------------------------------------------
+
+        if (
+          _settings_menu == 3
+        ) {
+
+          _radio_submenu =
+            true;
+
+          _page =
+            HomePage::RADIO;
+
+          return true;
+        }
+
+
+        // ----------------------------------------------------
         // ECRÃ
         //
-        // Índice 3 em todos os targets.
+        // Índice 4 em todos os targets.
         // ----------------------------------------------------
 
         if (
           _settings_menu ==
-          3 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET
         ) {
 
           _settings_display_submenu =
             true;
-
-          _settings_display_menu = 0;
 
           _settings_timeout_submenu =
             false;
@@ -12113,15 +12676,13 @@ public:
 
         if (
           _settings_menu ==
-          3 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET
         ) {
 
           _settings_notifications_submenu =
             true;
-
-          _settings_notifications_menu = 0;
 
           return true;
         }
@@ -12135,7 +12696,7 @@ public:
 
         if (
           _settings_menu ==
-          3 +
+          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
@@ -12143,8 +12704,6 @@ public:
 
           _settings_gps_submenu =
             true;
-
-          _settings_gps_menu = 0;
 
           _settings_gps_interval_submenu =
             false;
@@ -12157,6 +12716,38 @@ public:
           return true;
         }
 
+
+        // ----------------------------------------------------
+        // DESLIGAR
+        // ----------------------------------------------------
+
+        if (
+          _settings_menu ==
+          5 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
+        ) {
+
+          _shutdown_init = true;
+
+          return true;
+        }
+
+
+        // ----------------------------------------------------
+        // [ SAIR ]
+        // ----------------------------------------------------
+
+        if (
+          _settings_menu ==
+          6 +
+          HIVEFW_SETTINGS_COLOR_OFFSET +
+          HIVEFW_SETTINGS_DISPLAY_OFFSET +
+          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
+        ) {
+
+#else
 
         // ----------------------------------------------------
         // DESLIGAR
@@ -12183,38 +12774,6 @@ public:
         if (
           _settings_menu ==
           5 +
-          HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET +
-          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
-        ) {
-
-#else
-
-        // ----------------------------------------------------
-        // DESLIGAR
-        // ----------------------------------------------------
-
-        if (
-          _settings_menu ==
-          3 +
-          HIVEFW_SETTINGS_COLOR_OFFSET +
-          HIVEFW_SETTINGS_DISPLAY_OFFSET +
-          HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
-        ) {
-
-          _shutdown_init = true;
-
-          return true;
-        }
-
-
-        // ----------------------------------------------------
-        // [ SAIR ]
-        // ----------------------------------------------------
-
-        if (
-          _settings_menu ==
-          4 +
           HIVEFW_SETTINGS_COLOR_OFFSET +
           HIVEFW_SETTINGS_DISPLAY_OFFSET +
           HIVEFW_SETTINGS_NOTIFICATIONS_OFFSET
@@ -13584,10 +14143,13 @@ public:
 
         if (c == KEY_CANCEL || c == KEY_SELECT) {
 
-          _radio_menu = 0;
           _radio_submenu = false;
 
-          _page = HomePage::MESSAGES;
+          _page =
+            HomePage::SETTINGS;
+
+          _settings_submenu =
+            true;
 
           return true;
         }
@@ -14085,7 +14647,7 @@ public:
         ) {
 
           _radio_menu =
-            (_radio_menu + 1) % 9;
+            (_radio_menu + 1) % 8;
 
           return true;
         }
@@ -14096,7 +14658,7 @@ public:
         ) {
 
           _radio_menu =
-            (_radio_menu + 8) % 9;
+            (_radio_menu + 7) % 8;
 
           return true;
         }
@@ -14107,7 +14669,12 @@ public:
         ) {
 
           _radio_submenu = false;
-          _radio_menu = 0;
+
+          _page =
+            HomePage::SETTINGS;
+
+          _settings_submenu =
+            true;
 
           return true;
         }
@@ -14312,19 +14879,6 @@ public:
             return true;
           }
 
-          // ----------------------------------------------------
-          // SAIR
-          // ----------------------------------------------------
-
-          if (_radio_menu == 8) {
-
-            _radio_submenu = false;
-            _radio_menu = 0;
-
-            _page = HomePage::MESSAGES;
-
-            return true;
-          }
         }
 
         return true;
@@ -14352,7 +14906,7 @@ public:
           _repeater_info_submenu = false;
           _repeater_duty_submenu = false;
           _repeater_submenu = false;
-          _page = HomePage::RADIO;
+          _page = HomePage::COMPANION;
           return true;
         }
 
@@ -14628,7 +15182,7 @@ public:
             _repeater_info_submenu = false;
             _repeater_duty_submenu = false;
             _repeater_submenu = false;
-            _page = HomePage::RADIO;
+            _page = HomePage::COMPANION;
 
             return true;
           }
@@ -15766,7 +16320,7 @@ void UITask::loop() {
   }
   ev = back_btn.check();
   if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    c = handleTripleClick(KEY_SELECT);
+    c = handleTripleClick(KEY_CANCEL);
   }
 #elif defined(PIN_USER_BTN)
   int ev = user_btn.check();
@@ -15777,7 +16331,7 @@ void UITask::loop() {
   } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
     c = handleDoubleClick(KEY_PREV);
   } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-    c = handleTripleClick(KEY_SELECT);
+    c = handleTripleClick(KEY_CANCEL);
   }
 #endif
 #if defined(UI_HAS_ROTARY_INPUT)
@@ -15800,7 +16354,7 @@ void UITask::loop() {
     } else if (ev == BUTTON_EVENT_DOUBLE_CLICK) {
       c = handleDoubleClick(KEY_PREV);
     } else if (ev == BUTTON_EVENT_TRIPLE_CLICK) {
-      c = handleTripleClick(KEY_SELECT);
+      c = handleTripleClick(KEY_CANCEL);
     }
     _analogue_pin_read_millis = millis();
   }
@@ -15941,10 +16495,17 @@ char UITask::handleDoubleClick(char c) {
 }
 
 char UITask::handleTripleClick(char c) {
-  MESH_DEBUG_PRINTLN("UITask: triple click triggered");
-  checkDisplayOn(c);
-  toggleBuzzer();
-  return c;
+
+  MESH_DEBUG_PRINTLN(
+    "UITask: triple click -> BACK"
+  );
+
+  // HiveFW:
+  // 3 cliques = VOLTAR / CANCELAR.
+  //
+  // Se o ecrã estiver apagado,
+  // checkDisplayOn() acorda-o e consome o gesto.
+  return checkDisplayOn(c);
 }
 
 bool UITask::getGPSState() {
@@ -16039,17 +16600,59 @@ void UITask::toggleGPS() {
 }
 
 void UITask::toggleBuzzer() {
-    // Toggle buzzer quiet mode
-  #ifdef PIN_BUZZER
-    if (buzzer.isQuiet()) {
-      buzzer.quiet(false);
-      notify(UIEventType::ack);
-    } else {
-      buzzer.quiet(true);
+
+#ifdef PIN_BUZZER
+
+  if (_node_prefs == NULL) {
+    return;
+  }
+
+  // Alterar a preferência persistente.
+  //
+  // MODO SILÊNCIO pode colocar o hardware temporariamente
+  // em quiet, por isso não usamos buzzer.isQuiet()
+  // para decidir o novo valor guardado.
+  _node_prefs->buzzer_quiet =
+    _node_prefs->buzzer_quiet
+      ? 0
+      : 1;
+
+
+  // O silêncio temporário tem prioridade.
+  if (_silent_mode) {
+
+    buzzer.quiet(
+      true
+    );
+
+  } else {
+
+    buzzer.quiet(
+      _node_prefs->buzzer_quiet
+    );
+
+    // Feedback apenas quando o buzzer acabou de ser ligado.
+    if (
+      !_node_prefs->buzzer_quiet
+    ) {
+
+      notify(
+        UIEventType::ack
+      );
     }
-    _node_prefs->buzzer_quiet = buzzer.isQuiet();
-    the_mesh.savePrefs();
-    showAlert(buzzer.isQuiet() ? "Buzzer: OFF" : "Buzzer: ON", 800);
-    _next_refresh = 0;  // trigger refresh
-  #endif
+  }
+
+
+  the_mesh.savePrefs();
+
+  showAlert(
+    _node_prefs->buzzer_quiet
+      ? "Buzzer: OFF"
+      : "Buzzer: ON",
+    800
+  );
+
+  _next_refresh = 0;
+
+#endif
 }
