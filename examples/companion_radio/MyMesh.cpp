@@ -68,13 +68,6 @@
 #define STATS_TYPE_RADIO              1
 #define STATS_TYPE_PACKETS             2
 
-// HiveFW extension carried inside the standard CMD_GET_CUSTOM_VARS envelope.
-// Request: [40, 0xF0, page]. Response stays RESP_CODE_CUSTOM_VARS so existing
-// MeshCore clients/parsers remain compatible and simply see custom key/value
-// pairs. Three neighbours per page keeps the text frame comfortably bounded.
-#define HIVEFW_CUSTOM_NEIGHBOURS_NAMESPACE 0xF0
-#define HIVEFW_CUSTOM_NEIGHBOURS_PAGE_SIZE 3
-
 #define RESP_CODE_OK                  0
 #define RESP_CODE_ERR                 1
 #define RESP_CODE_CONTACTS_START      2  // first reply to CMD_GET_CONTACTS
@@ -3225,101 +3218,6 @@ void MyMesh::handleCmdFrame(size_t len) {
     } else {
       writeErrFrame(ERR_CODE_ILLEGAL_ARG);
     }
-  } else if (cmd_frame[0] == CMD_GET_CUSTOM_VARS &&
-             len >= 3 &&
-             cmd_frame[1] == HIVEFW_CUSTOM_NEIGHBOURS_NAMESPACE) {
-    // HiveFW local Repeater neighbour table.
-    //
-    // This is deliberately transported as CUSTOM_VARS instead of adding a
-    // new response opcode: meshcore-py already parses RESP_CODE_CUSTOM_VARS,
-    // so Home Assistant can consume this extension without a fork of the
-    // upstream Python library. Reading this table never transmits on LoRa.
-    const uint8_t page = cmd_frame[2];
-    const int neighbour_count = getRepeaterNeighbourCount();
-    int page_count =
-      (neighbour_count + HIVEFW_CUSTOM_NEIGHBOURS_PAGE_SIZE - 1) /
-      HIVEFW_CUSTOM_NEIGHBOURS_PAGE_SIZE;
-    if (page_count < 1) {
-      page_count = 1;
-    }
-
-    int out_i = 0;
-    out_frame[out_i++] = RESP_CODE_CUSTOM_VARS;
-    char *dp = (char *)&out_frame[out_i];
-    size_t remaining = MAX_FRAME_SIZE - out_i;
-
-    int written = snprintf(
-      dp,
-      remaining,
-      "hm:%u|%d|%u|%d",
-      _prefs.isRepeatEn() ? 1 : 0,
-      neighbour_count,
-      page,
-      page_count
-    );
-    if (written < 0 || (size_t)written >= remaining) {
-      writeErrFrame(ERR_CODE_BAD_STATE);
-      return;
-    }
-    dp += written;
-    remaining -= written;
-
-    if (page < page_count) {
-      const int first =
-        ((int)page) * HIVEFW_CUSTOM_NEIGHBOURS_PAGE_SIZE;
-      const int last =
-        min(
-          first + HIVEFW_CUSTOM_NEIGHBOURS_PAGE_SIZE,
-          neighbour_count
-        );
-
-      for (int index = first; index < last; index++) {
-        const mesh::Identity *identity =
-          getRepeaterNeighbour(index);
-        if (identity == NULL) {
-          continue;
-        }
-
-        char prefix[13];
-        for (int b = 0; b < 6; b++) {
-          snprintf(
-            &prefix[b * 2],
-            sizeof(prefix) - (b * 2),
-            "%02x",
-            identity->pub_key[b]
-          );
-        }
-        prefix[12] = '\0';
-
-        // Stored SNR is quarter-dB (the same representation used elsewhere
-        // in the Companion protocol). The HA side divides this value by 4.
-        const int snr_quarter_db =
-          (int)getRepeaterNeighbourSNR(index);
-        const uint32_t heard_ago =
-          getRepeaterNeighbourHeardAgo(index);
-        const int slot = index - first;
-
-        written = snprintf(
-          dp,
-          remaining,
-          ",n%d:%s|%d|%lu",
-          slot,
-          prefix,
-          snr_quarter_db,
-          (unsigned long)heard_ago
-        );
-        if (written < 0 || (size_t)written >= remaining) {
-          break;
-        }
-        dp += written;
-        remaining -= written;
-      }
-    }
-
-    _serial->writeFrame(
-      out_frame,
-      dp - (char *)out_frame
-    );
   } else if (cmd_frame[0] == CMD_GET_CUSTOM_VARS) {
     out_frame[0] = RESP_CODE_CUSTOM_VARS;
     char *dp = (char *)&out_frame[1];
